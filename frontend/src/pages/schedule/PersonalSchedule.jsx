@@ -7,19 +7,25 @@ import CourseSearch from "./CourseSearch";
 function parseMeeting(meetingStr, label, class_number) {
   if (!meetingStr) return [];
 
-  const regex = /([MTWRF]+)\s(\d{1,2})(?::(\d{2}))?-(\d{1,2})(?::(\d{2}))?([ap])/i;
+  // ✅ am/pm이 하나만 있어도 동작하게
+  const regex = /([MTWRF]+)\s(\d{1,2})(?::(\d{2}))?(a|p)?-(\d{1,2})(?::(\d{2}))?(a|p)/i;
   const match = meetingStr.match(regex);
   if (!match) return [];
 
   const dayStr = match[1];
+
   const startHour = parseInt(match[2]);
   const startMin = parseInt(match[3] || "0");
-  const endHourRaw = parseInt(match[4]);
-  const endMin = parseInt(match[5] || "0");
-  const meridiem = match[6].toLowerCase();
+  const startMeridiemRaw = match[4];
+  const endHourRaw = parseInt(match[5]);
+  const endMin = parseInt(match[6] || "0");
+  const endMeridiem = match[7].toLowerCase();
 
-  const startHour24 = startHour % 12 + (meridiem === "p" ? 12 : 0);
-  const endHour24 = endHourRaw % 12 + (meridiem === "p" ? 12 : 0);
+  // ✅ startMeridiem이 없으면 endMeridiem을 따름
+  const startMeridiem = (startMeridiemRaw || endMeridiem).toLowerCase();
+
+  const startHour24 = startHour % 12 + (startMeridiem === "p" ? 12 : 0);
+  const endHour24 = endHourRaw % 12 + (endMeridiem === "p" ? 12 : 0);
 
   const start = `${startHour24.toString().padStart(2, "0")}:${startMin.toString().padStart(2, "0")}`;
   const end = `${endHour24.toString().padStart(2, "0")}:${endMin.toString().padStart(2, "0")}`;
@@ -34,8 +40,6 @@ function parseMeeting(meetingStr, label, class_number) {
     class_number,
   }));
 }
-
-
 
 
 
