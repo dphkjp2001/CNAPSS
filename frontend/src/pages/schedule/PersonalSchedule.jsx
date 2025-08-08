@@ -3,35 +3,41 @@ import React, { useState, useEffect } from "react";
 import ScheduleGrid from "./ScheduleGrid";
 import CourseSearch from "./CourseSearch";
 
-function parseMeeting(meetStr) {
-  const dayMap = {
-    M: "MON",
-    T: "TUE",
-    W: "WED",
-    R: "THU",
-    F: "FRI",
-  };
+// PersonalSchedule.jsx 내부
+function parseMeeting(meetingStr, label, class_number) {
+  if (!meetingStr) return [];
 
-  const regex = /([MTWRF]+) (\d{1,2})(?::(\d{2}))?-(\d{1,2})(?::(\d{2}))?([ap])/i;
-  const match = meetStr.match(regex);
+  const regex = /([MTWRF]+)\s(\d{1,2})(?::(\d{2}))?-(\d{1,2})(?::(\d{2}))?([ap])/i;
+  const match = meetingStr.match(regex);
   if (!match) return [];
 
-  const days = match[1].split("").map((d) => dayMap[d]);
+  const dayStr = match[1];
   const startHour = parseInt(match[2]);
   const startMin = parseInt(match[3] || "0");
-  const endHour = parseInt(match[4]);
+  const endHourRaw = parseInt(match[4]);
   const endMin = parseInt(match[5] || "0");
   const meridiem = match[6].toLowerCase();
 
-  const start = `${startHour + (meridiem === "p" && startHour < 12 ? 12 : 0)}:${startMin
-    .toString()
-    .padStart(2, "0")}`;
-  const end = `${endHour + (meridiem === "p" && endHour < 12 ? 12 : 0)}:${endMin
-    .toString()
-    .padStart(2, "0")}`;
+  const startHour24 = startHour % 12 + (meridiem === "p" ? 12 : 0);
+  const endHour24 = endHourRaw % 12 + (meridiem === "p" ? 12 : 0);
 
-  return days.map((day) => ({ day, start, end }));
+  const start = `${startHour24.toString().padStart(2, "0")}:${startMin.toString().padStart(2, "0")}`;
+  const end = `${endHour24.toString().padStart(2, "0")}:${endMin.toString().padStart(2, "0")}`;
+
+  const dayMap = { M: "MON", T: "TUE", W: "WED", R: "THU", F: "FRI" };
+
+  return dayStr.split("").map((d) => ({
+    day: dayMap[d],
+    start,
+    end,
+    label,
+    class_number,
+  }));
 }
+
+
+
+
 
 function PersonalSchedule() {
   const [courseList, setCourseList] = useState([]);
@@ -48,36 +54,76 @@ function PersonalSchedule() {
     const isAlreadyAdded = selected.some(
       (s) => s.label === section.course_code && s.class_number === section.class_number
     );
-  
+
     if (isAlreadyAdded) {
-      // 제거
       setSelected((prev) =>
         prev.filter((s) => s.class_number !== section.class_number)
       );
     } else {
-      // 추가
-      const slots = parseMeeting(section.meets).map((s) => ({
-        ...s,
-        label: section.course_code,
-        class_number: section.class_number, // ✅ 비교 위해 포함
-      }));
+      const slots = parseMeeting(
+        section.meets,
+        section.course_code,
+        section.class_number
+      );
+
+       const isConflict = slots.some((newSlot) =>
+        selected.some(
+          (existing) =>
+            existing.day === newSlot.day &&
+            !(
+              newSlot.end <= existing.start || // 새 수업이 기존 수업 전
+              newSlot.start >= existing.end    // 새 수업이 기존 수업 후
+            )
+        )
+      );
+
+      if (isConflict) {
+        const confirmReplace = window.confirm("선택한 과목이 기존 수업과 시간이 겹칩니다. 기존 과목을 이 과목으로 바꾸시겠습니까?");
+        if (!confirmReplace) return;
+
+        // 겹치는 수업을 삭제
+        const conflictClassNumbers = slots
+          .flatMap((newSlot) =>
+            selected.filter(
+              (existing) =>
+                existing.day === newSlot.day &&
+                !(
+                  newSlot.end <= existing.start ||
+                  newSlot.start >= existing.end
+                )
+            )
+          )
+          .map((s) => s.class_number);
+
+        const filtered = selected.filter(
+          (s) => !conflictClassNumbers.includes(s.class_number)
+        );
+
+        setSelected([...filtered, ...slots]);
+        return;
+      }
+
       setSelected((prev) => [...prev, ...slots]);
     }
-  };
+};
+  const handleRemoveCourse = (class_number) => {
+  setSelected((prev) =>
+    prev.filter((s) => s.class_number !== class_number)
+  );
+};
+
 
   return (
     <div className="p-6">
       <h1 className="text-xl font-semibold mb-4">Personal Schedule Builder</h1>
 
       <div className="flex gap-6">
-        {/* 좌측: 검색창 */}
         <div className="w-3/12">
           <CourseSearch data={courseList} onSelect={handleAddCourse} />
         </div>
 
-        {/* 우측: 스케줄 그리드 */}
         <div className="w-9/12">
-          <ScheduleGrid schedules={selected} />
+          <ScheduleGrid schedules={selected} onRemove={handleRemoveCourse} />
         </div>
       </div>
     </div>

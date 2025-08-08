@@ -1,4 +1,5 @@
 // src/pages/freeboard/FreeBoardDetail.jsx
+//반응형 수정 함
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
@@ -63,18 +64,22 @@ function FreeBoardDetail() {
   const isAuthor = user?.email === post.email;
 
   return (
-    <div className="p-4 sm:p-6 md:p-8 max-w-3xl mx-auto">
-      <div className="bg-white shadow-md rounded-2xl p-6 mb-6">
-        <h2 className="text-2xl font-bold mb-2">{post.title}</h2>
-        <p className="text-gray-500 text-sm mb-4">
+    <div className="px-4 py-6 sm:px-6 md:px-8 max-w-3xl mx-auto"> {/* ✅ 수정됨 */}
+      <div className="bg-white shadow-md rounded-2xl px-4 py-5 sm:p-6 mb-6"> {/* ✅ 수정됨 */}
+        <h2 className="text-xl sm:text-2xl font-bold mb-2"> {/* ✅ 수정됨 */}
+          {post.title}
+        </h2>
+        <p className="text-gray-500 text-xs sm:text-sm mb-4"> {/* ✅ 수정됨 */}
           Posted by anonymous1 • {dayjs(post.createdAt).fromNow()}
         </p>
-        <p className="text-base mb-6 whitespace-pre-wrap">{post.content}</p>
+        <p className="text-sm sm:text-base mb-6 whitespace-pre-wrap"> {/* ✅ 수정됨 */}
+          {post.content}
+        </p>
 
-        <div className="flex items-center gap-3 mb-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-4"> {/* ✅ 수정됨 */}
           <button
             onClick={handleThumb}
-            className="text-sm px-3 py-1 rounded bg-gray-100 hover:bg-gray-200"
+            className="text-xs sm:text-sm px-3 py-1 rounded bg-gray-100 hover:bg-gray-200"
           >
             👍 {post.thumbsUpUsers?.length || 0}
           </button>
@@ -113,7 +118,3 @@ function FreeBoardDetail() {
 }
 
 export default FreeBoardDetail;
-
-
-
-
