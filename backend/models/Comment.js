@@ -8,7 +8,7 @@ const commentSchema = new mongoose.Schema(
     nickname: { type: String, required: true },
     content: { type: String, required: true },
     parentId: { type: mongoose.Schema.Types.ObjectId, ref: "Comment", default: null }, // ✅ 추가
-    
+    readBy: { type: [String], default: [] },  // 내가 읽었는가가 핵심
 
     thumbsUp: { type: Number, default: 0 },
     thumbsUpUsers: [{ type: String, default: [] }], // ✅ 필수!, // email 목록 저장

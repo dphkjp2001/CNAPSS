@@ -1,65 +1,94 @@
 // frontend/src/hooks/useNotificationsPolling.js
-import { useEffect, useState, useRef } from "react";
+const express = require("express");
+const router = express.Router();
+const Comment = require("../models/Comment");
+const Post = require("../models/Post");
 
-const useNotificationsPolling = (
-  email,
-  activeInterval = 5000,
-  inactiveInterval = 60000,
-  minutes = 5
-) => {
-  const [notifications, setNotifications] = useState([]);
-  const intervalRef = useRef(null);
+// 🔔 알림 목록 (내 글/내 댓글에 달린 "안읽은" 새 댓글만)
+// GET /api/notification/:email?minutes=5
+router.get("/:email", async (req, res) => {
+  const { email } = req.params;
+  const minutes = Math.max(1, Number(req.query.minutes) || 5); // 기본 5분
 
-  const fetchNotifications = async () => {
-    if (!email) return;
-    try {
-      const base = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, ""); // e.g. https://api.cnapss.com/api
-      const url = `${base}/notification/${encodeURIComponent(email)}?minutes=${minutes}`;
-      const res = await fetch(url);
-      if (!res.ok) {
-        const text = await res.text().catch(() => "");
-        throw new Error(`HTTP ${res.status} ${text?.slice(0, 120) || ""}`);
-      }
-      const data = await res.json();
-      setNotifications(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error("🔔 알림 불러오기 실패:", err);
-    }
-  };
+  try {
+    // 내가 쓴 글/댓글 목록
+    const [myPosts, myComments] = await Promise.all([
+      Post.find({ email }).select("_id").lean(),
+      Comment.find({ email }).select("_id").lean(),
+    ]);
+    const postIds = myPosts.map((p) => p._id);
+    const commentIds = myComments.map((c) => c._id);
 
-  const startPolling = (delay) => {
-    clearInterval(intervalRef.current);
-    fetchNotifications(); // 즉시 1번 실행
-    intervalRef.current = setInterval(fetchNotifications, delay);
-  };
+    // 최근 N분 내 + 내가 단 댓글 제외 + "아직 내가 안 읽은" 댓글만
+    const since = new Date(Date.now() - minutes * 60 * 1000);
+    const unreadNewComments = await Comment.find({
+      $or: [
+        { postId: { $in: postIds } },     // 내 글에 달린 댓글
+        { parentId: { $in: commentIds } } // 내 댓글에 달린 대댓글
+      ],
+      email: { $ne: email },               // 내가 단 댓글 제외
+      createdAt: { $gt: since },           // 최근 N분
+      readBy: { $ne: email },              // ✅ 내가 아직 안 읽은 것만!
+    })
+      .sort({ createdAt: -1 })
+      .lean();
 
-  useEffect(() => {
-    if (!email) return;
+    res.json(unreadNewComments);
+  } catch (err) {
+    console.error("❌ 알림 불러오기 실패:", err);
+    res.status(500).json({ message: "Failed to fetch notifications" });
+  }
+});
 
-    // 초기: 현재 탭 상태에 맞춰 시작
-    const isActive = document.visibilityState === "visible";
-    startPolling(isActive ? activeInterval : inactiveInterval);
+// 🔖 단건 읽음 처리
+// POST /api/notification/mark-read  { commentId, email }
+router.post("/mark-read", async (req, res) => {
+  const { commentId, email } = req.body;
+  if (!commentId || !email) {
+    return res.status(400).json({ message: "Missing commentId or email" });
+  }
+  try {
+    await Comment.findByIdAndUpdate(commentId, {
+      $addToSet: { readBy: email }, // 중복 방지
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("❌ 읽음 처리 실패:", err);
+    res.status(500).json({ message: "Failed to mark as read" });
+  }
+});
 
-    // 탭 활성/비활성 전환 시 간격 변경
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        startPolling(activeInterval);
-      } else {
-        startPolling(inactiveInterval);
-      }
-    };
+// (선택) 모두 읽음 처리
+// POST /api/notification/mark-all-read  { email, minutes?=5 }
+router.post("/mark-all-read", async (req, res) => {
+  const { email } = req.body;
+  const minutes = Math.max(1, Number(req.body.minutes) || 5);
+  if (!email) return res.status(400).json({ message: "Missing email" });
 
-    document.addEventListener("visibilitychange", handleVisibilityChange);
+  try {
+    const [myPosts, myComments] = await Promise.all([
+      Post.find({ email }).select("_id").lean(),
+      Comment.find({ email }).select("_id").lean(),
+    ]);
+    const postIds = myPosts.map((p) => p._id);
+    const commentIds = myComments.map((c) => c._id);
+    const since = new Date(Date.now() - minutes * 60 * 1000);
 
-    return () => {
-      clearInterval(intervalRef.current);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
-  }, [email, activeInterval, inactiveInterval, minutes]);
+    await Comment.updateMany(
+      {
+        $or: [{ postId: { $in: postIds } }, { parentId: { $in: commentIds } }],
+        email: { $ne: email },
+        createdAt: { $gt: since },
+        readBy: { $ne: email },
+      },
+      { $addToSet: { readBy: email } }
+    );
 
-  return notifications;
-};
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("❌ 전체 읽음 처리 실패:", err);
+    res.status(500).json({ message: "Failed to mark all as read" });
+  }
+});
 
-export default useNotificationsPolling;
-
-
+module.exports = router;
