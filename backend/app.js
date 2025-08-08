@@ -15,7 +15,6 @@ const courseRoutes = require("./routes/course");
 const scheduleRoutes = require("./routes/schedule");
 
 
-
 // ✅ 환경변수 설정
 dotenv.config({
   path: process.env.NODE_ENV === "production" ? ".env.production" : ".env.development"
@@ -60,7 +59,6 @@ app.use("/api/chat", chatRoutes);
 app.use("/api/request", requestRoutes);
 app.use("/api/course", courseRoutes);
 app.use("/api/schedule", scheduleRoutes);
-app.use("/api/notifications", authMiddleware, notificationsRoute);
 
 // ✅ 헬스체크
 app.get("/", (req, res) => {
