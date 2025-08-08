@@ -12,41 +12,42 @@ function Layout() {
   const socket = useSocket();
   const navigate = useNavigate();
 
-  // ✅ 활성 탭 5초 / 비활성 탭 60초 / 조회기간 5분
+  // ✅ 활성 5초 / 비활성 60초 / 최근 5분만
   const notifications = useNotificationsPolling(user?.email, 5000, 60000, 5);
 
   const [showModal, setShowModal] = useState(false);
   const [floatingChat, setFloatingChat] = useState(null);
   const [showScheduleDropdown, setShowScheduleDropdown] = useState(false);
 
-  // --- 알림 뱃지 카운트 & 애니메이션 ---
+  // --- API base ---
+  const baseApi = useMemo(
+    () => (import.meta.env.VITE_API_URL || "").replace(/\/+$/, ""),
+    []
+  );
+
+  // --- 뱃지 카운트 & 애니메이션 ---
   const [badgeCount, setBadgeCount] = useState(0);
   const prevBadgeRef = useRef(0);
   const [bump, setBump] = useState(false);
 
   useEffect(() => {
-    // 모달이 닫혀 있을 때만 외부 변화로 카운트 반영
-    if (!showModal) {
-      setBadgeCount(notifications.length);
-    }
+    if (!showModal) setBadgeCount(notifications.length);
   }, [notifications.length, showModal]);
 
   useEffect(() => {
     if (badgeCount > prevBadgeRef.current) {
       setBump(true);
-      const t = setTimeout(() => setBump(false), 300); // 300ms만 반짝
+      const t = setTimeout(() => setBump(false), 300);
       return () => clearTimeout(t);
     }
     prevBadgeRef.current = badgeCount;
   }, [badgeCount]);
 
-  // --- 읽음 처리(모달 열면 현재 보이는 것들 서버에 즉시 read로 기록) ---
-  const baseApi = useMemo(
-    () => (import.meta.env.VITE_API_URL || "").replace(/\/+$/, ""),
-    []
-  );
+  // --- 읽음 상태(로컬 표시용) ---
   const [readIds, setReadIds] = useState(new Set());
+  const isRead = (id) => readIds.has(id);
 
+  // 단건 읽음 (유지)
   const markRead = useCallback(
     async (commentId) => {
       try {
@@ -56,37 +57,38 @@ function Layout() {
           body: JSON.stringify({ commentId, email: user?.email }),
         });
       } catch (e) {
-        // 콘솔만 찍고 UI는 그대로 둠
         console.warn("mark-read failed", e);
       }
     },
     [baseApi, user?.email]
   );
 
-  const markAllVisibleAsRead = useCallback(async () => {
+  // ✅ 모두 읽음 (신규) — 백엔드 일괄 처리 API 호출
+  const handleMarkAllRead = useCallback(async () => {
     if (!user?.email || notifications.length === 0) return;
-    const ids = notifications.map((n) => n._id);
-    // 1) 로컬 뱃지 즉시 0
-    setBadgeCount(0);
-    // 2) 로컬 표시용 readIds에 추가 → 회색 처리
-    setReadIds((prev) => new Set([...prev, ...ids]));
-    // 3) 서버에도 순차 반영(실패해도 UX 유지)
-    ids.forEach((id) => markRead(id));
-  }, [notifications, user?.email, markRead]);
+    try {
+      // 1) 서버에 일괄 요청
+      await fetch(`${baseApi}/notification/mark-all-read`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: user.email, minutes: 5 }),
+      });
 
-  // 벨 클릭 → 모달 토글 + 열릴 때 읽음 처리
-  const onBellClick = () => {
-    setShowModal((open) => {
-      const next = !open;
-      if (!open && notifications.length > 0) {
-        // 모달을 "열 때"만 처리
-        markAllVisibleAsRead();
-      }
-      return next;
-    });
-  };
+      // 2) 로컬 UI 즉시 반영: 배지 0, 현재 보이는 항목 전부 '읽음' 표시
+      setBadgeCount(0);
+      setReadIds((prev) => new Set([...prev, ...notifications.map((n) => n._id)]));
 
-  // --- 새 대화 알림 → 플로팅 채팅 박스 오픈 ---
+      // 3) 깔끔 UX: 모달 닫고(선택) 다음 폴링에서 서버 기준으로 목록 정리됨
+      setShowModal(false);
+    } catch (e) {
+      console.error("mark-all-read failed", e);
+    }
+  }, [baseApi, user?.email, user?.email, notifications]);
+
+  // 벨 클릭 → 모달 토글
+  const onBellClick = () => setShowModal((v) => !v);
+
+  // 새 대화 → 플로팅 채팅
   useEffect(() => {
     if (!user || !socket) return;
     const handleNewConversation = ({ targetEmail, conversationId }) => {
@@ -95,9 +97,6 @@ function Layout() {
     socket.on("newConversation", handleNewConversation);
     return () => socket.off("newConversation", handleNewConversation);
   }, [user, socket]);
-
-  // 읽은 스타일 헬퍼
-  const isRead = (id) => readIds.has(id);
 
   return (
     <div className="flex flex-col min-h-screen bg-cream text-ink font-body">
@@ -177,18 +176,29 @@ function Layout() {
         <div className="fixed top-24 right-8 bg-white border border-sand shadow-xl rounded-lg w-80 max-h-96 overflow-y-auto z-50">
           <div className="p-4 border-b font-bold text-softGold flex justify-between items-center">
             <span>Notifications</span>
-            <button onClick={() => setShowModal(false)} className="text-sm text-gray-500 hover:text-red-500">✕</button>
+            <div className="flex items-center gap-2">
+              {/* ✅ 모두 읽음 버튼 */}
+              <button
+                onClick={handleMarkAllRead}
+                disabled={!user?.email || notifications.length === 0}
+                className="text-xs text-blue-600 hover:underline disabled:opacity-40"
+              >
+                Mark all read
+              </button>
+              <button onClick={() => setShowModal(false)} className="text-sm text-gray-500 hover:text-red-500">
+                ✕
+              </button>
+            </div>
           </div>
           <ul className="divide-y">
             {notifications.length > 0 ? (
               notifications.map((n) => {
-                const read = isRead(n._id);
+                const read = isRead(n._id); // 방금 mark-all 후엔 로컬에서 회색 표시
                 return (
                   <li key={n._id} className={read ? "bg-gray-50" : ""}>
                     <Link
                       to={`/freeboard/${n.postId}#comment-${n._id}`}
                       onClick={async () => {
-                        // 단건 클릭 시에도 읽음 처리(중복 방지)
                         if (!read) {
                           setReadIds((prev) => new Set(prev).add(n._id));
                           await markRead(n._id);
@@ -235,6 +245,7 @@ function Layout() {
 }
 
 export default Layout;
+
 
 
 
