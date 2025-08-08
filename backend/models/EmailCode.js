@@ -5,7 +5,7 @@ const EmailCodeSchema = new mongoose.Schema(
   {
     email: { type: String, required: true, index: true, lowercase: true, trim: true },
     codeHash: { type: String, required: true },
-    expiresAt: { type: Date, required: true, index: true },
+    expiresAt: { type: Date,  index: true },
     attempts: { type: Number, default: 0 },
     verified: { type: Boolean, default: false },
   },
