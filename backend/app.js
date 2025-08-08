@@ -7,7 +7,7 @@ const dotenv = require("dotenv");
 const authRoutes = require("./routes/auth");
 const postsRoutes = require("./routes/posts");
 const commentRoutes = require("./routes/comments");
-const notificationRoutes = require("./routes/notifications");
+const notificationRoute = require("./routes/notification"); // 단수형!
 const marketRoutes = require("./routes/market");
 const chatRoutes = require("./routes/chat");
 const requestRoutes = require("./routes/request");
@@ -53,7 +53,7 @@ app.use(express.json());
 app.use("/api/auth", authRoutes);
 app.use("/api/posts", postsRoutes);
 app.use("/api/comments", commentRoutes);
-app.use("/api/notifications", notificationRoutes);
+app.use("/api/notification", notificationRoute);
 app.use("/api/market", marketRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/request", requestRoutes);

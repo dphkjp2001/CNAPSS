@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { Link, Outlet } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import useNotificationsPolling from "../hooks/useNotificationsPolling";
+import useNotificationsPolling from "../hooks/useNotificationsPolling"; // ✅ 새 훅
 import Footer from "./Footer";
 import ChatBox from "./Chatbox";
 import { useSocket } from "../contexts/SocketContext";
@@ -10,11 +10,15 @@ import { useSocket } from "../contexts/SocketContext";
 function Layout() {
   const { user, logout } = useAuth();
   const socket = useSocket();
-  const notifications = useNotificationsPolling(user?.email);
+
+  // ✅ 활성 탭 5초 / 비활성 탭 60초 / 조회기간 5분
+  const notifications = useNotificationsPolling(user?.email, 5000, 60000, 5);
+
   const [showModal, setShowModal] = useState(false);
   const [floatingChat, setFloatingChat] = useState(null);
   const [showScheduleDropdown, setShowScheduleDropdown] = useState(false);
 
+  // 🔁 새 대화 알림 → 플로팅 채팅 박스 오픈
   useEffect(() => {
     if (!user || !socket) return;
 
@@ -25,10 +29,7 @@ function Layout() {
     };
 
     socket.on("newConversation", handleNewConversation);
-
-    return () => {
-      socket.off("newConversation", handleNewConversation);
-    };
+    return () => socket.off("newConversation", handleNewConversation);
   }, [user, socket]);
 
   return (
@@ -39,6 +40,7 @@ function Layout() {
           <Link to="/dashboard" className="text-2xl font-heading font-bold text-ink hover:text-softGold transition">
             CNAPSS
           </Link>
+
           <div className="flex items-center gap-4 text-sm font-body font-medium relative">
             <Link to="/freeboard" className="hover:text-softGold transition">Free Board</Link>
             <Link to="/recommend" className="hover:text-softGold transition">Course Recs</Link>
@@ -73,6 +75,7 @@ function Layout() {
                 )}
               </button>
             )}
+
             {user ? (
               <>
                 <span className="text-xs text-gray-500">{user.email}</span>
@@ -109,12 +112,13 @@ function Layout() {
                     onClick={() => setShowModal(false)}
                     className="block p-3 text-sm text-gray-700 hover:bg-cream transition"
                   >
-                    💬 <b>{n.nickname}</b> commented on your {n.parentId ? "comment" : "post"}
+                    💬 <b>Somebody</b> commented on your {n.parentId ? "comment" : "post"}
+                    {/* <div className="text-xs text-gray-400 mt-1">{new Date(n.createdAt).toLocaleString()}</div> */}
                   </Link>
                 </li>
               ))
             ) : (
-              <li className="p-3 text-sm text-gray-500">No new notifications</li>
+              <li className="p-3 text-sm text-gray-500">No notifications</li>
             )}
           </ul>
         </div>
