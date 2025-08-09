@@ -16,7 +16,7 @@ const scheduleRoutes = require("./routes/schedule");
 
 // Foodplace
 const placesRouter = require("./routes/places");
-app.use("/api/places", placesRouter);
+
 
 
 // ✅ 환경변수 설정
@@ -63,6 +63,7 @@ app.use("/api/chat", chatRoutes);
 app.use("/api/request", requestRoutes);
 app.use("/api/course", courseRoutes);
 app.use("/api/schedule", scheduleRoutes);
+app.use("/api/places", placesRouter); // 여기?
 
 // ✅ 헬스체크
 app.get("/", (req, res) => {
