@@ -1,15 +1,26 @@
 // frontend/src/pages/dashboard/Dashboard.jsx
-
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useSchool } from "../../contexts/SchoolContext";
-import { Navigate, Link } from "react-router-dom";
+import { Navigate, Link, useNavigate } from "react-router-dom";
+
+// Mini map preview (Leaflet)
+import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
+import "leaflet/dist/leaflet.css";
 
 function Dashboard() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { school, schoolTheme, loading } = useSchool();
   const [latestPosts, setLatestPosts] = useState([]);
   const baseURL = import.meta.env.VITE_API_URL;
+
+  // Center for mini map (NYU fallback)
+  // TODO: if you store lat/lon per school in SchoolContext, replace here
+  const SCHOOL_CENTER = useMemo(() => {
+    // NYU default
+    return { lat: 40.7291, lon: -73.9965 };
+  }, []);
 
   if (loading) return null;
   if (!school) return <Navigate to="/select-school" />;
@@ -74,6 +85,12 @@ function Dashboard() {
                 Marketplace
               </Link>
             </li>
+            {/* Optional: keep a direct link too */}
+            <li>
+              <Link to="/foodmap" className="hover:text-softGold transition">
+                Food Map
+              </Link>
+            </li>
           </ul>
         </aside>
 
@@ -125,20 +142,44 @@ function Dashboard() {
             )}
           </section>
 
-          {/* Announcements */}
+          {/* Announcements → Clickable Food Map Card with mini map preview */}
           <section
-            className="w-full rounded-2xl p-6 border border-sand shadow-inner"
+            onClick={() => navigate("/foodmap")}
+            className="w-full rounded-2xl p-0 border border-sand shadow-inner cursor-pointer hover:shadow-lg transition bg-white overflow-hidden"
             style={{ backgroundColor: "#f8f5ff" }}
+            title="Go to Food Map"
           >
-            <h2
-              className="font-heading text-lg mb-2 font-semibold"
-              style={{ color: schoolTheme.text }}
-            >
-              Announcements
-            </h2>
-            <p className="text-gray-700 text-sm">
-              New features are coming soon!
-            </p>
+            <div className="p-6">
+              <h2
+                className="font-heading text-lg mb-1 font-semibold flex items-center gap-2"
+                style={{ color: schoolTheme.text }}
+              >
+                🍽️ Explore Nearby Food
+                <span className="text-xs text-blue-600 underline ml-2">Open map</span>
+              </h2>
+              <p className="text-gray-700 text-sm">
+                Discover top‑rated restaurants and cafes near campus. Click to open the full map.
+              </p>
+            </div>
+
+            {/* Mini map preview (non-interactive) */}
+            <div className="h-56 pointer-events-none select-none">
+              <MapContainer
+                center={[SCHOOL_CENTER.lat, SCHOOL_CENTER.lon]}
+                zoom={15}
+                style={{ height: "100%", width: "100%" }}
+                attributionControl={false}
+                zoomControl={false}
+              >
+                <TileLayer
+                  attribution='&copy; OpenStreetMap contributors'
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                />
+                <Marker position={[SCHOOL_CENTER.lat, SCHOOL_CENTER.lon]}>
+                  <Popup>Campus Center</Popup>
+                </Marker>
+              </MapContainer>
+            </div>
           </section>
         </main>
       </div>
@@ -147,4 +188,3 @@ function Dashboard() {
 }
 
 export default Dashboard;
-

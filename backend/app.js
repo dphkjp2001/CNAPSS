@@ -14,6 +14,10 @@ const requestRoutes = require("./routes/request");
 const courseRoutes = require("./routes/course");
 const scheduleRoutes = require("./routes/schedule");
 
+// Foodplace
+const placesRouter = require("./routes/places");
+app.use("/api/places", placesRouter);
+
 
 // ✅ 환경변수 설정
 dotenv.config({

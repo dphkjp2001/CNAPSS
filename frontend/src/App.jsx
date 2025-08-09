@@ -35,6 +35,12 @@ import RequireAuth from "./components/RequireAuth";
 import PersonalSchedule from "./pages/schedule/PersonalSchedule";
 import GroupAvailability from "./pages/schedule/GroupAvailability";
 
+
+// 식당 추천용
+import FoodMap from "./pages/food/FoodMap";
+
+
+
 function App() {
   return (
     <Routes>
@@ -153,6 +159,18 @@ function App() {
             </RequireAuth>
           }
         />
+
+        <Route 
+          path="/foodmap" 
+          element={
+            <RequireAuth>
+                <FoodMap/>
+            </RequireAuth>
+          } 
+        />
+
+
+
       </Route>
 
       <Route path="*" element={<Navigate to="/" />} />
