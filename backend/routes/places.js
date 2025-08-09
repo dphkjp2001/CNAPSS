@@ -7,7 +7,11 @@ const router = express.Router();
 const cache = new NodeCache({ stdTTL: 60 * 30 }); // 30 min cache
 
 const FSQ_BASE = "https://api.foursquare.com/v3";
-const FSQ_KEY = process.env.FOURSQUARE_API_KEY;
+const FSQ_KEY =
+  process.env.FOURSQUARE_API_KEY ||
+  process.env.CNAPSSFOODMAP ||                // 👉 너가 쓴 이름
+  process.env.VITE_FOURSQUARE_API_KEY ||      // 혹시 프론트 환경변수로 넣어둔 경우
+  null;
 if (!FSQ_KEY) {
   console.warn("[places] FOURSQUARE_API_KEY is not set.");
 }
