@@ -1,0 +1,1 @@
+const d=async o=>{const t="dpao8me5f",e="cnapss_unsigned",s=`https://api.cloudinary.com/v1_1/${t}/image/upload`,a=new FormData;return a.append("file",o),a.append("upload_preset",e),(await(await fetch(s,{method:"POST",body:a})).json()).secure_url};export{d as u};
