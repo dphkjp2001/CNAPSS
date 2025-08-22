@@ -1,4 +1,4 @@
-// frontend/src/pages/freeboard/FreeBoardList.jsx
+/// src/pages/freeboard/FreeBoardList.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
@@ -51,25 +51,31 @@ export default function FreeBoardList() {
 
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState("");
 
   // UI state
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState("new"); // "new" | "old"
   const [page, setPage] = useState(1);
 
+  // ✅ school 스코프 반영해서 불러오기
   useEffect(() => {
+    let alive = true;
     (async () => {
       setLoading(true);
+      setError("");
       try {
-        const data = await fetchPosts(school); // ✅ school filter
-        setPosts(Array.isArray(data) ? data : []);
-      } catch (e) {
-        setError("Failed to load posts.");
+        const data = await fetchPosts(school); // ← 서버에 ?school=NYU 로 요청
+        if (alive) setPosts(Array.isArray(data) ? data : []);
+      } catch {
+        if (alive) setError("Failed to load posts.");
       } finally {
-        setLoading(false);
+        if (alive) setLoading(false);
       }
     })();
+    return () => {
+      alive = false;
+    };
   }, [school]);
 
   const filtered = useMemo(() => {
@@ -77,10 +83,11 @@ export default function FreeBoardList() {
     let list = posts.filter((p) =>
       q ? p.title?.toLowerCase().includes(q) || p.content?.toLowerCase().includes(q) : true
     );
-    list = list.sort((a, b) => {
-      if (sort === "old") return new Date(a.createdAt) - new Date(b.createdAt);
-      return new Date(b.createdAt) - new Date(a.createdAt);
-    });
+    list = list.sort((a, b) =>
+      sort === "old"
+        ? new Date(a.createdAt) - new Date(b.createdAt)
+        : new Date(b.createdAt) - new Date(a.createdAt)
+    );
     return list;
   }, [posts, query, sort]);
 

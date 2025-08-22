@@ -1,5 +1,5 @@
-// frontend/src/pages/freeboard/FreeBoardWrite.jsx
-import React, { useMemo, useState } from "react";
+/// frontend/src/pages/freeboard/FreeBoardWrite.jsx
+import React, { useMemo, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { useSchool } from "../../contexts/SchoolContext";
@@ -9,7 +9,7 @@ import { createPost } from "../../api/posts";
 
 export default function FreeBoardWrite() {
   const { user } = useAuth();
-  const { school, schoolTheme } = useSchool();
+  const { school, schoolTheme } = useSchool(); // ✅ scoped campus
   const schoolPath = useSchoolPath();
   const navigate = useNavigate();
 
@@ -17,7 +17,39 @@ export default function FreeBoardWrite() {
   const [content, setContent] = useState("");
   const [error, setError] = useState("");
 
-  const isValid = useMemo(() => title.trim() && content.trim(), [title, content]);
+  const isValid = useMemo(
+    () => Boolean(title.trim() && content.trim()),
+    [title, content]
+  );
+
+  const submit = useCallback(async () => {
+    if (!isValid || !user) return;
+    try {
+      setError("");
+      await createPost({
+        title: title.trim(),
+        content: content.trim(),
+        email: user.email,
+        nickname: user.nickname,
+        school, // ✅ send campus to backend
+      });
+      alert("Post submitted!");
+      navigate(schoolPath("/freeboard"));
+    } catch (err) {
+      console.error("Post creation error:", err);
+      const msg = err?.message || "Unexpected error occurred.";
+      setError(msg);
+      alert(msg);
+    }
+  }, [isValid, user, title, content, school, navigate, schoolPath]);
+
+  const handleKeyDown = (e) => {
+    // Cmd/Ctrl + Enter to submit
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      e.preventDefault();
+      submit();
+    }
+  };
 
   if (!user) {
     return (
@@ -29,26 +61,6 @@ export default function FreeBoardWrite() {
       </div>
     );
   }
-
-  const handleSubmit = async () => {
-    if (!isValid) return;
-    try {
-      setError("");
-      await createPost({
-        title: title.trim(),
-        content: content.trim(),
-        email: user.email,
-        nickname: user.nickname,
-        school, // ✅ scope
-      });
-      alert("Post submitted!");
-      navigate(schoolPath("/freeboard"));
-    } catch (err) {
-      console.error("Post creation error:", err);
-      setError(err?.message || "Unexpected error occurred.");
-      alert(err?.message || "Unexpected error occurred.");
-    }
-  };
 
   return (
     <div
@@ -71,6 +83,7 @@ export default function FreeBoardWrite() {
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
+                onKeyDown={handleKeyDown}
                 placeholder="Enter a title"
                 className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:border-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900/10"
                 required
@@ -83,6 +96,7 @@ export default function FreeBoardWrite() {
               <textarea
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
+                onKeyDown={handleKeyDown}
                 placeholder="Write your content here..."
                 rows={10}
                 className="mt-2 w-full resize-y rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:border-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900/10"
@@ -110,7 +124,7 @@ export default function FreeBoardWrite() {
               </button>
 
               <AsyncButton
-                onClick={handleSubmit}
+                onClick={submit}
                 loadingText="Posting…"
                 className="inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold text-white shadow disabled:opacity-60"
                 style={{ backgroundColor: schoolTheme?.primary || "#6b46c1" }}
@@ -125,6 +139,3 @@ export default function FreeBoardWrite() {
     </div>
   );
 }
-
-
-

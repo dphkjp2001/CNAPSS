@@ -1,5 +1,4 @@
-// 📁 파일 경로: backend/models/User.js
-
+// backend/models/User.js
 const mongoose = require('mongoose');
 
 const userSchema = new mongoose.Schema(
@@ -7,11 +6,16 @@ const userSchema = new mongoose.Schema(
     email: { type: String, required: true, unique: true },
     nickname: { type: String, required: true },
     password: { type: String, required: true },
-
-    // ✅ 이메일 인증 여부 (링크 클릭 기반)
     isVerified: { type: Boolean, default: false },
 
-    // 친구 기능 관련
+    // ✅ 소속 학교
+    school: {
+      type: String,
+      required: true,
+      enum: ["nyu", "columbia", "boston"], // 원하는 학교 코드만
+      index: true,
+    },
+
     friends: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
     friendRequests: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
     sentRequests: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
@@ -19,4 +23,4 @@ const userSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-module.exports = mongoose.model('User', userSchema);
+module.exports = mongoose.model("User", userSchema);
