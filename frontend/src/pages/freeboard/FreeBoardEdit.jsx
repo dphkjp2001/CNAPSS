@@ -1,13 +1,17 @@
-// src/pages/freeboard/FreeBoardEdit.jsx
+// frontend/src/pages/freeboard/FreeBoardEdit.jsx
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
-import { fetchPostById, updatePost } from "../../api/posts"; // ✅ API 분리된 함수 가져오기
+import { useSchool } from "../../contexts/SchoolContext";
+import { useSchoolPath } from "../../utils/schoolPath";
+import { fetchPostById, updatePost } from "../../api/posts";
 
-function FreeBoardEdit() {
+export default function FreeBoardEdit() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { school } = useSchool();
+  const schoolPath = useSchoolPath();
 
   const [form, setForm] = useState({ title: "", content: "" });
   const [loading, setLoading] = useState(true);
@@ -16,7 +20,7 @@ function FreeBoardEdit() {
   useEffect(() => {
     const loadPost = async () => {
       try {
-        const data = await fetchPostById(id);
+        const data = await fetchPostById(id, school); // ✅ guard
         setForm({ title: data.title, content: data.content });
       } catch (err) {
         setError(err.message);
@@ -24,9 +28,8 @@ function FreeBoardEdit() {
         setLoading(false);
       }
     };
-
     loadPost();
-  }, [id]);
+  }, [id, school]);
 
   const handleChange = (e) => {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
@@ -39,10 +42,10 @@ function FreeBoardEdit() {
         title: form.title,
         content: form.content,
         email: user.email,
+        school, // ✅ scope
       });
-
       alert("Post updated!");
-      navigate(`/freeboard/${id}`);
+      navigate(schoolPath(`/freeboard/${id}`));
     } catch (err) {
       alert("Update failed: " + err.message);
     }
@@ -72,15 +75,12 @@ function FreeBoardEdit() {
           required
         />
         <div className="flex gap-4">
-          <button
-            type="submit"
-            className="bg-green-500 text-white px-4 py-2 rounded"
-          >
+          <button type="submit" className="bg-green-500 text-white px-4 py-2 rounded">
             Save Changes
           </button>
           <button
             type="button"
-            onClick={() => navigate(-1)}
+            onClick={() => navigate(schoolPath(`/freeboard/${id}`))}
             className="bg-gray-400 text-white px-4 py-2 rounded"
           >
             Cancel
@@ -91,7 +91,6 @@ function FreeBoardEdit() {
   );
 }
 
-export default FreeBoardEdit;
 
 
 

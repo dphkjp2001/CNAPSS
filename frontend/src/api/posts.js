@@ -1,65 +1,75 @@
 // src/api/posts.js
 const BASE = import.meta.env.VITE_API_URL;
 
-// 📌 모든 게시글 가져오기
-export const fetchPosts = async () => {
-  const res = await fetch(`${BASE}/posts`);
-  if (!res.ok) throw new Error("Failed to fetch posts");
-  return res.json();
-};
-
-// 📌 단일 게시글 가져오기
-export const fetchPostById = async (id) => {
-  const res = await fetch(`${BASE}/posts/${id}`);
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.message || "Failed to load post");
-  return data;
-};
-
-// 📌 게시글 생성
-export const createPost = async ({ email, nickname, title, content }) => {
-  const res = await fetch(`${BASE}/posts`, {
-    method: "POST",
+// ------- helpers -------
+async function http(method, url, body) {
+  const res = await fetch(url, {
+    method,
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, nickname, title, content }),
+    ...(body ? { body: JSON.stringify(body) } : {}),
   });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.message || "Failed to create post");
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || `Request failed: ${res.status}`);
   return data;
+}
+
+function withQS(url, params) {
+  const qp = new URLSearchParams(
+    Object.entries(params || {}).filter(([, v]) => v !== undefined && v !== null)
+  );
+  const qs = qp.toString();
+  return qs ? `${url}?${qs}` : url;
+}
+
+// ------- Posts -------
+
+// List (scoped)
+export const fetchPosts = async (school) => {
+  if (!school) throw new Error("school is required");
+  return http("GET", withQS(`${BASE}/posts`, { school }));
 };
 
-// 📌 게시글 수정
-export const updatePost = async (id, { email, title, content }) => {
-  const res = await fetch(`${BASE}/posts/${id}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, title, content }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.message || "Failed to update post");
-  return data;
+// Detail (optional guard with school)
+export const fetchPostById = async (id, school) => {
+  if (!id) throw new Error("id is required");
+  return http("GET", withQS(`${BASE}/posts/${id}`, { school }));
 };
 
-// 📌 게시글 삭제
-export const deletePost = async (id, email) => {
-  const res = await fetch(`${BASE}/posts/${id}`, {
-    method: "DELETE",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.message || "Failed to delete post");
-  return data;
+// Create (verified users) — school required
+export const createPost = async ({ email, nickname, title, content, school }) => {
+  if (!school) throw new Error("school is required");
+  return http("POST", `${BASE}/posts`, { email, nickname, title, content, school });
 };
 
-// 📌 좋아요 토글
+// Update (author + school guard)
+export const updatePost = async (id, { email, title, content, school }) => {
+  if (!id) throw new Error("id is required");
+  if (!school) throw new Error("school is required");
+  return http("PUT", `${BASE}/posts/${id}`, { email, title, content, school });
+};
+
+// Delete (author + school guard)
+export const deletePost = async (id, email, school) => {
+  if (!id) throw new Error("id is required");
+  if (!school) throw new Error("school is required");
+  return http("DELETE", `${BASE}/posts/${id}`, { email, school });
+};
+
+// Toggle like (doc has school already)
 export const togglePostLike = async (id, email) => {
-  const res = await fetch(`${BASE}/posts/${id}/thumbs`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.message || "Failed to toggle like");
-  return data;
+  if (!id) throw new Error("id is required");
+  return http("POST", `${BASE}/posts/${id}/thumbs`, { email });
+};
+
+// Dashboard helpers
+export const fetchLikedPosts = async (email, school) => {
+  if (!email) throw new Error("email is required");
+  if (!school) throw new Error("school is required");
+  return http("GET", withQS(`${BASE}/posts/liked/${email}`, { school }));
+};
+
+export const fetchCommentedPosts = async (email, school) => {
+  if (!email) throw new Error("email is required");
+  if (!school) throw new Error("school is required");
+  return http("GET", withQS(`${BASE}/posts/commented/${email}`, { school }));
 };

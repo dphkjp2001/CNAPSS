@@ -1,61 +1,86 @@
-// src/pages/dashboard/MyPosts.jsx
-
-import React, { useEffect, useState } from "react";
+// frontend/src/pages/dashboard/MyPosts.jsx
+import React, { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../contexts/AuthContext";
+import { useSchool } from "../../contexts/SchoolContext";
+import { useSchoolPath } from "../../utils/schoolPath";
+import { fetchPosts } from "../../api/posts";
 import { Link } from "react-router-dom";
 
-function MyPosts() {
+export default function MyPosts() {
   const { user } = useAuth();
-  const [myPosts, setMyPosts] = useState([]);
-  const baseURL = import.meta.env.VITE_API_URL;
+  const { school, schoolTheme } = useSchool();
+  const schoolPath = useSchoolPath();
+
+  const [allPosts, setAllPosts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState("");
 
   useEffect(() => {
-    const fetchPosts = async () => {
+    if (!school) return;
+    (async () => {
+      setLoading(true);
       try {
-        const res = await fetch(`${baseURL}/posts`);
-        const data = await res.json();
-        if (Array.isArray(data)) {
-          const filtered = data.filter((p) => p.email === user?.email);
-          setMyPosts(filtered.reverse()); // 최신 글이 위로
-        }
-      } catch (err) {
-        console.error("Failed to load posts:", err);
+        const data = await fetchPosts(school); // ✅ scoped list
+        setAllPosts(Array.isArray(data) ? data : []);
+      } catch (e) {
+        setErr(e?.message || "Failed to load posts.");
+      } finally {
+        setLoading(false);
       }
-    };
-    fetchPosts();
-  }, [user, baseURL]);
+    })();
+  }, [school]);
+
+  const myPosts = useMemo(() => {
+    const me = user?.email;
+    if (!me) return [];
+    return allPosts
+      .filter((p) => p.email === me)
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  }, [allPosts, user?.email]);
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
-      <h2 className="text-2xl font-heading mb-6"> My Posts</h2>
+    <div
+      className="min-h-screen px-4 py-8 sm:px-6"
+      style={{ backgroundColor: schoolTheme?.bg || "#f6f3ff" }}
+    >
+      <div className="mx-auto max-w-4xl">
+        <h2 className="mb-6 text-2xl font-bold text-gray-900">My Posts</h2>
 
-      {myPosts.length === 0 ? (
-        <p className="text-gray-500">You haven’t posted anything yet.</p>
-      ) : (
-        <ul className="space-y-4">
-          {myPosts.map((post) => (
-            <li
-              key={post._id}
-              className="bg-white shadow rounded p-4 border border-gray-200"
-            >
-              <Link
-                to={`/freeboard/${post._id}`}
-                className="text-lg font-semibold text-softGold hover:underline"
+        {loading ? (
+          <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm text-sm text-gray-600">
+            Loading…
+          </div>
+        ) : err ? (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            {err}
+          </div>
+        ) : myPosts.length === 0 ? (
+          <p className="text-gray-600">You haven’t posted anything yet.</p>
+        ) : (
+          <ul className="space-y-4">
+            {myPosts.map((post) => (
+              <li
+                key={post._id}
+                className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
               >
-                {post.title}
-              </Link>
-              <p className="text-xs text-gray-400">
-                {new Date(post.createdAt).toLocaleDateString()}
-              </p>
-              <p className="text-sm text-gray-700 mt-2 truncate">
-                {post.content.slice(0, 100)}...
-              </p>
-            </li>
-          ))}
-        </ul>
-      )}
+                <Link
+                  to={schoolPath(`/freeboard/${post._id}`)}
+                  className="text-lg font-semibold text-gray-900 hover:underline"
+                >
+                  {post.title}
+                </Link>
+                <p className="text-xs text-gray-500">
+                  {new Date(post.createdAt).toLocaleDateString()}
+                </p>
+                <p className="mt-2 line-clamp-2 text-sm text-gray-700">
+                  {post.content}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }
 
-export default MyPosts;

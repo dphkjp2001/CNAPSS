@@ -1,120 +1,149 @@
-// src/pages/freeboard/FreeBoardDetail.jsx
-//반응형 수정 함
-import React, { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+// frontend/src/pages/freeboard/FreeBoardDetail.jsx
+import React, { useEffect, useMemo, useState } from "react";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
+import { useSchool } from "../../contexts/SchoolContext";
+import { useSchoolPath } from "../../utils/schoolPath";
 import CommentSection from "../../components/CommentSection";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import "dayjs/locale/en";
 
-import {
-  fetchPostById,
-  deletePost,
-  togglePostLike,
-} from "../../api/posts"; // ✅ 분리된 API 불러오기
+import { fetchPostById, deletePost, togglePostLike } from "../../api/posts";
 
 dayjs.extend(relativeTime);
 dayjs.locale("en");
 
-function FreeBoardDetail() {
+export default function FreeBoardDetail() {
   const { id } = useParams();
-  const { user } = useAuth();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const { school, schoolTheme } = useSchool();
+  const schoolPath = useSchoolPath();
 
   const [post, setPost] = useState(null);
   const [error, setError] = useState("");
 
   const loadPost = async () => {
     try {
-      const data = await fetchPostById(id);
+      const data = await fetchPostById(id, school); // ✅ guard with school
       setPost(data);
     } catch (err) {
-      setError(err.message);
+      setError(err.message || "Failed to load the post.");
     }
   };
 
   useEffect(() => {
     loadPost();
-  }, [id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, school]);
+
+  const isAuthor = useMemo(() => user?.email === post?.email, [user, post]);
 
   const handleDelete = async () => {
-    if (!window.confirm("Are you sure you want to delete this post?")) return;
+    if (!window.confirm("Delete this post?")) return;
     try {
-      await deletePost(id, user.email);
-      alert("Post deleted successfully");
-      navigate("/freeboard");
+      await deletePost(id, user.email, school); // ✅ scoped delete
+      alert("Post deleted.");
+      navigate(schoolPath("/freeboard"));
     } catch (err) {
-      alert("Delete failed: " + err.message);
+      alert("Delete failed: " + (err.message || "Unknown error"));
     }
   };
 
   const handleThumb = async () => {
     try {
       await togglePostLike(id, user.email);
-      loadPost();
+      await loadPost();
     } catch (err) {
-      alert("추천 실패: " + err.message);
+      alert("Failed to like: " + (err.message || "Unknown error"));
     }
   };
 
-  if (error) return <p className="text-red-500">{error}</p>;
-  if (!post) return <p>Loading...</p>;
-
-  const isAuthor = user?.email === post.email;
+  if (error) {
+    return (
+      <div
+        className="min-h-screen flex items-center justify-center text-sm text-red-700"
+        style={{ backgroundColor: schoolTheme?.bg || "#f6f3ff" }}
+      >
+        {error}
+      </div>
+    );
+  }
+  if (!post) {
+    return (
+      <div
+        className="min-h-screen flex items-center justify-center text-sm text-gray-600"
+        style={{ backgroundColor: schoolTheme?.bg || "#f6f3ff" }}
+      >
+        Loading…
+      </div>
+    );
+  }
 
   return (
-    <div className="px-4 py-6 sm:px-6 md:px-8 max-w-3xl mx-auto"> {/* ✅ 수정됨 */}
-      <div className="bg-white shadow-md rounded-2xl px-4 py-5 sm:p-6 mb-6"> {/* ✅ 수정됨 */}
-        <h2 className="text-xl sm:text-2xl font-bold mb-2"> {/* ✅ 수정됨 */}
-          {post.title}
-        </h2>
-        <p className="text-gray-500 text-xs sm:text-sm mb-4"> {/* ✅ 수정됨 */}
-          Posted by anonymous1 • {dayjs(post.createdAt).fromNow()}
-        </p>
-        <p className="text-sm sm:text-base mb-6 whitespace-pre-wrap"> {/* ✅ 수정됨 */}
-          {post.content}
-        </p>
+    <div
+      className="min-h-screen px-4 py-6 sm:px-6"
+      style={{ backgroundColor: schoolTheme?.bg || "#f6f3ff" }}
+    >
+      <div className="mx-auto max-w-3xl">
+        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+          <div className="border-b border-gray-100 p-5 sm:p-6">
+            <h1 className="text-2xl font-bold text-gray-900">{post.title}</h1>
+            <p className="mt-1 text-sm text-gray-500">
+              Posted by <span className="font-medium">anonymous</span> • {dayjs(post.createdAt).fromNow()}
+            </p>
+          </div>
 
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-4"> {/* ✅ 수정됨 */}
-          <button
-            onClick={handleThumb}
-            className="text-xs sm:text-sm px-3 py-1 rounded bg-gray-100 hover:bg-gray-200"
-          >
-            👍 {post.thumbsUpUsers?.length || 0}
-          </button>
+          <div className="p-5 sm:p-6">
+            <div className="prose prose-sm max-w-none text-gray-800">
+              <p className="whitespace-pre-wrap leading-relaxed">{post.content}</p>
+            </div>
 
-          {isAuthor && (
-            <>
+            <div className="mt-6 flex flex-wrap items-center gap-3">
               <button
-                onClick={() => navigate(`/freeboard/edit/${post._id}`)}
-                className="px-4 py-1 bg-yellow-400 hover:bg-yellow-500 text-white text-sm font-medium rounded-xl"
+                onClick={handleThumb}
+                className="rounded-xl border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-800 shadow-sm hover:bg-gray-50"
+                aria-label="like post"
               >
-                Edit
+                👍 {post.thumbsUpUsers?.length || 0}
               </button>
-              <button
-                onClick={handleDelete}
-                className="px-4 py-1 bg-red-500 hover:bg-red-600 text-white text-sm font-medium rounded-xl"
+
+              {isAuthor && (
+                <>
+                  <button
+                    onClick={() => navigate(schoolPath(`/freeboard/edit/${post._id}`))}
+                    className="rounded-xl px-4 py-2 text-sm font-semibold text-white shadow"
+                    style={{ backgroundColor: schoolTheme?.primary || "#6b46c1" }}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={handleDelete}
+                    className="rounded-xl bg-red-500 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-red-600"
+                  >
+                    Delete
+                  </button>
+                </>
+              )}
+
+              <Link
+                to={schoolPath("/freeboard")}
+                className="ml-auto text-sm font-medium text-blue-600 underline underline-offset-2"
               >
-                Delete
-              </button>
-            </>
-          )}
+                ← Back to List
+              </Link>
+            </div>
+          </div>
         </div>
 
-        <button
-          onClick={() => navigate("/freeboard")}
-          className="text-sm text-blue-600 hover:underline"
-        >
-          ← Back to List
-        </button>
+        {post?._id && (
+          <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
+            <CommentSection postId={post._id} postAuthorEmail={post.email} />
+          </div>
+        )}
       </div>
-
-      {post?._id && (
-        <CommentSection postId={post._id} postAuthorEmail={post.email} />
-      )}
     </div>
   );
 }
 
-export default FreeBoardDetail;
