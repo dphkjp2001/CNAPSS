@@ -1,0 +1,1 @@
+import{g as e,e as t,b as r}from"./index-d2a4a0a2.js";function a(){const{school:o}=t(),{school:s,setSchool:c}=r();return o&&o!==s&&c(o),o||s}function l(){const o=a();return s=>e("/:school/*",{school:o,"*":String(s).replace(/^\//,"")})}export{l as u};
