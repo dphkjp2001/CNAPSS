@@ -1,16 +1,20 @@
-// src/components/Layout.jsx
+// 📁 src/components/Layout.jsx
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { Link, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { useSchool } from "../contexts/SchoolContext";
 import useNotificationsPolling from "../hooks/useNotificationsPolling";
 import Footer from "./Footer";
 import ChatBox from "./Chatbox";
 import { useSocket } from "../contexts/SocketContext";
+import { useSchoolPath } from "../utils/schoolPath"; // ✅ school-scoped path builder
 
 function Layout() {
   const { user, logout } = useAuth();
+  const { school } = useSchool(); // ✅ for register prefill
   const socket = useSocket();
   const navigate = useNavigate();
+  const schoolPath = useSchoolPath(); // ✅ use everywhere for links
 
   // ✅ 활성 5초 / 비활성 60초 / 최근 5분만
   const notifications = useNotificationsPolling(user?.email, 5000, 60000, 5);
@@ -67,23 +71,19 @@ function Layout() {
   const handleMarkAllRead = useCallback(async () => {
     if (!user?.email || notifications.length === 0) return;
     try {
-      // 1) 서버에 일괄 요청
       await fetch(`${baseApi}/notification/mark-all-read`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: user.email, minutes: 5 }),
       });
 
-      // 2) 로컬 UI 즉시 반영: 배지 0, 현재 보이는 항목 전부 '읽음' 표시
       setBadgeCount(0);
       setReadIds((prev) => new Set([...prev, ...notifications.map((n) => n._id)]));
-
-      // 3) 깔끔 UX: 모달 닫고(선택) 다음 폴링에서 서버 기준으로 목록 정리됨
       setShowModal(false);
     } catch (e) {
       console.error("mark-all-read failed", e);
     }
-  }, [baseApi, user?.email, user?.email, notifications]);
+  }, [baseApi, user?.email, notifications]);
 
   // 벨 클릭 → 모달 토글
   const onBellClick = () => setShowModal((v) => !v);
@@ -104,15 +104,24 @@ function Layout() {
       <header className="fixed top-0 left-0 right-0 bg-white/80 backdrop-blur-sm border-b border-sand z-50 h-20 flex items-center px-8">
         <div className="flex justify-between w-full items-center max-w-7xl mx-auto">
           <button
-            onClick={() => navigate("/dashboard")}
+            onClick={() => navigate(schoolPath("/dashboard"))} // ✅ always /:school/dashboard
             className="text-2xl font-heading font-bold text-ink hover:text-softGold transition"
           >
             CNAPSS
           </button>
 
           <div className="flex items-center gap-4 text-sm font-body font-medium relative">
-            <Link to="/freeboard" className="hover:text-softGold transition">Free Board</Link>
-            <Link to="/recommend" className="hover:text-softGold transition">Course Recs</Link>
+            <Link to={schoolPath("/freeboard")} className="hover:text-softGold transition">
+              Free Board
+            </Link>
+
+            {/* Course Recs: 라우트 미정이면 대시보드로 대체 */}
+            <button
+              onClick={() => navigate(schoolPath("/dashboard"))}
+              className="hover:text-softGold transition"
+            >
+              Course Recs
+            </button>
 
             {/* Schedule Grid Dropdown */}
             <div
@@ -123,13 +132,19 @@ function Layout() {
               <button className="hover:text-softGold transition">Schedule Grid ▾</button>
               {showScheduleDropdown && (
                 <div className="absolute top-6 left-0 bg-white border border-sand shadow-lg rounded-md z-50 w-48">
-                  <Link to="/personal-schedule" className="block px-4 py-2 hover:bg-cream">My Schedule</Link>
-                  <Link to="/group-availability" className="block px-4 py-2 hover:bg-cream">Group Scheduling</Link>
+                  <Link to={schoolPath("/personal-schedule")} className="block px-4 py-2 hover:bg-cream">
+                    My Schedule
+                  </Link>
+                  <Link to={schoolPath("/group-availability")} className="block px-4 py-2 hover:bg-cream">
+                    Group Scheduling
+                  </Link>
                 </div>
               )}
             </div>
 
-            <Link to="/market" className="hover:text-softGold transition">Marketplace</Link>
+            <Link to={schoolPath("/market")} className="hover:text-softGold transition">
+              Marketplace
+            </Link>
 
             {user && (
               <button
@@ -155,7 +170,10 @@ function Layout() {
               <>
                 <span className="text-xs text-gray-500">{user.email}</span>
                 <button
-                  onClick={logout}
+                  onClick={() => {
+                    logout();
+                    navigate("/login");
+                  }}
                   className="bg-softGold text-black px-3 py-1 rounded hover:opacity-90 transition font-body font-semibold"
                 >
                   Log out
@@ -163,8 +181,15 @@ function Layout() {
               </>
             ) : (
               <>
-                <Link to="/login" className="text-sm underline text-ink font-body">Login</Link>
-                <Link to="/register" className="text-sm underline text-ink font-body">Sign Up</Link>
+                <Link to="/login" className="text-sm underline text-ink font-body">
+                  Login
+                </Link>
+                <Link
+                  to={school ? `/register/${school}` : "/register"} // ✅ prefill school on register
+                  className="text-sm underline text-ink font-body"
+                >
+                  Sign Up
+                </Link>
               </>
             )}
           </div>
@@ -177,7 +202,6 @@ function Layout() {
           <div className="p-4 border-b font-bold text-softGold flex justify-between items-center">
             <span>Notifications</span>
             <div className="flex items-center gap-2">
-              {/* ✅ 모두 읽음 버튼 */}
               <button
                 onClick={handleMarkAllRead}
                 disabled={!user?.email || notifications.length === 0}
@@ -193,11 +217,11 @@ function Layout() {
           <ul className="divide-y">
             {notifications.length > 0 ? (
               notifications.map((n) => {
-                const read = isRead(n._id); // 방금 mark-all 후엔 로컬에서 회색 표시
+                const read = isRead(n._id);
                 return (
                   <li key={n._id} className={read ? "bg-gray-50" : ""}>
                     <Link
-                      to={`/freeboard/${n.postId}#comment-${n._id}`}
+                      to={schoolPath(`/freeboard/${n.postId}#comment-${n._id}`)} // ✅ scoped link
                       onClick={async () => {
                         if (!read) {
                           setReadIds((prev) => new Set(prev).add(n._id));
@@ -211,7 +235,6 @@ function Layout() {
                       }
                     >
                       💬 <b>Somebody</b> commented on your {n.parentId ? "comment" : "post"}
-                      {/* <div className="text-xs text-gray-400 mt-1">{new Date(n.createdAt).toLocaleString()}</div> */}
                     </Link>
                   </li>
                 );
@@ -245,6 +268,7 @@ function Layout() {
 }
 
 export default Layout;
+
 
 
 

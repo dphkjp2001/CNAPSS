@@ -1,86 +1,66 @@
 // src/api/posts.js
-const BASE = import.meta.env.VITE_API_URL;
+const BASE = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
+
+function authHeaders() {
+  const token = localStorage.getItem("token");
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+async function request(path, { method = "GET", headers = {}, body } = {}) {
+  const res = await fetch(`${BASE}${path}`, {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeaders(),
+      ...headers,
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  let data = null;
+  try {
+    data = await res.json();
+  } catch (_) {}
+  if (!res.ok) throw new Error(data?.message || `HTTP ${res.status}`);
+  return data;
+}
 
 // 목록 (학교별)
 export const fetchPosts = async (school) => {
-  const qs = school ? `?school=${encodeURIComponent(school)}` : "";
-  const res = await fetch(`${BASE}/posts${qs}`);
-  if (!res.ok) throw new Error("Failed to fetch posts");
-  return res.json();
+  if (!school) return [];
+  return request(`/posts?school=${encodeURIComponent(school)}`);
 };
 
-// 단일
-export const fetchPostById = async (id) => {
-  const res = await fetch(`${BASE}/posts/${id}`);
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.message || "Failed to load post");
-  return data;
+// 단일 (학교 스코프)
+export const fetchPostById = async (id, school) => {
+  return request(`/posts/${id}?school=${encodeURIComponent(school)}`);
 };
 
-// 생성 (학교를 반드시 보냄)
+// 생성
 export const createPost = async ({ email, nickname, title, content, school }) => {
-  const res = await fetch(`${BASE}/posts`, {
+  if (!school) throw new Error("School is required.");
+  return request(`/posts`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, nickname, title, content, school }),
+    body: { email, nickname, title, content, school },
   });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.message || "Failed to create post");
-  return data;
 };
 
-// 수정/삭제/좋아요 (변경 없음)
-export const updatePost = async (id, { email, title, content }) => {
-  const res = await fetch(`${BASE}/posts/${id}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, title, content }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.message || "Failed to update post");
-  return data;
-};
+// 수정/삭제/좋아요
+export const updatePost = async (id, { email, title, content }) =>
+  request(`/posts/${id}`, { method: "PUT", body: { email, title, content } });
 
-export const deletePost = async (id, email) => {
-  const res = await fetch(`${BASE}/posts/${id}`, {
-    method: "DELETE",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.message || "Failed to delete post");
-  return data;
-};
+export const deletePost = async (id, email) =>
+  request(`/posts/${id}`, { method: "DELETE", body: { email } });
 
-export const togglePostLike = async (id, email) => {
-  const res = await fetch(`${BASE}/posts/${id}/thumbs`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.message || "Failed to toggle like");
-  return data;
-};
+export const togglePostLike = async (id, email) =>
+  request(`/posts/${id}/thumbs`, { method: "POST", body: { email } });
 
 // 대시보드용
-export const fetchLikedPosts = async (email, school) => {
-  const qs = school ? `?school=${encodeURIComponent(school)}` : "";
-  const res = await fetch(`${BASE}/posts/liked/${encodeURIComponent(email)}${qs}`);
-  if (!res.ok) throw new Error("Failed to fetch liked posts");
-  return res.json();
-};
+export const fetchLikedPosts = async (email, school) =>
+  request(`/posts/liked/${encodeURIComponent(email)}?school=${encodeURIComponent(school)}`);
 
-export const fetchCommentedPosts = async (email, school) => {
-  const qs = school ? `?school=${encodeURIComponent(school)}` : "";
-  const res = await fetch(`${BASE}/posts/commented/${encodeURIComponent(email)}${qs}`);
-  if (!res.ok) throw new Error("Failed to fetch commented posts");
-  return res.json();
-};
+export const fetchCommentedPosts = async (email, school) =>
+  request(`/posts/commented/${encodeURIComponent(email)}?school=${encodeURIComponent(school)}`);
 
-export const fetchMyPosts = async (email, school) => {
-  const qs = school ? `?school=${encodeURIComponent(school)}` : "";
-  const res = await fetch(`${BASE}/posts?author=${encodeURIComponent(email)}${qs}`);
-  if (!res.ok) throw new Error("Failed to fetch my posts");
-  return res.json();
-};
+export const fetchMyPosts = async (email, school) =>
+  request(`/posts?author=${encodeURIComponent(email)}&school=${encodeURIComponent(school)}`);
+

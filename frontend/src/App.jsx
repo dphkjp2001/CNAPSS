@@ -4,6 +4,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import Layout from "./components/Layout";
 import PublicLayout from "./components/PublicLayout";
 import RequireAuth from "./components/RequireAuth";
+import { useAuth } from "./contexts/AuthContext";
 
 import Splash from "./pages/Splash";
 import SchoolSelect from "./pages/SchoolSelect";
@@ -33,6 +34,17 @@ const PersonalSchedule = lazy(() => import("./pages/schedule/PersonalSchedule"))
 const GroupAvailability = lazy(() => import("./pages/schedule/GroupAvailability"));
 const FoodMap = lazy(() => import("./pages/food/FoodMap"));
 
+/**
+ * 🔧 NormalizeDashboard
+ * '/dashboard', '/dashboard/dashboard' 등 잘못된/옛 링크를
+ * 올바른 '/{user.school}/dashboard' 또는 '/select-school' 로 정리한다.
+ */
+function NormalizeDashboard() {
+  const { user } = useAuth();
+  if (user?.school) return <Navigate to={`/${user.school}/dashboard`} replace />;
+  return <Navigate to="/select-school" replace />;
+}
+
 function App() {
   return (
     <Suspense fallback={<div className="p-6 text-sm text-gray-500">Loading…</div>}>
@@ -53,9 +65,13 @@ function App() {
           <Route path="/auth-required" element={<AuthRequired />} />
         </Route>
 
+        {/* ✅ 잘못된 경로 정리: /dashboard*, //dashboard* 등 */}
+        <Route path="/dashboard/*" element={<NormalizeDashboard />} />
+        <Route path="//dashboard/*" element={<NormalizeDashboard />} />
+
         {/* School-scoped routes */}
         <Route path="/:school" element={<Layout />}>
-          {/* Default -> dashboard */}
+          {/* Default -> dashboard (상대경로 OK: 여기선 '/:school'이 base) */}
           <Route index element={<Navigate to="dashboard" replace />} />
 
           {/* ✅ Guest preview allowed: dashboard is readable without auth */}
@@ -176,6 +192,7 @@ function App() {
 }
 
 export default App;
+
 
 
 
