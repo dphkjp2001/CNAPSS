@@ -8,43 +8,22 @@ const Comment = require("../models/Comment");
 const ALLOWED = ["nyu", "columbia", "boston"];
 const norm = (s) => String(s || "").trim().toLowerCase();
 
-// --- helpers -------------------------------------------------
-
-// 1) 요청으로부터 "누가" 요청했는지 파악 (임시: 이메일 기반)
-//    - header 'x-user-email' → body.email → query.email 순서로 추출
-//    - 실제 운영에서는 JWT에서 req.user.email을 쓰는 게 정석이야(다음 단계에서 적용 가능)
-async function resolveUser(req, { requireVerified = false } = {}) {
-  const email =
-    norm(req.headers["x-user-email"]) ||
-    norm(req.body?.email) ||
-    norm(req.query?.email);
-
-  if (!email) return null;
-
-  const user = await User.findOne({ email }).lean();
-  if (!user) return null;
-
-  if (requireVerified && !user.isVerified) return null;
-
-  // school 안전 확보
-  const school = norm(user.school);
-  if (!school || !ALLOWED.includes(school)) return null;
-
-  return { email: norm(user.email), nickname: user.nickname, school };
+// 학교 값을 header / query / body 중 하나에서 추출하고 소문자로 정규화
+function pickSchool(req) {
+  return norm(req.headers["x-school"] || req.query.school || req.body.school || "");
 }
 
-// --- routes --------------------------------------------------
-
-// 📌 게시글 목록: 항상 "요청 사용자"의 학교로만 필터링
+// 📌 게시글 목록 (학교 스코프 필터)
 router.get("/", async (req, res) => {
   try {
-    const me = await resolveUser(req);
-    if (!me) {
-      return res.status(401).json({ message: "User not resolved. Provide x-user-email or use auth." });
+    const school = pickSchool(req);
+    if (!school || !ALLOWED.includes(school)) {
+      return res.status(400).json({ message: "School is required." });
     }
-    const posts = await Post.find({ school: me.school })
-      .sort({ createdAt: -1 })
-      .lean();
+    const q = { school };
+    // author filtering (optional)
+    if (req.query.author) q.email = String(req.query.author).toLowerCase();
+    const posts = await Post.find(q).sort({ createdAt: -1 }).lean();
     res.json(posts);
   } catch (err) {
     console.error("List posts failed:", err);
@@ -52,25 +31,33 @@ router.get("/", async (req, res) => {
   }
 });
 
-// ✅ 게시글 작성: 클라이언트의 school 값은 절대 사용하지 않음
+// ✅ 게시글 작성 (verified + school 필요)
 router.post("/", async (req, res) => {
   try {
-    const { title, content } = req.body || {};
-    const me = await resolveUser(req, { requireVerified: true });
+    let { email, nickname, title, content } = req.body || {};
+    const school = pickSchool(req);
 
-    if (!me) {
-      return res.status(403).json({ message: "Only verified users can create posts." });
-    }
-    if (!title || !content) {
+    if (!title || !content || !email || !nickname || !school) {
       return res.status(400).json({ message: "Missing fields." });
+    }
+    if (!ALLOWED.includes(school)) {
+      return res.status(400).json({ message: "Invalid school." });
+    }
+
+    // 사용자 확인 (verified만 허용)
+    const user = await User.findOne({ email: String(email).toLowerCase() }).lean();
+    if (!user || !user.isVerified) {
+      return res
+        .status(403)
+        .json({ message: "Only verified users can create posts." });
     }
 
     const doc = await Post.create({
       title: String(title).trim(),
       content: String(content).trim(),
-      email: me.email,
-      nickname: String(req.body?.nickname || "").trim() || me.nickname || "Anonymous",
-      school: me.school, // <-- enforce from server
+      email: String(user.email).toLowerCase(),
+      nickname: String(user.nickname).trim(),
+      school, // ✅ lowercase
     });
 
     res.status(201).json(doc);
@@ -80,14 +67,14 @@ router.post("/", async (req, res) => {
   }
 });
 
-// 📌 게시글 상세: 사용자의 school과 문서 school이 일치해야 열람 가능
+// 📌 게시글 상세 (id로 조회)
 router.get("/:id", async (req, res) => {
   try {
-    const me = await resolveUser(req);
-    if (!me) {
-      return res.status(401).json({ message: "User not resolved. Provide x-user-email or use auth." });
+    const school = pickSchool(req);
+    if (!school || !ALLOWED.includes(school)) {
+      return res.status(400).json({ message: "School is required." });
     }
-    const post = await Post.findOne({ _id: req.params.id, school: me.school }).lean();
+    const post = await Post.findOne({ _id: req.params.id, school }).lean();
     if (!post) return res.status(404).json({ message: "Post not found." });
     res.json(post);
   } catch (err) {
@@ -96,25 +83,19 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// 📌 게시글 수정: 작성자 본인 + 같은 학교만
+// 📌 게시글 수정 (작성자만)
 router.put("/:id", async (req, res) => {
   try {
-    const me = await resolveUser(req, { requireVerified: true });
-    if (!me) return res.status(403).json({ message: "Forbidden." });
-
+    const { email, title, content } = req.body || {};
     const post = await Post.findById(req.params.id);
     if (!post) return res.status(404).json({ message: "Post not found." });
 
-    if (post.school !== me.school) {
-      return res.status(403).json({ message: "Cross-school access is not allowed." });
-    }
-    if (post.email !== me.email) {
+    if (post.email !== String(email).toLowerCase()) {
       return res.status(403).json({ message: "You can only edit your own posts." });
     }
 
-    const { title, content } = req.body || {};
-    if (title) post.title = String(title).trim();
-    if (content) post.content = String(content).trim();
+    post.title = String(title || post.title).trim();
+    post.content = String(content || post.content).trim();
     await post.save();
 
     res.json({ message: "Post updated successfully.", post });
@@ -124,19 +105,14 @@ router.put("/:id", async (req, res) => {
   }
 });
 
-// 📌 게시글 삭제: 작성자 본인 + 같은 학교만
+// 📌 게시글 삭제 (작성자만)
 router.delete("/:id", async (req, res) => {
   try {
-    const me = await resolveUser(req, { requireVerified: true });
-    if (!me) return res.status(403).json({ message: "Forbidden." });
-
+    const { email } = req.body || {};
     const post = await Post.findById(req.params.id);
     if (!post) return res.status(404).json({ message: "Post not found." });
 
-    if (post.school !== me.school) {
-      return res.status(403).json({ message: "Cross-school access is not allowed." });
-    }
-    if (post.email !== me.email) {
+    if (post.email !== String(email).toLowerCase()) {
       return res.status(403).json({ message: "You can only delete your own posts." });
     }
 
@@ -148,21 +124,18 @@ router.delete("/:id", async (req, res) => {
   }
 });
 
-// 📌 추천(좋아요) 토글: 같은 학교에서만 가능
+// 📌 추천 토글
 router.post("/:id/thumbs", async (req, res) => {
   try {
-    const me = await resolveUser(req, { requireVerified: true });
-    if (!me) return res.status(403).json({ message: "Forbidden." });
+    const email = String(req.body?.email || "").toLowerCase();
+    if (!email) return res.status(400).json({ message: "Email is required." });
 
     const post = await Post.findById(req.params.id);
     if (!post) return res.status(404).json({ message: "Post not found." });
-    if (post.school !== me.school) {
-      return res.status(403).json({ message: "Cross-school access is not allowed." });
-    }
 
-    const i = post.thumbsUpUsers.indexOf(me.email);
+    const i = post.thumbsUpUsers.indexOf(email);
     if (i >= 0) post.thumbsUpUsers.splice(i, 1);
-    else post.thumbsUpUsers.push(me.email);
+    else post.thumbsUpUsers.push(email);
 
     await post.save();
     res.json({ thumbsUpCount: post.thumbsUpUsers.length });
@@ -172,15 +145,14 @@ router.post("/:id/thumbs", async (req, res) => {
   }
 });
 
-// 📌 내가 좋아요 누른 글: 사용자 계정의 school로만 필터
+// 📌 내가 좋아요 누른 글 (학교 스코프 포함)
 router.get("/liked/:email", async (req, res) => {
   try {
-    const user = await User.findOne({ email: norm(req.params.email) }).lean();
-    if (!user || !user.school || !ALLOWED.includes(norm(user.school))) {
-      return res.status(400).json({ message: "Invalid user or school." });
+    const email = String(req.params.email || "").toLowerCase();
+    const school = pickSchool(req);
+    if (!school || !ALLOWED.includes(school)) {
+      return res.status(400).json({ message: "School is required." });
     }
-    const school = norm(user.school);
-    const email = norm(user.email);
 
     const likedPosts = await Post.find({ school, thumbsUpUsers: email })
       .sort({ createdAt: -1 })
@@ -192,17 +164,16 @@ router.get("/liked/:email", async (req, res) => {
   }
 });
 
-// 📌 내가 댓글 단 게시글: 댓글은 이메일로 찾고, 최종 포스트는 내 학교로 필터
+// 📌 내가 댓글 단 게시글 (학교 스코프 포함)
 router.get("/commented/:email", async (req, res) => {
   try {
-    const user = await User.findOne({ email: norm(req.params.email) }).lean();
-    if (!user || !user.school || !ALLOWED.includes(norm(user.school))) {
-      return res.status(400).json({ message: "Invalid user or school." });
+    const email = String(req.params.email || "").toLowerCase();
+    const school = pickSchool(req);
+    if (!school || !ALLOWED.includes(school)) {
+      return res.status(400).json({ message: "School is required." });
     }
-    const school = norm(user.school);
-    const email = norm(user.email);
 
-    const comments = await Comment.find({ email }).lean();
+    const comments = await Comment.find({ email, school }).lean();
     if (!comments.length) return res.json([]);
 
     const postIds = [...new Set(comments.map((c) => c.postId?.toString()).filter(Boolean))];
@@ -220,7 +191,6 @@ router.get("/commented/:email", async (req, res) => {
 });
 
 module.exports = router;
-
 
 
 
