@@ -100,30 +100,40 @@ router.post("/conversation", async (req, res) => {
 
 
 // ✅ 대화방 목록 + 상대방 닉네임 포함 (email path-param은 URL-encoded 가정)
+// ✅ 대화방 목록 + 상대 닉네임 포함 (레거시 호환 + 이메일 정규화 + optional school)
 router.get("/conversations/:email", async (req, res) => {
   try {
+    // 1) 이메일 방어: URL-decoding + trim + lowercase
     const raw = req.params.email || "";
-    // decode in case client encoded it (권장)
-    const email = decodeURIComponent(raw).toLowerCase();
+    const email = decodeURIComponent(raw).trim().toLowerCase();
     if (!email) return res.status(400).json({ message: "Email required." });
 
-    // optional school scope (권장: ?school=nyu)
-    const school = (req.query.school || "").toLowerCase();
+    // 2) (선택) 학교 스코프: ?school=nyu 로 오면 함께 필터
+    const school = (req.query.school || "").trim().toLowerCase();
 
-    const findQuery = school
-      ? { $or: [{ buyer: email }, { seller: email }], school }
-      : { $or: [{ buyer: email }, { seller: email }] };
+    // 3) 레거시/신규 모두 잡는 쿼리
+    const query = {
+      $or: [
+        { buyer: email },
+        { seller: email },
+        { participants: email }, // 👈 과거 participants 배열 스키마 호환
+      ],
+    };
+    if (school) query.school = school; // 문서에 school이 없는 경우는 이 필터를 빼고 쓰세요.
 
-    const conversations = await Conversation.find(findQuery)
+    const conversations = await Conversation.find(query)
       .sort({ updatedAt: -1 })
       .populate("itemId")
       .lean();
 
+    // 4) 상대 닉네임 붙이기
     const enriched = await Promise.all(
       conversations.map(async (c) => {
+        const buyer = String(c.buyer || "").toLowerCase();
+        const seller = String(c.seller || "").toLowerCase();
         const [buyerUser, sellerUser] = await Promise.all([
-          User.findOne({ email: c.buyer }).lean(),
-          User.findOne({ email: c.seller }).lean(),
+          buyer ? User.findOne({ email: buyer }).lean() : null,
+          seller ? User.findOne({ email: seller }).lean() : null,
         ]);
         return {
           ...c,
@@ -139,6 +149,8 @@ router.get("/conversations/:email", async (req, res) => {
     res.status(500).json({ message: "Failed to load conversations." });
   }
 });
+
+);
 
 
 module.exports = router;
