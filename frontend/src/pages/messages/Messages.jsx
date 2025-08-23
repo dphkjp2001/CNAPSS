@@ -191,6 +191,7 @@
 
 // ✅ src/pages/message/Messages.jsx
 import React, { useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
 import ChatBox from "../../components/Chatbox";
 import { useAuth } from "../../contexts/AuthContext";
 import { io } from "socket.io-client";
@@ -201,25 +202,37 @@ const socket = io(import.meta.env.VITE_SOCKET_URL, {
 
 function Messages() {
   const { user } = useAuth();
+  const { school: schoolParam } = useParams(); // /:school/messages
   const [conversations, setConversations] = useState([]);
   const [selected, setSelected] = useState(null);
+
+  const BASE = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
+  const school =
+    (schoolParam || localStorage.getItem("selectedSchool") || "").toLowerCase();
 
   const fetchConversations = async () => {
     if (!user?.email) return;
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/chat/conversations/${user.email}`);
-      if (!res.ok) throw new Error("응답 실패");
+      const emailSeg = encodeURIComponent(user.email); // 🔒 encode '@'
+      const qs = school ? `?school=${encodeURIComponent(school)}` : "";
+      const res = await fetch(`${BASE}/chat/conversations/${emailSeg}${qs}`);
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        throw new Error(text || `HTTP ${res.status}`);
+      }
       const data = await res.json();
-      if (!Array.isArray(data)) throw new Error("잘못된 데이터 형식");
+      if (!Array.isArray(data)) throw new Error("Invalid response shape");
       setConversations(data);
     } catch (err) {
       console.error("❌ 대화 불러오기 실패:", err.message);
+      setConversations([]);
     }
   };
 
   useEffect(() => {
     fetchConversations();
-  }, [user]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.email, school]);
 
   useEffect(() => {
     const handleReceive = () => fetchConversations();
@@ -238,17 +251,18 @@ function Messages() {
       socket.off("receiveMessage", handleReceive);
       socket.off("conversationUpdated", handleUpdate);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const otherNickname = (convo) =>
-    convo.buyer === user.email ? convo.sellerNickname : convo.buyerNickname;
+    convo.buyer === user?.email ? convo.sellerNickname : convo.buyerNickname;
 
   const otherEmail = (convo) =>
-    convo.buyer === user.email ? convo.seller : convo.buyer;
+    convo.buyer === user?.email ? convo.seller : convo.buyer;
 
   const unreadCount = (convo) =>
     convo.messages?.filter(
-      (msg) => msg.sender !== user.email && !msg.readBy?.includes(user.email)
+      (msg) => msg.sender !== user?.email && !msg.readBy?.includes(user?.email)
     ).length || 0;
 
   return (
@@ -258,9 +272,7 @@ function Messages() {
         <h2 className="text-lg font-bold mb-4">💬 Messages</h2>
         <div className="space-y-2">
           {conversations.length === 0 && (
-            <p className="text-sm text-gray-500">
-              진행 중인 채팅이 없습니다.
-            </p>
+            <p className="text-sm text-gray-500">진행 중인 채팅이 없습니다.</p>
           )}
           {conversations.map((c) => (
             <div
@@ -290,7 +302,7 @@ function Messages() {
           <ChatBox
             conversationId={selected._id}
             userEmail={user.email}
-            otherEmail={otherEmail(selected)}               // ✅ 체크표시 작동 위한 key point
+            otherEmail={otherEmail(selected)}      // ✅ Seen 표기 계산용
             fullSize
             otherNickname={otherNickname(selected)}
           />

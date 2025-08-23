@@ -98,31 +98,33 @@ router.post("/conversation", async (req, res) => {
   }
 });
 
-// ✅ 대화방 목록 (이메일+학교로 필터)
+
+// ✅ 대화방 목록 + 상대방 닉네임 포함 (email path-param은 URL-encoded 가정)
 router.get("/conversations/:email", async (req, res) => {
   try {
-    const email = norm(req.params.email);
-    const school = pickSchool(req);
-    if (!email || !school) {
-      return res.status(400).json({ message: "Email and school are required." });
-    }
-    if (!ALLOWED.includes(school)) {
-      return res.status(400).json({ message: "Invalid school." });
-    }
+    const raw = req.params.email || "";
+    // decode in case client encoded it (권장)
+    const email = decodeURIComponent(raw).toLowerCase();
+    if (!email) return res.status(400).json({ message: "Email required." });
 
-    const conversations = await Conversation.find({
-      school,
-      $or: [{ buyer: email }, { seller: email }],
-    })
+    // optional school scope (권장: ?school=nyu)
+    const school = (req.query.school || "").toLowerCase();
+
+    const findQuery = school
+      ? { $or: [{ buyer: email }, { seller: email }], school }
+      : { $or: [{ buyer: email }, { seller: email }] };
+
+    const conversations = await Conversation.find(findQuery)
       .sort({ updatedAt: -1 })
       .populate("itemId")
       .lean();
 
-    // attach peer nicknames
     const enriched = await Promise.all(
       conversations.map(async (c) => {
-        const buyerUser = await User.findOne({ email: c.buyer }).lean();
-        const sellerUser = await User.findOne({ email: c.seller }).lean();
+        const [buyerUser, sellerUser] = await Promise.all([
+          User.findOne({ email: c.buyer }).lean(),
+          User.findOne({ email: c.seller }).lean(),
+        ]);
         return {
           ...c,
           buyerNickname: buyerUser?.nickname || "Unknown",
@@ -133,10 +135,11 @@ router.get("/conversations/:email", async (req, res) => {
 
     res.json(enriched);
   } catch (err) {
-    console.error("❌ list conversations failed:", err);
+    console.error("❌ 대화 목록 불러오기 실패:", err);
     res.status(500).json({ message: "Failed to load conversations." });
   }
 });
+
 
 module.exports = router;
 
