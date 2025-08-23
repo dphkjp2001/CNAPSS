@@ -5,136 +5,113 @@ const Post = require("../models/Post");
 const User = require("../models/User");
 const Comment = require("../models/Comment");
 
-const ALLOWED = ["nyu", "columbia", "boston"];
-const norm = (s) => String(s || "").trim().toLowerCase();
-
-// 학교 값을 header / query / body 중 하나에서 추출하고 소문자로 정규화
-function pickSchool(req) {
-  return norm(req.headers["x-school"] || req.query.school || req.body.school || "");
+// ------------------------------
+// Helpers
+// ------------------------------
+function requireSchool(req, res, next) {
+  const school = req.query.school || req.body.school;
+  if (!school) return res.status(400).json({ message: "school is required" });
+  req._school = school;
+  next();
 }
 
-// 📌 게시글 목록 (학교 스코프 필터)
-router.get("/", async (req, res) => {
+// ------------------------------
+// List posts (scoped by school)
+// GET /posts?school=NYU
+// ------------------------------
+router.get("/", requireSchool, async (req, res) => {
   try {
-    const school = pickSchool(req);
-    if (!school || !ALLOWED.includes(school)) {
-      return res.status(400).json({ message: "School is required." });
-    }
-    const q = { school };
-    // author filtering (optional)
-    if (req.query.author) q.email = String(req.query.author).toLowerCase();
-    const posts = await Post.find(q).sort({ createdAt: -1 }).lean();
+    const posts = await Post.find({ school: req._school }).sort({ createdAt: -1 });
     res.json(posts);
   } catch (err) {
-    console.error("List posts failed:", err);
+    console.error("Failed to load posts:", err);
     res.status(500).json({ message: "Failed to load posts." });
   }
 });
 
-// ✅ 게시글 작성 (verified + school 필요)
-router.post("/", async (req, res) => {
+// ------------------------------
+// Create post (verified users only)
+// POST /posts  { email, title, content, school }
+// ------------------------------
+router.post("/", requireSchool, async (req, res) => {
+  const { email, title, content } = req.body;
+
   try {
-    let { email, nickname, title, content } = req.body || {};
-    const school = pickSchool(req);
-
-    if (!title || !content || !email || !nickname || !school) {
-      return res.status(400).json({ message: "Missing fields." });
-    }
-    if (!ALLOWED.includes(school)) {
-      return res.status(400).json({ message: "Invalid school." });
-    }
-
-    // 사용자 확인 (verified만 허용)
-    const user = await User.findOne({ email: String(email).toLowerCase() }).lean();
+    const user = await User.findOne({ email });
     if (!user || !user.isVerified) {
       return res
         .status(403)
         .json({ message: "Only verified users can create posts." });
     }
 
-    const doc = await Post.create({
-      title: String(title).trim(),
-      content: String(content).trim(),
-      email: String(user.email).toLowerCase(),
-      nickname: String(user.nickname).trim(),
-      school, // ✅ lowercase
+    const newPost = await Post.create({
+      title,
+      content,
+      email: user.email,
+      nickname: user.nickname,
+      school: req._school, // ✅ scope
     });
 
-    res.status(201).json(doc);
+    res.status(201).json(newPost);
   } catch (err) {
-    console.error("Create post failed:", err);
-    res.status(500).json({ message: "Failed to create post.", error: err.message });
+    console.error("Create post error:", err);
+    res
+      .status(500)
+      .json({ message: "Failed to create post.", error: err.message });
   }
 });
 
-// 📌 게시글 상세 (id로 조회)
-router.get("/:id", async (req, res) => {
-  try {
-    const school = pickSchool(req);
-    if (!school || !ALLOWED.includes(school)) {
-      return res.status(400).json({ message: "School is required." });
-    }
-    const post = await Post.findOne({ _id: req.params.id, school }).lean();
-    if (!post) return res.status(404).json({ message: "Post not found." });
-    res.json(post);
-  } catch (err) {
-    console.error("Get post failed:", err);
-    res.status(500).json({ message: "Failed to fetch post." });
-  }
-});
+// ------------------------------
+// Update post (author only; school guard)
+// PUT /posts/:id  { email, title, content, school }
+// ------------------------------
+router.put("/:id", requireSchool, async (req, res) => {
+  const { email, title, content } = req.body;
+  const { id } = req.params;
 
-// 📌 게시글 수정 (작성자만)
-router.put("/:id", async (req, res) => {
   try {
-    const { email, title, content } = req.body || {};
-    const post = await Post.findById(req.params.id);
+    const post = await Post.findById(id);
     if (!post) return res.status(404).json({ message: "Post not found." });
 
-    if (post.email !== String(email).toLowerCase()) {
-      return res.status(403).json({ message: "You can only edit your own posts." });
+    // school isolation
+    if (post.school !== req._school) {
+      return res.status(403).json({ message: "School mismatch." });
+    }
+    // ownership
+    if (post.email !== email) {
+      return res
+        .status(403)
+        .json({ message: "You can only edit your own posts." });
     }
 
-    post.title = String(title || post.title).trim();
-    post.content = String(content || post.content).trim();
+    post.title = title;
+    post.content = content;
     await post.save();
 
     res.json({ message: "Post updated successfully.", post });
   } catch (err) {
-    console.error("Update post failed:", err);
-    res.status(500).json({ message: "Failed to update post.", error: err.message });
+    console.error("Update post error:", err);
+    res
+      .status(500)
+      .json({ message: "Failed to update post.", error: err.message });
   }
 });
 
-// 📌 게시글 삭제 (작성자만)
-router.delete("/:id", async (req, res) => {
-  try {
-    const { email } = req.body || {};
-    const post = await Post.findById(req.params.id);
-    if (!post) return res.status(404).json({ message: "Post not found." });
-
-    if (post.email !== String(email).toLowerCase()) {
-      return res.status(403).json({ message: "You can only delete your own posts." });
-    }
-
-    await Post.findByIdAndDelete(req.params.id);
-    res.json({ message: "Post deleted successfully." });
-  } catch (err) {
-    console.error("Delete post failed:", err);
-    res.status(500).json({ message: "Failed to delete post.", error: err.message });
-  }
-});
-
-// 📌 추천 토글
+// ------------------------------
+// Toggle like
+// POST /posts/:id/thumbs  { email }
+// (school는 문서에 이미 저장되어 있으므로 별도 요구 X)
+// ------------------------------
 router.post("/:id/thumbs", async (req, res) => {
-  try {
-    const email = String(req.body?.email || "").toLowerCase();
-    if (!email) return res.status(400).json({ message: "Email is required." });
+  const { email } = req.body;
+  const { id } = req.params;
 
-    const post = await Post.findById(req.params.id);
+  try {
+    const post = await Post.findById(id);
     if (!post) return res.status(404).json({ message: "Post not found." });
 
-    const i = post.thumbsUpUsers.indexOf(email);
-    if (i >= 0) post.thumbsUpUsers.splice(i, 1);
+    const idx = post.thumbsUpUsers.indexOf(email);
+    if (idx >= 0) post.thumbsUpUsers.splice(idx, 1);
     else post.thumbsUpUsers.push(email);
 
     await post.save();
@@ -145,54 +122,109 @@ router.post("/:id/thumbs", async (req, res) => {
   }
 });
 
-// 📌 내가 좋아요 누른 글 (학교 스코프 포함)
-router.get("/liked/:email", async (req, res) => {
+// ------------------------------
+// Posts I liked (scoped)
+// GET /posts/liked/:email?school=NYU
+// ------------------------------
+router.get("/liked/:email", requireSchool, async (req, res) => {
+  const { email } = req.params;
   try {
-    const email = String(req.params.email || "").toLowerCase();
-    const school = pickSchool(req);
-    if (!school || !ALLOWED.includes(school)) {
-      return res.status(400).json({ message: "School is required." });
-    }
-
-    const likedPosts = await Post.find({ school, thumbsUpUsers: email })
-      .sort({ createdAt: -1 })
-      .lean();
+    const likedPosts = await Post.find({
+      thumbsUpUsers: email,
+      school: req._school,
+    }).sort({ createdAt: -1 });
     res.json(likedPosts);
   } catch (err) {
-    console.error("Liked posts failed:", err);
+    console.error("Failed to load liked posts:", err);
     res.status(500).json({ message: "Failed to load liked posts." });
   }
 });
 
-// 📌 내가 댓글 단 게시글 (학교 스코프 포함)
-router.get("/commented/:email", async (req, res) => {
-  try {
-    const email = String(req.params.email || "").toLowerCase();
-    const school = pickSchool(req);
-    if (!school || !ALLOWED.includes(school)) {
-      return res.status(400).json({ message: "School is required." });
-    }
+// ------------------------------
+// Posts I commented on (scoped)
+// GET /posts/commented/:email?school=NYU
+// ------------------------------
+router.get("/commented/:email", requireSchool, async (req, res) => {
+  const { email } = req.params;
 
-    const comments = await Comment.find({ email, school }).lean();
+  try {
+    const comments = await Comment.find({ email }); // comments are global by postId
     if (!comments.length) return res.json([]);
 
-    const postIds = [...new Set(comments.map((c) => c.postId?.toString()).filter(Boolean))];
+    const postIds = [
+      ...new Set(comments.map((c) => c.postId?.toString()).filter(Boolean)),
+    ];
     if (!postIds.length) return res.json([]);
 
-    const posts = await Post.find({ _id: { $in: postIds }, school })
-      .sort({ createdAt: -1 })
-      .lean();
+    const posts = await Post.find({
+      _id: { $in: postIds },
+      school: req._school, // ✅ scope
+    }).sort({ createdAt: -1 });
 
     res.json(posts);
   } catch (err) {
-    console.error("Commented posts failed:", err);
-    res.status(500).json({ message: "Failed to load commented posts.", error: err.message });
+    console.error("Commented posts error:", err);
+    res.status(500).json({
+      message: "Failed to load commented posts.",
+      error: err.message,
+    });
+  }
+});
+
+// ------------------------------
+// Get post detail (optional school check)
+// GET /posts/:id  (optionally ?school=NYU to guard)
+// ------------------------------
+router.get("/:id", async (req, res) => {
+  try {
+    const post = await Post.findById(req.params.id).lean();
+    if (!post) return res.status(404).json({ message: "Post not found." });
+
+    // If caller provided school, ensure it matches (prevents cross-school leaks)
+    const qsSchool = req.query.school;
+    if (qsSchool && post.school !== qsSchool) {
+      return res.status(404).json({ message: "Post not found." });
+    }
+
+    res.json(post);
+  } catch (err) {
+    console.error("Fetch post error:", err);
+    res.status(500).json({ message: "Failed to fetch post." });
+  }
+});
+
+// ------------------------------
+// Delete post (author only; school guard)
+// DELETE /posts/:id  { email, school }
+// ------------------------------
+router.delete("/:id", requireSchool, async (req, res) => {
+  const { email } = req.body;
+  const { id } = req.params;
+
+  try {
+    const post = await Post.findById(id);
+    if (!post) return res.status(404).json({ message: "Post not found." });
+
+    if (post.school !== req._school) {
+      return res.status(403).json({ message: "School mismatch." });
+    }
+    if (post.email !== email) {
+      return res
+        .status(403)
+        .json({ message: "You can only delete your own posts." });
+    }
+
+    await Post.findByIdAndDelete(id);
+    res.json({ message: "Post deleted successfully." });
+  } catch (err) {
+    console.error("Delete post error:", err);
+    res
+      .status(500)
+      .json({ message: "Failed to delete post.", error: err.message });
   }
 });
 
 module.exports = router;
-
-
 
 
 
