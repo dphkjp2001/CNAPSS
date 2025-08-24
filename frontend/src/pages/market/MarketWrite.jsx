@@ -1,7 +1,7 @@
 // src/pages/market/MarketWrite.jsx
 import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
+import { createItem } from "../../api/market";
 import { useAuth } from "../../contexts/AuthContext";
 import { useSchool } from "../../contexts/SchoolContext";
 import { useSchoolPath } from "../../utils/schoolPath";
@@ -18,7 +18,7 @@ const currency = new Intl.NumberFormat("en-US", {
 const MarketWrite = () => {
   const navigate = useNavigate();
   const schoolPath = useSchoolPath();
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const { school, schoolTheme } = useSchool();
   const baseURL = import.meta.env.VITE_API_URL;
 
@@ -104,15 +104,17 @@ const MarketWrite = () => {
       setLoading(true);
       setErr("");
 
-      await axios.post(`${baseURL}/market`, {
-        title: title.trim(),
-        description: description.trim(),
-        price: parseFloat(price),
-        school, // ✅ scoped
-        seller: user?.email,
-        images: images.map((i) => i.url), // cover at index 0
+      await createItem({
+         school,
+         token,
+         payload: {
+          title: title.trim(),
+          description: description.trim(),
+          price: parseFloat(price),
+         seller: user?.email,
+        images: images.map((i) => i.url),
+          },
       });
-
       navigate(schoolPath("/market"));
     } catch (error) {
       console.error(error);

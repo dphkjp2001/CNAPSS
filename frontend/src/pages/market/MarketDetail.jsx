@@ -1,8 +1,8 @@
 // src/pages/market/MarketDetail.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import axios from "axios";
-import { useAuth } from "../../contexts/AuthContext";
+import { getItem, checkRequest, sendRequest, deleteItem as apiDelete } from "../../api/market";
+import { useAuth } from "../../contexts/AuthContext";import { useAuth } from "../../contexts/AuthContext";
 import { useSchool } from "../../contexts/SchoolContext";
 import { useSchoolPath } from "../../utils/schoolPath";
 
@@ -18,7 +18,6 @@ export default function MarketDetail() {
   const { user } = useAuth();
   const { school, schoolTheme } = useSchool();
   const schoolPath = useSchoolPath();
-  const baseURL = import.meta.env.VITE_API_URL;
 
   const [item, setItem] = useState(null);
   const [mainImg, setMainImg] = useState(null);
@@ -30,8 +29,7 @@ export default function MarketDetail() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await axios.get(`${baseURL}/market/${id}`, { params: { school } }); // ✅ scoped
-        const data = res.data;
+        const data = await getItem({ school, token: user?.token || localStorage.getItem("token")?.replace(/^Bearer /,""), id });
         setItem(data);
         setMainImg(Array.isArray(data.images) && data.images.length > 0 ? data.images[0] : null);
       } catch (e) {
@@ -43,16 +41,14 @@ export default function MarketDetail() {
     if (user) {
       (async () => {
         try {
-          const res = await axios.get(`${baseURL}/market/request/${id}/${user.email}`, {
-            params: { school }, // ✅ scoped
-          });
-          if (res.data.alreadySent) setStatus("already");
+          const r = await checkRequest({ school, token: localStorage.getItem("token")?.replace(/^Bearer /,""), itemId: id, email: user.email });
+         if (r.alreadySent) setStatus("already");
         } catch (e) {
           console.error("request-check failed", e);
         }
       })();
     }
-  }, [id, baseURL, user, school]);
+  }, [id, user, school]);
 
   const isOwner = useMemo(
     () => !!(user?.email && item?.seller && user.email === item.seller),
@@ -62,9 +58,7 @@ export default function MarketDetail() {
   const handleDelete = async () => {
     if (!window.confirm("Delete this listing?")) return;
     try {
-      await axios.delete(`${baseURL}/market/${id}`, {
-        data: { school }, // ✅ scoped delete
-      });
+      await apiDelete({ school, token: localStorage.getItem("token")?.replace(/^Bearer /,""), id });
       navigate(schoolPath("/market"));
     } catch (e) {
       console.error(e);
@@ -75,13 +69,13 @@ export default function MarketDetail() {
   const handleSendRequest = async () => {
     if (!message.trim()) return;
     try {
-      const res = await axios.post(`${baseURL}/market/request`, {
-        itemId: id,
-        buyer: user.email,
-        message,
-        school, // ✅ scoped
-      });
-      const { conversationId } = res.data;
+      const { conversationId } = await sendRequest({
+               school,
+               token: localStorage.getItem("token")?.replace(/^Bearer /,""),
+               itemId: id,
+               buyer: user.email,
+               message,
+             });
       if (conversationId) navigate(schoolPath(`/messages?conversation=${conversationId}`));
       else alert("Unexpected server response.");
     } catch (e) {

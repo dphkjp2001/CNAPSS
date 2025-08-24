@@ -3,7 +3,9 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useSchool } from "../../contexts/SchoolContext";
 import { useSchoolPath } from "../../utils/schoolPath";
-import axios from "axios";
+import { listItems } from "../../api/market";
+import { useAuth } from "../../contexts/AuthContext";
+
 
 const PAGE_SIZE = 12;
 
@@ -96,15 +98,15 @@ const MarketList = () => {
 
   const { school, schoolTheme } = useSchool();
   const schoolPath = useSchoolPath();
-  const baseURL = import.meta.env.VITE_API_URL;
+  const { token } = useAuth();
 
   useEffect(() => {
     let mounted = true;
     const fetchItems = async () => {
       try {
         setLoading(true);
-        const res = await axios.get(`${baseURL}/market`, { params: { school } }); // ✅ scoped
-        if (mounted) setItems(Array.isArray(res.data) ? res.data : []);
+        const data = await listItems({ school, token }); // ✅ /api/:school/market + Authorization
+        if (mounted) setItems(Array.isArray(data) ? data : []);
       } catch (e) {
         setErr("Failed to load listings.");
         console.error("❌ Failed to load listings", e);
@@ -116,7 +118,7 @@ const MarketList = () => {
     return () => {
       mounted = false;
     };
-  }, [baseURL, school]);
+    }, [school, token]);
 
   const processed = useMemo(() => {
     const q = query.trim().toLowerCase();

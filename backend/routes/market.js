@@ -174,7 +174,7 @@
 // backend/routes/market.js
 const express = require("express");
 const mongoose = require("mongoose");
-const router = express.Router();
+const router = express.Router({ mergeParams: true });
 
 const MarketItem = require("../models/MarketItem");
 const User = require("../models/User");

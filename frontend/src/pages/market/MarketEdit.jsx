@@ -1,7 +1,7 @@
 // src/pages/market/MarketEdit.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import axios from "axios";
+import { getItem, updateItem } from "../../api/market";
 import { useAuth } from "../../contexts/AuthContext";
 import { useSchool } from "../../contexts/SchoolContext";
 import { useSchoolPath } from "../../utils/schoolPath";
@@ -19,7 +19,7 @@ const MarketEdit = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const schoolPath = useSchoolPath();
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const { school, schoolTheme } = useSchool();
   const baseURL = import.meta.env.VITE_API_URL;
 
@@ -45,8 +45,7 @@ const MarketEdit = () => {
     let mounted = true;
     const fetchItem = async () => {
       try {
-        const res = await axios.get(`${baseURL}/market/${id}`, { params: { school } }); // ✅ scoped
-        const data = res.data;
+        const data = await getItem({ school, token, id });
 
         if (data.seller !== user?.email) {
           alert("You don’t have permission to edit this listing.");
@@ -74,7 +73,7 @@ const MarketEdit = () => {
     return () => {
       mounted = false;
     };
-  }, [id, user, navigate, baseURL, school, schoolPath]);
+  }, [id, user, navigate, school, schoolPath, token]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -143,14 +142,17 @@ const MarketEdit = () => {
       setLoading(true);
       setErr("");
 
-      await axios.put(`${baseURL}/market/${id}`, {
-        title: form.title.trim(),
-        description: form.description.trim(),
-        price: parseFloat(form.price),
-        images: images.map((i) => i.url), // cover is index 0
-        school, // ✅ scoped
-      });
-
+      await updateItem({
+               school,
+               token,
+               id,
+               payload: {
+                 title: form.title.trim(),
+                 description: form.description.trim(),
+                 price: parseFloat(form.price),
+                 images: images.map((i) => i.url), // cover at index 0
+               },
+        });
       navigate(schoolPath(`/market/${id}`));
     } catch (e) {
       console.error(e);
