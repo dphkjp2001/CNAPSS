@@ -166,58 +166,49 @@ const Comment = require("../models/Comment");
 const Post = require("../models/Post");
 const User = require("../models/User");
 
-// 🔒 모든 comment 라우트 보호 + 테넌트 일치 강제
 router.use(requireAuth, schoolGuard);
 
-/**
- * GET /:postId
- * - 같은 학교의 해당 게시글 댓글 목록
- */
+// GET /api/:school/comments/:postId
 router.get("/:postId", async (req, res) => {
   const { postId } = req.params;
-
   if (!mongoose.Types.ObjectId.isValid(postId)) {
     return res.status(400).json({ message: "Invalid postId" });
   }
-
   try {
-    // post가 같은 학교인지 1차 확인
     const post = await Post.findOne({ _id: postId, school: req.user.school }).select("_id");
     if (!post) return res.status(404).json({ message: "Post not found." });
 
-    const comments = await Comment.find({ postId, school: req.user.school }).sort({ createdAt: 1 });
-    res.json(comments);
-  } catch (err) {
-    console.error("Load comments error:", err);
+    const items = await Comment.find({ postId, school: req.user.school })
+      .sort({ createdAt: 1 })
+      .lean();
+
+    res.json(items);
+  } catch (e) {
+    console.error("comments:list", e);
     res.status(500).json({ message: "Failed to load comments." });
   }
 });
 
-/**
- * POST /:postId
- * - 댓글 작성(대댓글 포함)
- * body: { content, parentId? }
- */
+// POST /api/:school/comments/:postId
 router.post("/:postId", async (req, res) => {
   const { postId } = req.params;
-  const { content, parentId = null } = req.body;
+  let { content, parentId = null } = req.body;
+  content = String(content || "").trim();
 
   if (!mongoose.Types.ObjectId.isValid(postId)) {
     return res.status(400).json({ message: "Invalid postId" });
   }
+  if (!content) return res.status(400).json({ message: "Content required" });
 
   try {
-    // 작성자 검증(선택: isVerified)
     const me = await User.findOne({ email: req.user.email });
     if (!me || !me.isVerified) {
       return res.status(403).json({ message: "Only verified users can comment." });
     }
 
-    // 대상 게시글이 같은 학교인지 확인
     const post = await Post.findOne({ _id: postId, school: req.user.school });
     if (!post) return res.status(404).json({ message: "Post not found." });
 
-    // parentId가 있으면 같은 학교/같은 post인지 확인
     let parent = null;
     if (parentId) {
       if (!mongoose.Types.ObjectId.isValid(parentId)) {
@@ -227,110 +218,96 @@ router.post("/:postId", async (req, res) => {
       if (!parent) return res.status(400).json({ message: "Parent comment not found." });
     }
 
-    const newComment = await Comment.create({
+    const doc = await Comment.create({
       postId,
       email: req.user.email,
       nickname: me.nickname,
       content,
       parentId: parent ? parent._id : null,
-      school: req.user.school, // 🔐 서버 주입
+      school: req.user.school,
     });
 
-    res.status(201).json(newComment);
-  } catch (err) {
-    console.error("Create comment error:", err);
+    res.status(201).json(doc);
+  } catch (e) {
+    console.error("comments:create", e);
     res.status(500).json({ message: "Failed to create comment." });
   }
 });
 
-/**
- * PUT /:id
- * - 댓글 수정 (작성자 본인 또는 superadmin)
- * body: { content }
- */
+// PUT /api/:school/comments/:id
 router.put("/:id", async (req, res) => {
   const { id } = req.params;
-  const { content } = req.body;
+  let { content } = req.body;
+  content = String(content || "").trim();
 
   if (!mongoose.Types.ObjectId.isValid(id)) {
     return res.status(400).json({ message: "Invalid comment id" });
   }
+  if (!content) return res.status(400).json({ message: "Content required" });
 
   try {
-    const comment = await Comment.findOne({ _id: id, school: req.user.school });
-    if (!comment) return res.status(404).json({ message: "Comment not found." });
-
-    if (comment.email !== req.user.email && req.user.role !== "superadmin") {
+    const owned = await Comment.findOne({ _id: id, school: req.user.school }).select("email");
+    if (!owned) return res.status(404).json({ message: "Comment not found." });
+    if (owned.email !== req.user.email && req.user.role !== "superadmin") {
       return res.status(403).json({ message: "You can only edit your own comments." });
     }
 
-    comment.content = content;
-    await comment.save();
-    res.json({ message: "Comment updated successfully.", comment });
-  } catch (err) {
-    console.error("Update comment error:", err);
+    const updated = await Comment.findOneAndUpdate(
+      { _id: id, school: req.user.school },
+      { $set: { content } },
+      { new: true, lean: true }
+    );
+    res.json(updated); // ✅ 프론트가 그대로 쓰기 쉬움
+  } catch (e) {
+    console.error("comments:update", e);
     res.status(500).json({ message: "Failed to update comment." });
   }
 });
 
-/**
- * DELETE /:id
- * - 댓글 삭제 (작성자 본인 또는 superadmin)
- */
+// DELETE /api/:school/comments/:id
 router.delete("/:id", async (req, res) => {
   const { id } = req.params;
-
   if (!mongoose.Types.ObjectId.isValid(id)) {
     return res.status(400).json({ message: "Invalid comment id" });
   }
-
   try {
-    const comment = await Comment.findOne({ _id: id, school: req.user.school });
-    if (!comment) return res.status(404).json({ message: "Comment not found." });
-
-    if (comment.email !== req.user.email && req.user.role !== "superadmin") {
+    const owned = await Comment.findOne({ _id: id, school: req.user.school }).select("email");
+    if (!owned) return res.status(404).json({ message: "Comment not found." });
+    if (owned.email !== req.user.email && req.user.role !== "superadmin") {
       return res.status(403).json({ message: "You can only delete your own comments." });
     }
-
-    await Comment.deleteOne({ _id: comment._id });
-    res.json({ message: "Comment deleted successfully." });
-  } catch (err) {
-    console.error("Delete comment error:", err);
+    await Comment.deleteOne({ _id: id, school: req.user.school });
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("comments:delete", e);
     res.status(500).json({ message: "Failed to delete comment." });
   }
 });
 
-/**
- * POST /:id/thumbs
- * - 댓글 좋아요 토글 (내 계정)
- * - `thumbsUpUsers` 기준으로 토글하고, `thumbsUp` 숫자 동기화
- */
+// POST /api/:school/comments/:commentId/thumbs
 router.post("/:commentId/thumbs", async (req, res) => {
   try {
     const { commentId } = req.params;
-    const school = req.user.school;
     const email = (req.user.email || "").toLowerCase();
 
-    // 현재 상태 확인 (lean으로 가볍게 조회)
-    const cur = await Comment.findOne({ _id: commentId /* , school */ }).lean();
+    const cur = await Comment.findOne({ _id: commentId, school: req.user.school })
+      .select("thumbsUpUsers")
+      .lean();
     if (!cur) return res.status(404).json({ message: "Not found" });
 
     const has = (cur.thumbsUpUsers || []).map((e) => e.toLowerCase()).includes(email);
     const update = has
-      ? { $pull: { thumbsUpUsers: email }, $inc: { thumbsUp: -1 } }
-      : { $addToSet: { thumbsUpUsers: email }, $inc: { thumbsUp: 1 } };
+      ? { $pull: { thumbsUpUsers: email } }
+      : { $addToSet: { thumbsUpUsers: email } };
 
-    // 원자적 업데이트로 저장 충돌 방지
     const next = await Comment.findOneAndUpdate(
-      { _id: commentId, school }, // ← Comment 스키마에 school 필드가 있으면 주석 해제
+      { _id: commentId, school: req.user.school },
       update,
-      { new: true }
-    ).lean();
+      { new: true, lean: true }
+    );
 
-    return res.json({
-      thumbs: next.thumbsUpUsers || [],
-      count: Array.isArray(next.thumbsUpUsers) ? next.thumbsUpUsers.length : 0,
-    });
+    const arr = next.thumbsUpUsers || [];
+    res.json({ thumbs: arr, count: arr.length });
   } catch (e) {
     console.error("comments:thumbs", e);
     res.status(500).json({ message: "Failed to toggle like." });
@@ -338,5 +315,6 @@ router.post("/:commentId/thumbs", async (req, res) => {
 });
 
 module.exports = router;
+
 
 

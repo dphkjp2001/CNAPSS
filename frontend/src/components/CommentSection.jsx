@@ -1,4 +1,4 @@
-// frontend/src/components/CommentSection.jsx
+// src/components/CommentSection.jsx
 import React, { useEffect, useState, useCallback } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { useSchool } from "../contexts/SchoolContext";
@@ -18,10 +18,7 @@ import {
 dayjs.extend(relativeTime);
 dayjs.locale("en");
 
-/**
- * Props:
- * - postId (required)
- */
+/** Props: { postId } */
 export default function CommentSection({ postId }) {
   const { user, token } = useAuth();
   const { school } = useSchool();
@@ -54,17 +51,16 @@ export default function CommentSection({ postId }) {
     }
   }, [postId, school, token]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useEffect(() => { load(); }, [load]);
 
   const onSubmit = async () => {
     const content = input.trim();
     if (!content || !postId) return;
     try {
-      const doc = await addComment({ school, token, postId, content });
-      setComments((prev) => [...prev, doc]);
+      await addComment({ school, token, postId, content });
       setInput("");
+      // 🔁 re-fetch to avoid relying on response shape
+      await load();
     } catch (e) {
       console.error("comments:add failed", e);
       alert("Failed to add comment.");
@@ -85,8 +81,9 @@ export default function CommentSection({ postId }) {
     const content = editText.trim();
     if (!content || !editingId) return;
     try {
-      const updated = await apiUpdateComment({ school, token, commentId: editingId, content });
-      setComments((prev) => prev.map((c) => (c._id === editingId ? updated : c)));
+      await apiUpdateComment({ school, token, commentId: editingId, content });
+      // 🔁 re-fetch to get the server source of truth
+      await load();
       onCancelEdit();
     } catch (e) {
       console.error("comments:update failed", e);
@@ -98,7 +95,7 @@ export default function CommentSection({ postId }) {
     if (!window.confirm("Delete this comment?")) return;
     try {
       await apiDeleteComment({ school, token, commentId });
-      setComments((prev) => prev.filter((c) => c._id !== commentId));
+      await load(); // 🔁 re-fetch
     } catch (e) {
       console.error("comments:delete failed", e);
       alert("Failed to delete comment.");
@@ -108,9 +105,12 @@ export default function CommentSection({ postId }) {
   const onToggleLike = async (commentId) => {
     try {
       const res = await toggleCommentThumbs({ school, token, commentId });
+      // optimistic sync with response; if shape differs, a full reload is cheap:
       setComments((prev) =>
         prev.map((c) =>
-          c._id === commentId ? { ...c, thumbs: res.thumbs ?? [], thumbsCount: res.count ?? (res.thumbs?.length || 0) } : c
+          c._id === commentId
+            ? { ...c, thumbs: res.thumbs ?? [], thumbsCount: res.count ?? (res.thumbs?.length || 0) }
+            : c
         )
       );
     } catch (e) {
@@ -240,6 +240,7 @@ export default function CommentSection({ postId }) {
     </div>
   );
 }
+
 
 
 
