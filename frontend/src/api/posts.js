@@ -82,3 +82,43 @@ export async function listCommented({ school, token, email }) {
   if (!res.ok) throw new Error("Failed to load commented posts");
   return res.json();
 }
+
+
+// ===== Backward-compat ADAPTERS (keep old imports working) =====
+// Old calls used: fetchPosts(school), fetchPostById(id, school), togglePostLike(id, school),
+// fetchLikedPosts(email, school), fetchCommentedPosts(email, school)
+// These adapters pull token from localStorage so old pages don't need to pass it explicitly.
+const tokenFromStorage = () => {
+  try { return localStorage.getItem("token"); } catch { return ""; }
+};
+
+export async function fetchPosts(school, opts = {}) {
+  const token = opts.token || tokenFromStorage();
+  return listPosts({ school, token });
+}
+
+export async function fetchPost(id, school, opts = {}) {
+  const token = opts.token || tokenFromStorage();
+  return getPost({ school, token, id });
+}
+
+export async function fetchPostById(id, school, opts = {}) {
+  const token = opts.token || tokenFromStorage();
+  return getPost({ school, token, id });
+}
+
+export async function togglePostLike(id, school, opts = {}) {
+  const token = opts.token || tokenFromStorage();
+  return toggleThumbs({ school, token, id });
+}
+
+export async function fetchLikedPosts(email, school, opts = {}) {
+  const token = opts.token || tokenFromStorage();
+  return listLiked({ school, token, email });
+}
+
+export async function fetchCommentedPosts(email, school, opts = {}) {
+  const token = opts.token || tokenFromStorage();
+  return listCommented({ school, token, email });
+}
+// ================================================================

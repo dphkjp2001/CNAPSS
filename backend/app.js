@@ -59,7 +59,6 @@ app.use("/api/auth", authRoutes);
 app.use("/api/:school/posts", postsRoutes);
 
 // ⬇️ 나머지는 이후 단계에서 차례로 :school 적용 예정
-app.use("/api/posts", postsRoutes);
 
 app.use("/api/:school/comments", commentRoutes);
 

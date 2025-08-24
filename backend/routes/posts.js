@@ -176,7 +176,7 @@
 
 // backend/routes/posts.js
 const express = require("express");
-const router = express.Router();
+const router = express.Router({ mergeParams: true });
 const Post = require("../models/Post");
 const User = require("../models/User");
 const Comment = require("../models/Comment");

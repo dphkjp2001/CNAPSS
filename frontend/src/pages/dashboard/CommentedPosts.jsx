@@ -1,13 +1,13 @@
-// src/pages/dashboard/CommentedPosts.jsx
+// frontend/src/pages/dashboard/CommentedPosts.jsx
 import React, { useEffect, useState } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useSchool } from "../../contexts/SchoolContext";
 import { useSchoolPath } from "../../utils/schoolPath";
-import { fetchCommentedPosts } from "../../api/posts";
+import { listCommented } from "../../api/posts";
 import { Link } from "react-router-dom";
 
 export default function CommentedPosts() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const { school, schoolTheme } = useSchool();
   const schoolPath = useSchoolPath();
 
@@ -16,11 +16,15 @@ export default function CommentedPosts() {
   const [err, setErr] = useState("");
 
   useEffect(() => {
-    if (!user?.email || !school) return;
+    if (!user?.email || !school || !token) return;
     (async () => {
       setLoading(true);
       try {
-        const data = await fetchCommentedPosts(user.email, school); // ✅ scoped
+        const data = await listCommented({
+          school,
+          token,
+          email: user.email,
+        });
         setPosts(Array.isArray(data) ? data : []);
       } catch (e) {
         setErr(e?.message || "Failed to load commented posts.");
@@ -28,7 +32,7 @@ export default function CommentedPosts() {
         setLoading(false);
       }
     })();
-  }, [user?.email, school]);
+  }, [user?.email, school, token]);
 
   return (
     <div
@@ -47,14 +51,11 @@ export default function CommentedPosts() {
             {err}
           </div>
         ) : posts.length === 0 ? (
-          <p className="text-gray-600">You haven’t commented on any posts yet.</p>
+          <p className="text-gray-600">No posts commented yet.</p>
         ) : (
           <ul className="space-y-3">
             {posts.map((post) => (
-              <li
-                key={post._id}
-                className="rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm"
-              >
+              <li key={post._id} className="rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
                 <Link
                   to={schoolPath(`/freeboard/${post._id}`)}
                   className="font-medium text-blue-700 hover:underline"
@@ -72,5 +73,6 @@ export default function CommentedPosts() {
     </div>
   );
 }
+
 
 

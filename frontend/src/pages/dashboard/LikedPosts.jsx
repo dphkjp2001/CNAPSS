@@ -3,11 +3,11 @@ import React, { useEffect, useState } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useSchool } from "../../contexts/SchoolContext";
 import { useSchoolPath } from "../../utils/schoolPath";
-import { fetchLikedPosts } from "../../api/posts";
+import { listLiked } from "../../api/posts";            // ✅ 변경
 import { Link } from "react-router-dom";
 
 export default function LikedPosts() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();                   // ✅ token 추가
   const { school, schoolTheme } = useSchool();
   const schoolPath = useSchoolPath();
 
@@ -16,11 +16,15 @@ export default function LikedPosts() {
   const [err, setErr] = useState("");
 
   useEffect(() => {
-    if (!user?.email || !school) return;
+    if (!user?.email || !school || !token) return;     // ✅ token 필요
     (async () => {
       setLoading(true);
       try {
-        const data = await fetchLikedPosts(user.email, school); // ✅ scoped
+        const data = await listLiked({                 // ✅ 새 시그니처
+          school,
+          token,
+          email: user.email,
+        });
         setPosts(Array.isArray(data) ? data : []);
       } catch (e) {
         setErr(e?.message || "Failed to load liked posts.");
@@ -28,7 +32,7 @@ export default function LikedPosts() {
         setLoading(false);
       }
     })();
-  }, [user?.email, school]);
+  }, [user?.email, school, token]);                     // ✅ token 의존성 추가
 
   return (
     <div
@@ -72,4 +76,5 @@ export default function LikedPosts() {
     </div>
   );
 }
+
 

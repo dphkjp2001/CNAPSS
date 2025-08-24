@@ -7,7 +7,9 @@ import { useSchoolPath } from "../../utils/schoolPath";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import "dayjs/locale/en";
-import { fetchPosts } from "../../api/posts";
+
+// ✅ NEW: use the new API wrapper
+import { listPosts } from "../../api/posts";
 
 dayjs.extend(relativeTime);
 dayjs.locale("en");
@@ -44,7 +46,7 @@ function EmptyState({ onWrite, primary }) {
 }
 
 export default function FreeBoardList() {
-  const { user } = useAuth();
+  const { user, token } = useAuth();              // ✅ token 필요
   const { school, schoolTheme } = useSchool();
   const schoolPath = useSchoolPath();
   const navigate = useNavigate();
@@ -58,25 +60,28 @@ export default function FreeBoardList() {
   const [sort, setSort] = useState("new"); // "new" | "old"
   const [page, setPage] = useState(1);
 
-  // ✅ school 스코프 반영해서 불러오기
+  // ✅ school + token으로 목록 불러오기
   useEffect(() => {
     let alive = true;
+    if (!school || !token) return;
+
     (async () => {
       setLoading(true);
       setError("");
       try {
-        const data = await fetchPosts(school); // ← 서버에 ?school=NYU 로 요청
+        const data = await listPosts({ school, token }); // ← /api/:school/posts + Authorization
         if (alive) setPosts(Array.isArray(data) ? data : []);
-      } catch {
+      } catch (e) {
         if (alive) setError("Failed to load posts.");
       } finally {
         if (alive) setLoading(false);
       }
     })();
+
     return () => {
       alive = false;
     };
-  }, [school]);
+  }, [school, token]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -203,6 +208,7 @@ export default function FreeBoardList() {
     </div>
   );
 }
+
 
 
 
