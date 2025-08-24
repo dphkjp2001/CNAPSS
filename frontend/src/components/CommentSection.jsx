@@ -1,5 +1,5 @@
-// src/components/CommentSection.jsx
-import React, { useEffect, useState, useCallback } from "react";
+// frontend/src/components/CommentSection.jsx
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { useSchool } from "../contexts/SchoolContext";
 import AsyncButton from "./AsyncButton";
@@ -18,26 +18,37 @@ import {
 dayjs.extend(relativeTime);
 dayjs.locale("en");
 
-/** Props: { postId } */
 export default function CommentSection({ postId }) {
   const { user, token } = useAuth();
   const { school } = useSchool();
 
+  const me = (user?.email || "").toLowerCase();
+
   const [comments, setComments] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [listLoading, setListLoading] = useState(true);
   const [err, setErr] = useState("");
 
-  const [input, setInput] = useState("");
-  const [isComposing, setIsComposing] = useState(false);
+  // root input
+  const [rootText, setRootText] = useState("");
+  const [postingRoot, setPostingRoot] = useState(false);
+  const [composingRoot, setComposingRoot] = useState(false);
+
+  // per-item ui states
+  const [replyingId, setReplyingId] = useState(null);
+  const [replyText, setReplyText] = useState("");
+  const [postingReplyId, setPostingReplyId] = useState(null);
 
   const [editingId, setEditingId] = useState(null);
   const [editText, setEditText] = useState("");
+  const [savingId, setSavingId] = useState(null);
 
-  const me = (user?.email || "").toLowerCase();
+  const [deletingId, setDeletingId] = useState(null);
+  const [likingId, setLikingId] = useState(null);
 
+  // fetch list once
   const load = useCallback(async () => {
     if (!postId || !school || !token) return;
-    setLoading(true);
+    setListLoading(true);
     setErr("");
     try {
       const data = await listComments({ school, token, postId });
@@ -47,74 +58,149 @@ export default function CommentSection({ postId }) {
       setErr("Failed to load comments.");
       setComments([]);
     } finally {
-      setLoading(false);
+      setListLoading(false);
     }
   }, [postId, school, token]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
-  const onSubmit = async () => {
-    const content = input.trim();
-    if (!content || !postId) return;
+  // build tree
+  const tree = useMemo(() => {
+    const map = new Map();
+    const nodes = (comments || []).map((c) => ({ ...c, children: [] }));
+    nodes.forEach((n) => map.set(n._id, n));
+    const roots = [];
+    nodes.forEach((n) => {
+      if (n.parentId && map.has(n.parentId)) map.get(n.parentId).children.push(n);
+      else roots.push(n);
+    });
+    // optional: sort by time inside each level
+    const sortByTime = (arr) => arr.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    const walk = (arr) => { sortByTime(arr); arr.forEach((n) => walk(n.children)); };
+    walk(roots);
+    return roots;
+  }, [comments]);
+
+  // helpers to update local state
+  const replaceById = (id, next) =>
+    setComments((prev) => prev.map((c) => (c._id === id ? next : c)));
+  const removeByIdWithChildren = (id) =>
+    setComments((prev) => {
+      // remove target and its descendants
+      const ids = new Set([id]);
+      let changed = true;
+      while (changed) {
+        changed = false;
+        prev.forEach((c) => {
+          if (c.parentId && ids.has(c.parentId) && !ids.has(c._id)) {
+            ids.add(c._id);
+            changed = true;
+          }
+        });
+      }
+      return prev.filter((c) => !ids.has(c._id));
+    });
+
+  /* ====================== actions ====================== */
+
+  // add root comment
+  const submitRoot = async () => {
+    const content = rootText.trim();
+    if (!content) return;
+    setPostingRoot(true);
     try {
-      await addComment({ school, token, postId, content });
-      setInput("");
-      // 🔁 re-fetch to avoid relying on response shape
-      await load();
+      const doc = await addComment({ school, token, postId, content });
+      setComments((prev) => [...prev, doc]);
+      setRootText("");
     } catch (e) {
-      console.error("comments:add failed", e);
+      console.error("comments:add root failed", e);
       alert("Failed to add comment.");
+    } finally {
+      setPostingRoot(false);
     }
   };
 
-  const onStartEdit = (c) => {
+  // start reply
+  const startReply = (commentId) => {
+    setReplyingId(commentId);
+    setReplyText("");
+  };
+  const cancelReply = () => {
+    setReplyingId(null);
+    setReplyText("");
+  };
+  const submitReply = async (parentId) => {
+    const content = replyText.trim();
+    if (!content) return;
+    setPostingReplyId(parentId);
+    try {
+      const doc = await addComment({ school, token, postId, content, parentId });
+      setComments((prev) => [...prev, doc]);
+      cancelReply();
+    } catch (e) {
+      console.error("comments:add reply failed", e);
+      alert("Failed to add reply.");
+    } finally {
+      setPostingReplyId(null);
+    }
+  };
+
+  // edit
+  const startEdit = (c) => {
     setEditingId(c._id);
     setEditText(c.content || "");
   };
-
-  const onCancelEdit = () => {
+  const cancelEdit = () => {
     setEditingId(null);
     setEditText("");
   };
-
-  const onSaveEdit = async () => {
+  const saveEdit = async () => {
     const content = editText.trim();
     if (!content || !editingId) return;
+    setSavingId(editingId);
     try {
-      await apiUpdateComment({ school, token, commentId: editingId, content });
-      // 🔁 re-fetch to get the server source of truth
-      await load();
-      onCancelEdit();
+      const updated = await apiUpdateComment({ school, token, commentId: editingId, content });
+      replaceById(editingId, updated);
+      cancelEdit();
     } catch (e) {
       console.error("comments:update failed", e);
       alert("Failed to update comment.");
+    } finally {
+      setSavingId(null);
     }
   };
 
-  const onDelete = async (commentId) => {
-    if (!window.confirm("Delete this comment?")) return;
+  // delete
+  const deleteOne = async (id) => {
+    if (!window.confirm("Delete this comment? Replies will also be removed in the list view.")) return;
+    setDeletingId(id);
     try {
-      await apiDeleteComment({ school, token, commentId });
-      await load(); // 🔁 re-fetch
+      await apiDeleteComment({ school, token, commentId: id });
+      removeByIdWithChildren(id);
     } catch (e) {
       console.error("comments:delete failed", e);
       alert("Failed to delete comment.");
+    } finally {
+      setDeletingId(null);
     }
   };
 
-  const onToggleLike = async (commentId) => {
+  // like
+  const toggleLike = async (id) => {
+    setLikingId(id);
     try {
-      const res = await toggleCommentThumbs({ school, token, commentId });
-      // optimistic sync with response; if shape differs, a full reload is cheap:
-      setComments((prev) =>
-        prev.map((c) =>
-          c._id === commentId
-            ? { ...c, thumbs: res.thumbs ?? [], thumbsCount: res.count ?? (res.thumbs?.length || 0) }
-            : c
-        )
-      );
+      const res = await toggleCommentThumbs({ school, token, commentId: id });
+      replaceById(id, (prev => {
+        const p = comments.find((c) => c._id === id);
+        if (!p) return p;
+        return { ...p, thumbs: res.thumbs ?? [], thumbsCount: res.count ?? (res.thumbs?.length || 0) };
+      })());
     } catch (e) {
       console.error("comments:thumb toggle failed", e);
+    } finally {
+      setLikingId(null);
     }
   };
 
@@ -130,116 +216,231 @@ export default function CommentSection({ postId }) {
     <div className="mt-8">
       <h3 className="mb-3 text-lg font-semibold text-gray-900">Comments</h3>
 
-      {/* New comment input */}
+      {/* root composer */}
       <div className="mb-4 rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
         <textarea
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onCompositionStart={() => setIsComposing(true)}
-          onCompositionEnd={() => setIsComposing(false)}
+          value={rootText}
+          onChange={(e) => setRootText(e.target.value)}
+          onCompositionStart={() => setComposingRoot(true)}
+          onCompositionEnd={() => setComposingRoot(false)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey && !isComposing) {
+            if (e.key === "Enter" && !e.shiftKey && !composingRoot) {
               e.preventDefault();
-              onSubmit();
+              submitRoot();
             }
           }}
           placeholder="Write a comment…"
           className="h-20 w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10"
         />
         <div className="mt-2 text-right">
-          <AsyncButton onClick={onSubmit} className="rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-black">
-            Post
+          <AsyncButton
+            disabled={postingRoot}
+            onClick={submitRoot}
+            className="rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-black disabled:opacity-60"
+          >
+            {postingRoot ? "Posting…" : "Post"}
           </AsyncButton>
         </div>
       </div>
 
-      {/* Comments list */}
+      {/* list */}
       <div className="rounded-xl border border-gray-200 bg-white p-2 sm:p-3">
-        {loading ? (
+        {listLoading ? (
           <div className="p-3 text-sm text-gray-600">Loading…</div>
         ) : err ? (
           <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{err}</div>
-        ) : comments.length === 0 ? (
+        ) : tree.length === 0 ? (
           <div className="p-3 text-sm text-gray-600">No comments yet.</div>
         ) : (
-          <ul className="divide-y divide-gray-100">
-            {comments.map((c) => {
-              const mine = (c.email || "").toLowerCase() === me;
-              const liked = (c.thumbs || []).map((e) => e.toLowerCase()).includes(me);
-              const likeCount = c.thumbsCount ?? (c.thumbs ? c.thumbs.length : 0);
-
-              return (
-                <li key={c._id} className="py-3">
-                  <div className="flex items-start gap-3">
-                    <div className="h-8 w-8 shrink-0 rounded-full bg-gray-200" />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-gray-900">
-                          {(c.email || "").split("@")[0] || "anon"}
-                        </span>
-                        <span className="text-xs text-gray-500">• {dayjs(c.createdAt).fromNow()}</span>
-                      </div>
-
-                      {editingId === c._id ? (
-                        <div className="mt-2">
-                          <textarea
-                            value={editText}
-                            onChange={(e) => setEditText(e.target.value)}
-                            className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10"
-                          />
-                          <div className="mt-2 flex gap-2">
-                            <button
-                              onClick={onSaveEdit}
-                              className="rounded-lg bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-black"
-                            >
-                              Save
-                            </button>
-                            <button
-                              onClick={onCancelEdit}
-                              className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <p className="mt-1 whitespace-pre-wrap break-words text-sm text-gray-800">{c.content}</p>
-                      )}
-
-                      <div className="mt-2 flex items-center gap-3 text-xs text-gray-600">
-                        <button
-                          onClick={() => onToggleLike(c._id)}
-                          className={`rounded px-2 py-1 ${liked ? "bg-blue-50 text-blue-600" : "hover:bg-gray-100"}`}
-                          title="Like"
-                        >
-                          👍 {likeCount}
-                        </button>
-
-                        {mine && editingId !== c._id && (
-                          <>
-                            <button onClick={() => onStartEdit(c)} className="rounded px-2 py-1 hover:bg-gray-100">
-                              Edit
-                            </button>
-                            <button
-                              onClick={() => onDelete(c._id)}
-                              className="rounded px-2 py-1 text-red-600 hover:bg-red-50"
-                            >
-                              Delete
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </li>
-              );
-            })}
+          <ul className="space-y-3">
+            {tree.map((n) => (
+              <CommentNode
+                key={n._id}
+                node={n}
+                me={me}
+                replyingId={replyingId}
+                replyText={replyText}
+                postingReplyId={postingReplyId}
+                editingId={editingId}
+                editText={editText}
+                savingId={savingId}
+                deletingId={deletingId}
+                likingId={likingId}
+                onStartReply={startReply}
+                onCancelReply={cancelReply}
+                onChangeReply={setReplyText}
+                onSubmitReply={submitReply}
+                onStartEdit={startEdit}
+                onCancelEdit={cancelEdit}
+                onChangeEdit={setEditText}
+                onSaveEdit={saveEdit}
+                onDelete={deleteOne}
+                onToggleLike={toggleLike}
+              />
+            ))}
           </ul>
         )}
       </div>
     </div>
   );
 }
+
+function CommentNode(props) {
+  const {
+    node,
+    me,
+    replyingId,
+    replyText,
+    postingReplyId,
+    editingId,
+    editText,
+    savingId,
+    deletingId,
+    likingId,
+    onStartReply,
+    onCancelReply,
+    onChangeReply,
+    onSubmitReply,
+    onStartEdit,
+    onCancelEdit,
+    onChangeEdit,
+    onSaveEdit,
+    onDelete,
+    onToggleLike,
+  } = props;
+
+  const mine = (node.email || "").toLowerCase() === me;
+  const liked = (node.thumbs || []).map((e) => e.toLowerCase()).includes(me);
+  const likeCount = node.thumbsCount ?? (node.thumbs ? node.thumbs.length : 0);
+
+  return (
+    <li>
+      <div className="flex items-start gap-3">
+        <div className="h-8 w-8 shrink-0 rounded-full bg-gray-200" />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-gray-900">
+              {(node.email || "").split("@")[0] || "anon"}
+            </span>
+            <span className="text-xs text-gray-500">• {dayjs(node.createdAt).fromNow()}</span>
+          </div>
+
+          {editingId === node._id ? (
+            <div className="mt-2">
+              <textarea
+                value={editText}
+                onChange={(e) => onChangeEdit(e.target.value)}
+                className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10"
+              />
+              <div className="mt-2 flex gap-2">
+                <button
+                  onClick={onSaveEdit}
+                  disabled={savingId === node._id}
+                  className="rounded-lg bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-black disabled:opacity-60"
+                >
+                  {savingId === node._id ? "Saving…" : "Save"}
+                </button>
+                <button
+                  onClick={onCancelEdit}
+                  className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <p className="mt-1 whitespace-pre-wrap break-words text-sm text-gray-800">{node.content}</p>
+          )}
+
+          <div className="mt-2 flex items-center gap-3 text-xs text-gray-600">
+            <button
+              onClick={() => onToggleLike(node._id)}
+              disabled={likingId === node._id}
+              className={`rounded px-2 py-1 ${liked ? "bg-blue-50 text-blue-600" : "hover:bg-gray-100"} disabled:opacity-60`}
+            >
+              👍 {likeCount}
+            </button>
+
+            <button onClick={() => onStartReply(node._id)} className="rounded px-2 py-1 hover:bg-gray-100">
+              Reply
+            </button>
+
+            {mine && (
+              <>
+                <button onClick={() => onStartEdit(node)} className="rounded px-2 py-1 hover:bg-gray-100">
+                  Edit
+                </button>
+                <button
+                  onClick={() => onDelete(node._id)}
+                  disabled={deletingId === node._id}
+                  className="rounded px-2 py-1 text-red-600 hover:bg-red-50 disabled:opacity-60"
+                >
+                  {deletingId === node._id ? "Deleting…" : "Delete"}
+                </button>
+              </>
+            )}
+          </div>
+
+          {/* reply box */}
+          {replyingId === node._id && (
+            <div className="mt-2">
+              <textarea
+                value={replyText}
+                onChange={(e) => onChangeReply(e.target.value)}
+                className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10"
+                placeholder="Write a reply…"
+              />
+              <div className="mt-2 flex gap-2">
+                <button
+                  onClick={() => onSubmitReply(node._id)}
+                  disabled={postingReplyId === node._id}
+                  className="rounded-lg bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-black disabled:opacity-60"
+                >
+                  {postingReplyId === node._id ? "Posting…" : "Reply"}
+                </button>
+                <button onClick={onCancelReply} className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* children */}
+          {node.children?.length > 0 && (
+            <ul className="mt-3 space-y-3 border-l-2 border-gray-200 pl-6">
+              {node.children.map((child) => (
+                <CommentNode
+                  key={child._id}
+                  node={child}
+                  me={me}
+                  replyingId={replyingId}
+                  replyText={replyText}
+                  postingReplyId={postingReplyId}
+                  editingId={editingId}
+                  editText={editText}
+                  savingId={savingId}
+                  deletingId={deletingId}
+                  likingId={likingId}
+                  onStartReply={onStartReply}
+                  onCancelReply={onCancelReply}
+                  onChangeReply={onChangeReply}
+                  onSubmitReply={onSubmitReply}
+                  onStartEdit={onStartEdit}
+                  onCancelEdit={onCancelEdit}
+                  onChangeEdit={onChangeEdit}
+                  onSaveEdit={onSaveEdit}
+                  onDelete={onDelete}
+                  onToggleLike={onToggleLike}
+                />
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </li>
+  );
+}
+
 
 
 
