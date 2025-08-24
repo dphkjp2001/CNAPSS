@@ -15,6 +15,8 @@ const requestRoutes = require("./routes/request");
 const courseRoutes = require("./routes/course");
 const scheduleRoutes = require("./routes/schedule");
 const placesRouter = require("./routes/places");
+const requireAuth = require("./middleware/requireAuth");
+const schoolGuard = require("./middleware/schoolGuard");
 
 
 
@@ -72,7 +74,9 @@ app.use("/api/:school/chat", chatRoutes);
 app.use("/api/request", requestRoutes);
 app.use("/api/course", courseRoutes);
 app.use("/api/schedule", scheduleRoutes);
-app.use("/api/places", placesRouter); // 여기?
+
+app.use("/api/:school/places", requireAuth, schoolGuard, placesRouter);
+
 
 // ✅ 헬스체크
 app.get("/", (req, res) => {

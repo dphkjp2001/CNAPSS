@@ -38,6 +38,27 @@ export async function fetchNearbyPlaces({
   return res.json();
 }
 
+
+/** Yelp autocomplete proxy
+ * GET /api/:school/places/suggest?text=...&latitude=...&longitude=...&limit=...
+ */
+export async function fetchPlaceSuggestions({ school, token, text, lat, lon, limit = 8 }) {
+  const s = String(school || "").toLowerCase().trim();
+  const params = new URLSearchParams({
+    text: String(text || ""),
+    ...(lat != null && { latitude: String(lat) }),   // ✅ backend expects 'latitude'
+    ...(lon != null && { longitude: String(lon) }), // ✅ backend expects 'longitude'
+    limit: String(limit),
+  });
+
+  const res = await fetch(`${API}/${s}/places/suggest?${params.toString()}`, {
+    headers: auth(token),
+  });
+  if (!res.ok) throw new Error("Failed to load suggestions");
+  return res.json(); // { suggestions: [...] }
+}
+
+
 export async function geocodeAddress({ school, token, address }) {
   const s = String(school || "").toLowerCase().trim();
   const params = new URLSearchParams({ address });
