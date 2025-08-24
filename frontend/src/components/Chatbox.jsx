@@ -1,58 +1,271 @@
-// ✅ src/components/ChatBox.jsx
+// // ✅ src/components/ChatBox.jsx
+// import React, { useEffect, useState, useRef } from "react";
+// import { io } from "socket.io-client";
+// import dayjs from "dayjs";
+// import relativeTime from "dayjs/plugin/relativeTime";
+// import localizedFormat from "dayjs/plugin/localizedFormat";
+// import "dayjs/locale/ko";
+
+// dayjs.locale("ko");
+// dayjs.extend(relativeTime);
+// dayjs.extend(localizedFormat);
+
+// const socket = io(import.meta.env.VITE_SOCKET_URL, {
+//   transports: ["websocket"],
+// });
+
+// function ChatBox({ conversationId, userEmail, onClose, fullSize = false, otherNickname, otherEmail }) {
+//   const [messages, setMessages] = useState([]);
+//   const [input, setInput] = useState("");
+//   const [isComposing, setIsComposing] = useState(false);
+//   const scrollRef = useRef(null);
+
+//   useEffect(() => {
+//     if (!conversationId) return;
+
+//     const fetchMessages = async () => {
+//       try {
+//         const res = await fetch(`${import.meta.env.VITE_API_URL}/chat/${conversationId}/messages`);
+//         const data = await res.json();
+//         setMessages(data);
+
+//         socket.emit("markAsRead", {
+//           conversationId,
+//           email: userEmail,
+//         });
+//       } catch (err) {
+//         console.error("❌ 메시지 불러오기 실패:", err);
+//       }
+//     };
+
+//     fetchMessages();
+//   }, [conversationId, userEmail]);
+
+//   useEffect(() => {
+//     socket.emit("join", { conversationId });
+
+//     const handleIncoming = (msg) => {
+//       setMessages((prev) => [...prev, msg]);
+
+//       socket.emit("markAsRead", {
+//         conversationId,
+//         email: userEmail,
+//       });
+//     };
+
+//     const handleReadUpdate = ({ conversationId: convoId, reader }) => {
+//       if (convoId !== conversationId) return;
+//       setMessages((prev) =>
+//         prev.map((m) =>
+//           m.readBy?.includes(reader) ? m : { ...m, readBy: [...(m.readBy || []), reader] }
+//         )
+//       );
+//     };
+
+//     socket.on("receiveMessage", handleIncoming);
+//     socket.on("readStatusUpdated", handleReadUpdate);
+
+//     return () => {
+//       socket.off("receiveMessage", handleIncoming);
+//       socket.off("readStatusUpdated", handleReadUpdate);
+//     };
+//   }, [conversationId, userEmail]);
+
+//   const handleSend = () => {
+//     const trimmed = input.trim();
+//     if (!trimmed) return;
+
+//     const msg = {
+//       conversationId,
+//       sender: userEmail,
+//       content: trimmed,
+//     };
+
+//     socket.emit("sendMessage", msg);
+//     setInput("");
+//   };
+
+//   useEffect(() => {
+//     scrollRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+//   }, [messages]);
+
+//   const shouldShowDate = (msg, index) => {
+//     if (index === 0) return true;
+//     return !dayjs(msg.createdAt).isSame(messages[index - 1].createdAt, "day");
+//   };
+
+//   const lastMyReadMessage = [...messages].reverse().find(
+//     (m) => m.sender === userEmail && m.readBy?.includes(otherEmail)
+//   );
+
+//   return (
+//     <div
+//       className={`relative border rounded-lg shadow bg-white flex flex-col ${
+//         fullSize ? "w-full h-full" : "w-full max-w-md p-4"
+//       }`}
+//     >
+//       {onClose && (
+//         <button
+//           onClick={onClose}
+//           className="absolute top-2 right-2 text-gray-400 hover:text-black text-xl"
+//         >
+//           ×
+//         </button>
+//       )}
+
+//       <div className="flex items-center gap-2 border-b p-2 font-semibold">
+//         <span>🗨️</span>
+//         <span>{otherNickname || "Chat"}</span>
+//       </div>
+
+//       <div className="flex-1 overflow-y-auto mb-3 space-y-2 p-4">
+//         {messages.map((msg, idx) => (
+//           <div key={idx}>
+//             {shouldShowDate(msg, idx) && (
+//               <div className="text-center text-sm text-gray-400 my-2">
+//                 {dayjs(msg.createdAt).format("YYYY년 M월 D일")}
+//               </div>
+//             )}
+//             <div
+//               className={`flex ${
+//                 msg.sender === userEmail ? "justify-end" : "justify-start"
+//               }`}
+//             >
+//               <div className="max-w-xs">
+//                 <div
+//                   className={`px-3 py-1 rounded-lg break-words ${
+//                     msg.sender === userEmail
+//                       ? "bg-blue-600 text-white"
+//                       : "bg-gray-200 text-black"
+//                   }`}
+//                 >
+//                   {msg.content}
+//                 </div>
+//                 <div
+//                   className={`text-xs mt-1 ${
+//                     msg.sender === userEmail
+//                       ? "text-right text-gray-300"
+//                       : "text-left text-gray-500"
+//                   }`}
+//                 >
+//                   {dayjs(msg.createdAt).format("A h:mm")}
+//                   {msg === lastMyReadMessage && (
+//                     <span className="ml-1 text-blue-500 font-medium">Seen</span>
+//                   )}
+//                 </div>
+//               </div>
+//             </div>
+//           </div>
+//         ))}
+//         <div ref={scrollRef} />
+//       </div>
+
+//       <div className="flex gap-2 p-2 border-t">
+//         <input
+//           type="text"
+//           className="flex-1 border rounded p-2"
+//           value={input}
+//           onChange={(e) => setInput(e.target.value)}
+//           onCompositionStart={() => setIsComposing(true)}
+//           onCompositionEnd={() => setIsComposing(false)}
+//           onKeyDown={(e) => {
+//             if (e.key === "Enter" && !isComposing) handleSend();
+//           }}
+//           placeholder="메시지를 입력하세요..."
+//         />
+//         <button
+//           onClick={handleSend}
+//           className="bg-blue-600 text-white px-4 rounded hover:bg-blue-700"
+//         >
+//           전송
+//         </button>
+//       </div>
+//     </div>
+//   );
+// }
+
+// export default ChatBox;
+
+// frontend/src/components/Chatbox.jsx
 import React, { useEffect, useState, useRef } from "react";
-import { io } from "socket.io-client";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import localizedFormat from "dayjs/plugin/localizedFormat";
 import "dayjs/locale/ko";
 
+// ✅ NEW: contexts & API
+import { useAuth } from "../contexts/AuthContext";
+import { useSchool } from "../contexts/SchoolContext";
+import { useSocket } from "../contexts/SocketContext";
+import * as chatApi from "../api/chat";
+
 dayjs.locale("ko");
 dayjs.extend(relativeTime);
 dayjs.extend(localizedFormat);
 
-const socket = io(import.meta.env.VITE_SOCKET_URL, {
-  transports: ["websocket"],
-});
-
+/**
+ * Props:
+ * - conversationId (required)
+ * - userEmail (내 이메일 - 기존 코드 유지용, 실제로는 useAuth.user.email 사용 가능)
+ * - otherNickname, otherEmail (UI용)
+ * - onClose?, fullSize?
+ */
 function ChatBox({ conversationId, userEmail, onClose, fullSize = false, otherNickname, otherEmail }) {
+  const { user, token } = useAuth();
+  const { school } = useSchool();
+  const { socket, emit, on, off } = useSocket();
+
+  const me = (user?.email || userEmail || "").toLowerCase();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [isComposing, setIsComposing] = useState(false);
+  const [loading, setLoading] = useState(false);
   const scrollRef = useRef(null);
 
+  // 1) 선택된 대화의 메시지 불러오기 (+ 읽음 표시)
   useEffect(() => {
-    if (!conversationId) return;
+    if (!conversationId || !token || !school) return;
 
-    const fetchMessages = async () => {
+    let mounted = true;
+    (async () => {
       try {
-        const res = await fetch(`${import.meta.env.VITE_API_URL}/chat/${conversationId}/messages`);
-        const data = await res.json();
-        setMessages(data);
+        setLoading(true);
+        // 서버는 최신순으로 주므로 화면에서 오래된 → 최신 순서로 보여주려면 reverse
+        const data = await chatApi.getMessages({ school, token, conversationId });
+        if (!mounted) return;
+        setMessages((data || []).reverse());
 
-        socket.emit("markAsRead", {
-          conversationId,
-          email: userEmail,
-        });
+        // 📌 읽음 처리(소켓)
+        emit && emit("chat:read", { conversationId });
       } catch (err) {
-        console.error("❌ 메시지 불러오기 실패:", err);
+        console.error("❌ failed to load messages:", err);
+      } finally {
+        if (mounted) setLoading(false);
       }
+    })();
+
+    return () => {
+      mounted = false;
     };
+  }, [conversationId, token, school, emit]);
 
-    fetchMessages();
-  }, [conversationId, userEmail]);
-
+  // 2) 소켓 룸 조인 + 실시간 수신/읽음 업데이트
   useEffect(() => {
-    socket.emit("join", { conversationId });
+    if (!conversationId || !socket) return;
 
-    const handleIncoming = (msg) => {
+    // 룸 조인
+    emit("chat:join", { conversationId });
+
+    // 수신 핸들러
+    const handleReceive = (msg) => {
+      if (msg.conversationId !== conversationId) return;
       setMessages((prev) => [...prev, msg]);
 
-      socket.emit("markAsRead", {
-        conversationId,
-        email: userEmail,
-      });
+      // 새 메시지 받자마자 읽음 처리
+      emit("chat:read", { conversationId });
     };
 
+    // 읽음 상태 갱신 핸들러
     const handleReadUpdate = ({ conversationId: convoId, reader }) => {
       if (convoId !== conversationId) return;
       setMessages((prev) =>
@@ -62,40 +275,39 @@ function ChatBox({ conversationId, userEmail, onClose, fullSize = false, otherNi
       );
     };
 
-    socket.on("receiveMessage", handleIncoming);
-    socket.on("readStatusUpdated", handleReadUpdate);
+    on("chat:receive", handleReceive);
+    on("chat:read:updated", handleReadUpdate);
 
     return () => {
-      socket.off("receiveMessage", handleIncoming);
-      socket.off("readStatusUpdated", handleReadUpdate);
+      off("chat:receive", handleReceive);
+      off("chat:read:updated", handleReadUpdate);
     };
-  }, [conversationId, userEmail]);
+  }, [socket, emit, on, off, conversationId]);
 
+  // 3) 전송
   const handleSend = () => {
     const trimmed = input.trim();
-    if (!trimmed) return;
+    if (!trimmed || !conversationId) return;
 
-    const msg = {
-      conversationId,
-      sender: userEmail,
-      content: trimmed,
-    };
-
-    socket.emit("sendMessage", msg);
+    // 소켓으로 서버에 전송 → 서버가 DB 저장 후 브로드캐스트
+    emit("chat:send", { conversationId, content: trimmed });
     setInput("");
   };
 
+  // 4) 자동 스크롤
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [messages]);
 
+  // 5) 날짜 표시 유틸
   const shouldShowDate = (msg, index) => {
     if (index === 0) return true;
     return !dayjs(msg.createdAt).isSame(messages[index - 1].createdAt, "day");
   };
 
+  // 6) 'Seen' 표시(상대가 내 메시지를 읽었는지)
   const lastMyReadMessage = [...messages].reverse().find(
-    (m) => m.sender === userEmail && m.readBy?.includes(otherEmail)
+    (m) => m.sender?.toLowerCase() === me && (m.readBy || []).map((e) => e.toLowerCase()).includes((otherEmail || "").toLowerCase())
   );
 
   return (
@@ -119,33 +331,26 @@ function ChatBox({ conversationId, userEmail, onClose, fullSize = false, otherNi
       </div>
 
       <div className="flex-1 overflow-y-auto mb-3 space-y-2 p-4">
+        {loading && <div className="text-sm text-gray-500">Loading...</div>}
         {messages.map((msg, idx) => (
-          <div key={idx}>
+          <div key={msg._id || idx}>
             {shouldShowDate(msg, idx) && (
               <div className="text-center text-sm text-gray-400 my-2">
                 {dayjs(msg.createdAt).format("YYYY년 M월 D일")}
               </div>
             )}
-            <div
-              className={`flex ${
-                msg.sender === userEmail ? "justify-end" : "justify-start"
-              }`}
-            >
+            <div className={`flex ${msg.sender?.toLowerCase() === me ? "justify-end" : "justify-start"}`}>
               <div className="max-w-xs">
                 <div
                   className={`px-3 py-1 rounded-lg break-words ${
-                    msg.sender === userEmail
-                      ? "bg-blue-600 text-white"
-                      : "bg-gray-200 text-black"
+                    msg.sender?.toLowerCase() === me ? "bg-blue-600 text-white" : "bg-gray-200 text-black"
                   }`}
                 >
                   {msg.content}
                 </div>
                 <div
                   className={`text-xs mt-1 ${
-                    msg.sender === userEmail
-                      ? "text-right text-gray-300"
-                      : "text-left text-gray-500"
+                    msg.sender?.toLowerCase() === me ? "text-right text-gray-300" : "text-left text-gray-500"
                   }`}
                 >
                   {dayjs(msg.createdAt).format("A h:mm")}
@@ -175,7 +380,8 @@ function ChatBox({ conversationId, userEmail, onClose, fullSize = false, otherNi
         />
         <button
           onClick={handleSend}
-          className="bg-blue-600 text-white px-4 rounded hover:bg-blue-700"
+          disabled={!socket}
+          className="bg-blue-600 text-white px-4 rounded hover:bg-blue-700 disabled:opacity-50"
         >
           전송
         </button>
@@ -185,6 +391,7 @@ function ChatBox({ conversationId, userEmail, onClose, fullSize = false, otherNi
 }
 
 export default ChatBox;
+
 
 
 

@@ -3,18 +3,17 @@ const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
 
+
 // ✅ 라우터 import
 const authRoutes = require("./routes/auth");
 const postsRoutes = require("./routes/posts");
 const commentRoutes = require("./routes/comments");
-const notificationRoute = require("./routes/notification"); // 단수형!
+const notificationRoute = require("./routes/notification");
 const marketRoutes = require("./routes/market");
 const chatRoutes = require("./routes/chat");
 const requestRoutes = require("./routes/request");
 const courseRoutes = require("./routes/course");
 const scheduleRoutes = require("./routes/schedule");
-
-// Foodplace
 const placesRouter = require("./routes/places");
 
 
@@ -55,11 +54,25 @@ app.use(express.json());
 
 // ✅ 라우트 등록
 app.use("/api/auth", authRoutes);
+
+// 🔁 멀티테넌시 적용된 posts (중요!)
+app.use("/api/:school/posts", postsRoutes);
+
+// ⬇️ 나머지는 이후 단계에서 차례로 :school 적용 예정
 app.use("/api/posts", postsRoutes);
+
+app.use("/api/:school/comments", commentRoutes);
 app.use("/api/comments", commentRoutes);
+
 app.use("/api/notification", notificationRoute);
+
+app.use("/api/:school/market", marketRoutes);
 app.use("/api/market", marketRoutes);
+
+app.use("/api/:school/chat", chatRoutes);
 app.use("/api/chat", chatRoutes);
+
+
 app.use("/api/request", requestRoutes);
 app.use("/api/course", courseRoutes);
 app.use("/api/schedule", scheduleRoutes);

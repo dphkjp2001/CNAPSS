@@ -36,6 +36,7 @@ function serializeUser(user) {
     email: user.email,
     nickname: user.nickname,
     school: user.school,
+    role: user.role,   
     verified: user.isVerified,
   };
 }
@@ -177,6 +178,7 @@ router.post("/register", async (req, res) => {
       id: newUser._id,
       email: newUser.email,
       school: newUser.school,
+      role: newUser.role,
     });
 
     return res.status(200).json({
@@ -219,6 +221,7 @@ router.post("/login", async (req, res) => {
       id: user._id,
       email: user.email,
       school: user.school,
+      role: user.role,  
     });
 
     return res.json({

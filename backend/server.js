@@ -88,113 +88,148 @@
 
 
 
-// ✅ backend/server.js
-const mongoose = require("mongoose");
+// backend/server.js
 const app = require("./app");
 const http = require("http");
 const { Server } = require("socket.io");
+const jwt = require("jsonwebtoken");
+const mongoose = require("mongoose");
 
-const Message = require("./models/Message");
 const Conversation = require("./models/Conversation");
+const Message = require("./models/Message");
 
 if (process.env.NODE_ENV !== "production") {
   require("dotenv").config();
 }
 
 const server = http.createServer(app);
+
+// 🔧 소켓 CORS (필요 시 도메인 화이트리스트로 좁혀도 됨)
 const io = new Server(server, {
   cors: {
-    origin: "*",
+    origin: [
+      "https://www.cnapss.com",
+      "https://cnapss.com",
+      "https://cnapss-3da82.web.app",
+      "http://localhost:3000",
+      "http://localhost:5173",
+    ],
     methods: ["GET", "POST"],
   },
 });
 
-mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log("✅ MongoDB 연결 성공"))
-  .catch(err => console.error("❌ MongoDB 연결 실패", err));
+// 🧩 Mongo 연결
+mongoose
+  .connect(process.env.MONGODB_URI)
+  .then(() => console.log("✅ MongoDB connected"))
+  .catch((err) => console.error("❌ MongoDB connect failed", err));
+
+// 🔐 소켓 인증 (JWT)
+io.use((socket, next) => {
+  try {
+    const token =
+      socket.handshake.auth?.token ||
+      socket.handshake.query?.token ||
+      (socket.handshake.headers?.authorization || "").replace(/^Bearer\s+/i, "");
+    if (!token) return next(new Error("UNAUTHORIZED"));
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    socket.user = {
+      id: decoded.id,
+      email: decoded.email,
+      school: decoded.school,
+      role: decoded.role || "user",
+    };
+    return next();
+  } catch (e) {
+    return next(new Error("UNAUTHORIZED"));
+  }
+});
+
+// 🔎 권한 체크 helper
+async function authorizeConversation(conversationId, email, school) {
+  if (!conversationId) return { ok: false };
+  const convo = await Conversation.findById(conversationId);
+  if (!convo) return { ok: false };
+  const isParticipant = [convo.buyer, convo.seller].includes(email);
+  if (!isParticipant) return { ok: false };
+  if (convo.school !== school) return { ok: false };
+  return { ok: true, convo };
+}
 
 io.on("connection", (socket) => {
-  console.log("🟢 사용자 연결됨:", socket.id);
+  const { email, school } = socket.user;
+  console.log("🟢 socket connected:", email, school);
 
-  socket.on("join", ({ conversationId }) => {
-    socket.join(conversationId);
-    console.log(`🛏️ Room joined: ${conversationId}`);
+  // 글로벌 룸
+  socket.join(`school:${school}`);
+  socket.join(`user:${email}`);
+
+  // 대화방 입장
+  socket.on("chat:join", async ({ conversationId }) => {
+    const auth = await authorizeConversation(conversationId, email, school);
+    if (!auth.ok) return;
+    socket.join(`conv:${conversationId}`);
   });
 
-  socket.on("sendMessage", async ({ conversationId, sender, content }) => {
-    console.log(`💬 메시지 from ${sender}:`, content);
-    
+  // 메시지 발신
+  socket.on("chat:send", async ({ conversationId, content }) => {
     try {
-      const message = new Message({
+      const auth = await authorizeConversation(conversationId, email, school);
+      if (!auth.ok) return;
+
+      const msg = await Message.create({
         conversationId,
-        sender,
+        sender: email,
         content,
+        school,
       });
-      await message.save();
 
-      const convo = await Conversation.findByIdAndUpdate(
+      auth.convo.lastMessage = content;
+      auth.convo.updatedAt = new Date();
+      await auth.convo.save();
+
+      io.to(`conv:${conversationId}`).emit("chat:receive", {
+        _id: msg._id,
         conversationId,
-        {
-          lastMessage: content,
-          updatedAt: new Date(),
-        },
-        { new: true }
-      );
-
-      io.to(conversationId).emit("receiveMessage", {
-        _id: message._id,
-        sender,
+        sender: email,
         content,
-        createdAt: message.createdAt,
+        createdAt: msg.createdAt,
       });
 
-      const targetEmail = convo.buyer === sender ? convo.seller : convo.buyer;
-      io.emit("newConversation", {
-        targetEmail,
-        conversationId: convo._id,
-      });
-
-      // ✅ 미리보기 실시간 갱신용 emit
-      io.emit("conversationUpdated", {
-        conversationId: convo._id,
+      const peer = auth.convo.buyer === email ? auth.convo.seller : auth.convo.buyer;
+      io.to(`user:${peer}`).emit("chat:preview", {
+        conversationId,
         lastMessage: content,
-        updatedAt: convo.updatedAt,
+        updatedAt: auth.convo.updatedAt,
       });
-
     } catch (err) {
-      console.error("❌ 메시지 저장 실패:", err);
+      console.error("❌ chat:send error", err);
+    }
+  });
+
+  // 읽음 처리
+  socket.on("chat:read", async ({ conversationId }) => {
+    try {
+      const auth = await authorizeConversation(conversationId, email, school);
+      if (!auth.ok) return;
+
+      await Message.updateMany(
+        { conversationId, readBy: { $ne: email }, sender: { $ne: email } },
+        { $addToSet: { readBy: email } }
+      );
+      io.to(`conv:${conversationId}`).emit("chat:read:updated", { conversationId, reader: email });
+    } catch (err) {
+      console.error("❌ chat:read error", err);
     }
   });
 
   socket.on("disconnect", () => {
-    console.log("🔌 사용자 연결 종료:", socket.id);
+    console.log("🔌 socket disconnected:", email);
   });
-
-  socket.on("markAsRead", async ({ conversationId, email }) => {
-    try {
-      const unreadMessages = await Message.updateMany(
-        {
-          conversationId,
-          readBy: { $ne: email },
-          sender: { $ne: email }, // 내가 보낸 건 굳이 읽음 처리 안 해도 됨
-        },
-        { $addToSet: { readBy: email } } // 중복 방지
-      );
-  
-      // ✅ 읽음 상태가 바뀌었다면, 해당 대화방 사용자에게 알림
-      io.to(conversationId).emit("readStatusUpdated", {
-        conversationId,
-        reader: email,
-      });
-    } catch (err) {
-      console.error("❌ 읽음 처리 실패:", err);
-    }
-  });
-
-
 });
 
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
-  console.log(`🚀 서버 실행 중: http://localhost:${PORT}`);
+  console.log(`🚀 Server listening on http://localhost:${PORT}`);
 });
