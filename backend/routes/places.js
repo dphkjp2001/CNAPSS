@@ -2,8 +2,8 @@
 const express = require("express");
 const NodeCache = require("node-cache");
 
-const router = express.Router({ mergeParams: true }); // ✅ read :school
-const cache = new NodeCache({ stdTTL: 60 * 30 });
+const router = express.Router({ mergeParams: true }); // ✅ :school 읽기
+const cache = new NodeCache({ stdTTL: 60 * 30 }); // 30m
 
 /** ---------- External keys ---------- */
 const YELP_KEY =
@@ -18,8 +18,7 @@ const NOMINATIM_USER_AGENT =
 const authHeaders = () => ({ Authorization: `Bearer ${YELP_KEY}` });
 
 const SCHOOL_CONFIG = {
-  // Pre-seeded anchors. Add more schools as needed.
-  // Slug must be lowercase.
+  // Pre-seeded anchors. Add more schools here.
   nyu: {
     displayName: "New York University",
     center: { lat: 40.729513, lon: -73.997649 }, // Bobst
@@ -28,12 +27,13 @@ const SCHOOL_CONFIG = {
   },
   columbia: {
     displayName: "Columbia University",
-    center: { lat: 40.8075, lon: -73.9626 }, // Low Memorial Library vicinity
+    center: { lat: 40.8075, lon: -73.9626 },
     radius: 1500,
     defaultTypes: ["restaurant", "cafe", "fast food"],
   },
 };
 
+// Map generic UI types → Yelp category aliases
 const CATEGORY_MAP = {
   restaurant: "restaurants",
   cafe: "cafes",
@@ -87,13 +87,12 @@ async function geocodeNominatim(text, bias) {
     format: "jsonv2",
     limit: "1",
     addressdetails: "0",
-    // You can bias to US if you only support US campuses:
-    // countrycodes: "us",
+    // countrycodes: "us", // optionally restrict
   });
 
-  // Optional viewbox bias near campus anchor (helps ambiguous names)
+  // Optional bias near campus anchor
   if (bias && bias.lat && bias.lon) {
-    const box = 0.2; // ~small region around bias
+    const box = 0.2; // ~ small region
     params.set(
       "viewbox",
       `${bias.lon - box},${bias.lat + box},${bias.lon + box},${bias.lat - box}`
@@ -117,11 +116,7 @@ async function geocodeNominatim(text, bias) {
   };
 }
 
-/** Resolve school anchor:
- * 1) Pre-seeded config
- * 2) cached geocode
- * 3) geocode "<school> university campus"
- */
+/** Resolve school anchor: seeded → cached geocode → fresh geocode */
 async function resolveSchoolAnchor(school) {
   const s = String(school || "").toLowerCase();
   if (SCHOOL_CONFIG[s]?.center) return SCHOOL_CONFIG[s];
@@ -139,14 +134,23 @@ async function resolveSchoolAnchor(school) {
       radius: 1500,
       defaultTypes: ["restaurant", "cafe", "fast food"],
     };
-    cache.set(ck, cfg, 60 * 60 * 12); // 12h
+    cache.set(ck, cfg, 60 * 60 * 12);
     return cfg;
   }
   return null;
 }
 
 /** ---------- Yelp Search ---------- */
-async function yelpSearch({ lat, lon, radius, types, sortBy = "best_match", term = "" }) {
+async function yelpSearch({
+  lat,
+  lon,
+  radius,
+  categories,           // CSV string of Yelp aliases
+  sortBy = "best_match",
+  term = "",
+  priceLevels,          // "1,2,3,4"
+  openNow,              // boolean
+}) {
   const params = new URLSearchParams({
     latitude: String(lat),
     longitude: String(lon),
@@ -154,9 +158,12 @@ async function yelpSearch({ lat, lon, radius, types, sortBy = "best_match", term
     limit: "50",
     sort_by: sortBy, // rating | review_count | distance | best_match
   });
-  const cats = buildCategories(types);
-  if (cats) params.set("categories", cats);
+  if (categories) params.set("categories", categories);
   if (term) params.set("term", term);
+  if (priceLevels) params.set("price", String(priceLevels));
+  if (openNow === true || String(openNow).toLowerCase() === "true") {
+    params.set("open_now", "true");
+  }
 
   const url = `${YELP_BASE}/businesses/search?${params.toString()}`;
   const res = await fetch(url, { headers: authHeaders() });
@@ -191,9 +198,9 @@ async function yelpSearch({ lat, lon, radius, types, sortBy = "best_match", term
 /** ---------- Routes ---------- */
 // GET /api/:school/places/nearby
 // Query supports:
-//  - address (or q): "Columbia University Bookstore" or "70 Washington Sq S, NYC" etc.
-//  - lat, lon (optional manual override)
-//  - radius, types (comma), minRating, minReviews, sortBy, term
+//  - address (or q) -> geocode first
+//  - lat, lon, radius
+//  - types, categories, priceLevels, openNow, minRating, minReviews, sortBy, term
 router.get("/nearby", async (req, res) => {
   try {
     const school = String(req.params.school || "").toLowerCase();
@@ -207,14 +214,14 @@ router.get("/nearby", async (req, res) => {
     const qAddress = (req.query.address || req.query.q || "").toString().trim();
     let baseCenter = { ...anchor.center };
 
-    // If address given, geocode and replace center
+    // If address given, geocode & replace center (bias near campus)
     if (qAddress) {
       const ck = `addr:${school}:${qAddress}`;
       const cached = cache.get(ck);
       let geocoded = cached;
       if (!geocoded) {
-        geocoded = await geocodeNominatim(qAddress, anchor.center); // bias near campus
-        if (geocoded) cache.set(ck, geocoded, 60 * 60); // 1h
+        geocoded = await geocodeNominatim(qAddress, anchor.center);
+        if (geocoded) cache.set(ck, geocoded, 60 * 60);
       }
       if (geocoded?.lat && geocoded?.lon) {
         baseCenter = { lat: geocoded.lat, lon: geocoded.lon };
@@ -228,14 +235,36 @@ router.get("/nearby", async (req, res) => {
     const radius = req.query.radius
       ? parseInt(req.query.radius, 10)
       : anchor.radius || 1500;
+
     const types = (req.query.types
       ? String(req.query.types).split(",")
       : anchor.defaultTypes || ["restaurant", "cafe"]).map((s) => s.trim());
+
+    // categories = UI types + optional cuisines CSV → Yelp alias CSV
+    const rawCats = String(req.query.categories || "")
+      .split(",")
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
+    const fromTypes = (buildCategories(types) || "").split(",").filter(Boolean);
+    const catSet = new Set(fromTypes);
+    for (const c of rawCats) {
+      // If UI sends real Yelp alias use as-is
+      for (const a of c.split(",")) if (a) catSet.add(a);
+    }
+    const categories = Array.from(catSet).join(",") || null;
 
     const minRating = req.query.minRating ? parseFloat(req.query.minRating) : 0;
     const minReviews = req.query.minReviews ? parseInt(req.query.minReviews, 10) : 0;
     const sortBy = req.query.sortBy || "best_match";
     const term = (req.query.term || "").trim();
+    const priceLevels = String(req.query.priceLevels || req.query.price || "")
+      .split(",")
+      .map((n) => parseInt(n, 10))
+      .filter((n) => [1, 2, 3, 4].includes(n))
+      .join(",") || null;
+    const openNow = ["1", "true", "yes", "on"].includes(
+      String(req.query.openNow).toLowerCase()
+    );
 
     const key = [
       school,
@@ -243,11 +272,15 @@ router.get("/nearby", async (req, res) => {
       center.lon,
       radius,
       types.join("|"),
+      categories || "",
       minRating,
       minReviews,
       sortBy,
       term,
+      priceLevels || "",
+      openNow ? "1" : "0",
     ].join(":");
+
     const cached = cache.get(key);
     if (cached) return res.json(cached);
 
@@ -255,9 +288,11 @@ router.get("/nearby", async (req, res) => {
       lat: center.lat,
       lon: center.lon,
       radius,
-      types,
+      categories,
       sortBy,
       term,
+      priceLevels,
+      openNow,
     });
 
     const items = base
@@ -281,7 +316,6 @@ router.get("/nearby", async (req, res) => {
   }
 });
 
-// (optional) Address-only geocode helper
 // GET /api/:school/places/geocode?address=...
 router.get("/geocode", async (req, res) => {
   try {
@@ -297,6 +331,42 @@ router.get("/geocode", async (req, res) => {
   }
 });
 
+// GET /api/:school/places/suggest?text=...&latitude=...&longitude=...&limit=8
+router.get("/suggest", async (req, res) => {
+  try {
+    const text = String(req.query.text || "").trim();
+    const latitude = req.query.latitude ? parseFloat(req.query.latitude) : null;
+    const longitude = req.query.longitude ? parseFloat(req.query.longitude) : null;
+    const limit = req.query.limit ? parseInt(req.query.limit, 10) : 8;
+
+    if (!text) return res.json({ suggestions: [] });
+
+    const params = new URLSearchParams({
+      text,
+      ...(latitude != null && { latitude }),
+      ...(longitude != null && { longitude }),
+      ...(limit && { limit }),
+    });
+    const url = `${YELP_BASE}/autocomplete?${params}`;
+    const r = await fetch(url, { headers: authHeaders() });
+    if (!r.ok) {
+      const t = await r.text().catch(() => "");
+      throw new Error(`Yelp autocomplete failed: ${r.status} ${t}`);
+    }
+    const j = await r.json();
+    const suggestions = [
+      ...(j.categories || []).map((c) => ({ type: "category", text: c.title })),
+      ...(j.terms || []).map((t) => ({ type: "term", text: t.text })),
+      ...(j.businesses || []).map((b) => ({ type: "business", text: b.name })),
+    ].slice(0, limit);
+    res.json({ suggestions });
+  } catch (e) {
+    console.error("[places suggest]", e);
+    res.status(500).json({ suggestions: [] });
+  }
+});
+
 module.exports = router;
+
 
 

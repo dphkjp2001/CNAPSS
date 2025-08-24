@@ -9,7 +9,7 @@ const auth = (token) => ({
 export async function fetchNearbyPlaces({
   school,
   token,
-  address,        // ✅ NEW: address or place name for geocoding
+  address,        // address or place name (server will geocode first)
   lat,
   lon,
   radius,
@@ -18,10 +18,13 @@ export async function fetchNearbyPlaces({
   minReviews = 0,
   sortBy = "best_match",
   term = "",
+  categories,     // CSV of Yelp aliases e.g. "ramen,sushi,thai"
+  priceLevels,    // "1,2,3,4"
+  openNow,        // boolean
 }) {
   const s = String(school || "").toLowerCase().trim();
   const params = new URLSearchParams({
-    ...(address && { address }),  // ✅ server will geocode this first
+    ...(address && { address }),
     ...(lat != null && { lat }),
     ...(lon != null && { lon }),
     ...(radius != null && { radius }),
@@ -30,14 +33,23 @@ export async function fetchNearbyPlaces({
     minReviews,
     sortBy,
     ...(term && { term }),
+    ...(categories && { categories }),
+    ...(priceLevels && { priceLevels }),
+    ...(openNow ? { openNow: "true" } : {}),
   });
+
   const res = await fetch(`${API}/${s}/places/nearby?${params.toString()}`, {
     headers: auth(token),
   });
+
+  if (res.status === 501) {
+    const err = new Error("Feature unavailable");
+    err.code = "FEATURE_UNAVAILABLE";
+    throw err;
+  }
   if (!res.ok) throw new Error(`Failed to load places: ${res.status}`);
   return res.json();
 }
-
 
 /** Yelp autocomplete proxy
  * GET /api/:school/places/suggest?text=...&latitude=...&longitude=...&limit=...
@@ -46,8 +58,8 @@ export async function fetchPlaceSuggestions({ school, token, text, lat, lon, lim
   const s = String(school || "").toLowerCase().trim();
   const params = new URLSearchParams({
     text: String(text || ""),
-    ...(lat != null && { latitude: String(lat) }),   // ✅ backend expects 'latitude'
-    ...(lon != null && { longitude: String(lon) }), // ✅ backend expects 'longitude'
+    ...(lat != null && { latitude: String(lat) }),
+    ...(lon != null && { longitude: String(lon) }),
     limit: String(limit),
   });
 
@@ -58,7 +70,6 @@ export async function fetchPlaceSuggestions({ school, token, text, lat, lon, lim
   return res.json(); // { suggestions: [...] }
 }
 
-
 export async function geocodeAddress({ school, token, address }) {
   const s = String(school || "").toLowerCase().trim();
   const params = new URLSearchParams({ address });
@@ -67,5 +78,7 @@ export async function geocodeAddress({ school, token, address }) {
   });
   if (!res.ok) throw new Error("Geocode failed");
   return res.json();
+}
+
 }
 

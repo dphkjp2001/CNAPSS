@@ -19,7 +19,7 @@ function PanTo({ center }) {
   return null;
 }
 
-// A simple dot marker icon to avoid asset issues
+// A simple dot marker icon
 const dotIcon = L.divIcon({
   className:
     "w-3 h-3 rounded-full bg-rose-600 ring-2 ring-white shadow-[0_0_0_2px_rgba(244,63,94,0.35)]",
@@ -31,19 +31,22 @@ export default function FoodMap() {
   const { token } = useAuth();
   const { school } = useSchool();
 
-  // Server-driven center/radius/items (server returns center per-school)
-  const [center, setCenter] = useState({ lat: 40.729513, lon: -73.997649 }); // NYU Bobst fallback
+  // Server-driven center/radius/items (fallback to NYU Bobst)
+  const [center, setCenter] = useState({ lat: 40.729513, lon: -73.997649 });
   const [radius, setRadius] = useState(1200);
 
   // Filters
   const [types, setTypes] = useState(["restaurant", "cafe", "fast food"]);
+  const [cuisines, setCuisines] = useState([]);          // Yelp category aliases
+  const [priceLevels, setPriceLevels] = useState([1, 2, 3]); // 1:$ ~ 4:$$$$
+  const [openNow, setOpenNow] = useState(false);
   const [minRating, setMinRating] = useState(0);
   const [minReviews, setMinReviews] = useState(0);
-  const [sortBy, setSortBy] = useState("best_match"); // rating | review_count | distance | best_match
+  const [sortBy, setSortBy] = useState("best_match");   // rating | review_count | distance
 
   // Search term and address toggle
   const [term, setTerm] = useState("");
-  const [useAddress, setUseAddress] = useState(false); // when true, server geocodes 'address' first
+  const [useAddress, setUseAddress] = useState(false);
 
   // Data / UI states
   const [items, setItems] = useState([]);
@@ -60,7 +63,7 @@ export default function FoodMap() {
 
   const SCHOOL_LABEL = useMemo(() => String(school || "").toUpperCase(), [school]);
 
-  // Guard: require auth
+  // Guard
   if (!token) {
     return (
       <div className="mx-auto max-w-4xl p-6">
@@ -89,6 +92,9 @@ export default function FoodMap() {
           minRating,
           minReviews,
           sortBy,
+          categories: cuisines.join(","),
+          priceLevels: priceLevels.join(","),
+          openNow,
         });
 
         if (cancelled) return;
@@ -97,7 +103,6 @@ export default function FoodMap() {
         if (!activeId && res.items?.length) setActiveId(res.items[0].id);
       } catch (err) {
         if (cancelled) return;
-        // Our API helper throws { code: "FEATURE_UNAVAILABLE" } for 501
         if (err && err.code === "FEATURE_UNAVAILABLE") {
           setUnavailable(true);
           setItems([]);
@@ -109,14 +114,26 @@ export default function FoodMap() {
         if (!cancelled) setLoading(false);
       }
     })();
-
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [school, token, radius, types.join("|"), minRating, minReviews, sortBy, term, useAddress]);
+  }, [
+    school,
+    token,
+    radius,
+    types.join("|"),
+    cuisines.join("|"),
+    priceLevels.join(","),
+    openNow,
+    minRating,
+    minReviews,
+    sortBy,
+    term,
+    useAddress,
+  ]);
 
-  // Typeahead suggestions for address/keyword
+  // Typeahead suggestions
   useEffect(() => {
     let timer;
     const q = term.trim();
@@ -154,18 +171,14 @@ export default function FoodMap() {
   const onPickSuggest = (s) => {
     setTerm(s.text || "");
     setShowSuggests(false);
-    // If user is in address mode, keep it; otherwise leave as keyword.
-    // We could auto-enable address for business/category terms, but keep behavior predictable.
   };
 
   const toggleType = (t) => {
-    setTypes((prev) =>
-      prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]
-    );
+    setTypes((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
   };
 
   return (
-    <div className="flex h-[calc(100vh-80px)]">
+    <div className="flex h-[calc(100vh-72px)] overflow-hidden">
       {/* Left: Map */}
       <div className="relative flex-1">
         <MapContainer
@@ -217,9 +230,7 @@ export default function FoodMap() {
               key={p.id}
               position={[p.lat, p.lon]}
               icon={dotIcon}
-              eventHandlers={{
-                click: () => setActiveId(p.id),
-              }}
+              eventHandlers={{ click: () => setActiveId(p.id) }}
             >
               <Popup>
                 <div className="text-sm">
@@ -248,7 +259,7 @@ export default function FoodMap() {
         </MapContainer>
 
         {/* Top-left controls */}
-        <div className="pointer-events-auto absolute left-3 top-3 w-[min(560px,95%)] rounded-xl border border-gray-200 bg-white/95 p-3 shadow-md backdrop-blur">
+        <div className="pointer-events-auto absolute left-3 top-3 w-[min(720px,95%)] rounded-xl border border-gray-200 bg-white/95 p-3 shadow-md backdrop-blur">
           <div className="mb-2 flex items-center justify-between">
             <div className="text-sm font-semibold">Food Map ({SCHOOL_LABEL})</div>
             <div className="flex items-center gap-3 text-xs text-gray-600">
@@ -343,6 +354,66 @@ export default function FoodMap() {
                 </button>
               );
             })}
+
+            <span className="ml-2 text-gray-600">Cuisines:</span>
+            {[
+              "ramen",
+              "sushi",
+              "pizza",
+              "burgers",
+              "thai",
+              "mexican",
+              "chinese",
+              "korean",
+              "indpak",
+              "vegan",
+              "italian",
+            ].map((c) => {
+              const on = cuisines.includes(c);
+              return (
+                <button
+                  key={c}
+                  onClick={() =>
+                    setCuisines((prev) => (on ? prev.filter((x) => x !== c) : [...prev, c]))
+                  }
+                  className={`rounded-full px-2 py-1 ${
+                    on
+                      ? "bg-indigo-600 text-white"
+                      : "border border-gray-300 text-gray-700 hover:bg-gray-50"
+                  }`}
+                >
+                  {c}
+                </button>
+              );
+            })}
+
+            <span className="ml-2 text-gray-600">Price:</span>
+            {[1, 2, 3, 4].map((p) => {
+              const on = priceLevels.includes(p);
+              return (
+                <button
+                  key={p}
+                  onClick={() =>
+                    setPriceLevels((prev) =>
+                      on ? prev.filter((x) => x !== p) : [...prev, p].sort()
+                    )
+                  }
+                  className={`rounded px-2 py-1 font-mono ${
+                    on
+                      ? "bg-gray-900 text-white"
+                      : "border border-gray-300 text-gray-700 hover:bg-gray-50"
+                  }`}
+                >
+                  {"$".repeat(p)}
+                </button>
+              );
+            })}
+
+            <label className="ml-2 flex items-center gap-1 text-gray-700">
+              <input type="checkbox" checked={openNow} onChange={(e) => setOpenNow(e.target.checked)} />
+              open now
+            </label>
+
             <span className="ml-2 text-gray-600">Min ⭐</span>
             <select
               className="rounded border px-1 py-0.5"
@@ -355,6 +426,7 @@ export default function FoodMap() {
                 </option>
               ))}
             </select>
+
             <span className="ml-2 text-gray-600">Min reviews</span>
             <select
               className="rounded border px-1 py-0.5"
@@ -367,6 +439,7 @@ export default function FoodMap() {
                 </option>
               ))}
             </select>
+
             <span className="ml-2 text-gray-600">Sort</span>
             <select
               className="rounded border px-1 py-0.5"
@@ -394,7 +467,7 @@ export default function FoodMap() {
       </div>
 
       {/* Right: List */}
-      <div className="w-[380px] border-l bg-white">
+      <div className="w-[380px] border-l bg-white h-full flex flex-col">
         <div className="flex items-center justify-between border-b px-4 py-3">
           <div className="text-sm font-semibold">Results</div>
           <div className="text-xs text-gray-500">{items.length}</div>
@@ -416,9 +489,7 @@ export default function FoodMap() {
                 return (
                   <li
                     key={p.id}
-                    className={`cursor-pointer px-4 py-3 hover:bg-gray-50 ${
-                      on ? "bg-indigo-50" : ""
-                    }`}
+                    className={`cursor-pointer px-4 py-3 hover:bg-gray-50 ${on ? "bg-indigo-50" : ""}`}
                     onClick={() => setActiveId(p.id)}
                   >
                     <div className="flex items-start justify-between">
@@ -431,9 +502,7 @@ export default function FoodMap() {
                           ⭐ {p.rating ?? "-"} · {p.review_count ?? 0} reviews
                           {p.price ? <span> · {"$".repeat(p.price)}</span> : null}
                         </div>
-                        <div className="mt-1 text-xs text-gray-500">
-                          {p.address || "-"}
-                        </div>
+                        <div className="mt-1 text-xs text-gray-500">{p.address || "-"}</div>
                       </div>
                       {p.website ? (
                         <a
@@ -457,5 +526,6 @@ export default function FoodMap() {
     </div>
   );
 }
+
 
 
