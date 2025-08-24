@@ -1,59 +1,46 @@
-// src/api/comments.js
-const BASE = import.meta.env.VITE_API_URL;
+// // src/api/comments.js
+const API_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
+const authHeaders = (token) => ({ "Content-Type": "application/json", Authorization: `Bearer ${token}` });
 
-// 📌 댓글 불러오기
-export const fetchComments = async (postId, type = "freeboard", viewerEmail = null) => {
-  const query = viewerEmail ? `?type=${type}&email=${viewerEmail}` : `?type=${type}`;
-  const res = await fetch(`${BASE}/comments/${postId}${query}`);
-  const data = await res.json();
-  if (!res.ok) throw new Error("댓글 불러오기 실패");
-  return data;
-};
+export async function listComments({ school, token, postId }) {
+  const s = String(school || "").toLowerCase().trim();
+  const res = await fetch(`${API_URL}/${s}/comments/${postId}`, { headers: authHeaders(token) });
+  if (!res.ok) throw new Error("Failed to load comments");
+  return res.json();
+}
 
-// 📌 댓글 작성 (일반 or 대댓글)
-export const postComment = async ({ postId, email, content, parentId = null }) => {
-  const res = await fetch(`${BASE}/comments/${postId}`, {
+export async function addComment({ school, token, postId, content }) {
+  const s = String(school || "").toLowerCase().trim();
+  const res = await fetch(`${API_URL}/${s}/comments/${postId}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, content, parentId }),
+    headers: authHeaders(token),
+    body: JSON.stringify({ content }),
   });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.message || "댓글 등록 실패");
-  return data;
-};
+  if (!res.ok) throw new Error("Failed to add comment");
+  return res.json();
+}
 
-// 📌 댓글 수정
-export const updateComment = async ({ commentId, email, content }) => {
-  const res = await fetch(`${BASE}/comments/${commentId}`, {
+export async function updateComment({ school, token, commentId, content }) {
+  const s = String(school || "").toLowerCase().trim();
+  const res = await fetch(`${API_URL}/${s}/comments/${commentId}`, {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, content }),
+    headers: authHeaders(token),
+    body: JSON.stringify({ content }),
   });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.message || "댓글 수정 실패");
-  return data;
-};
+  if (!res.ok) throw new Error("Failed to update comment");
+  return res.json();
+}
 
-// 📌 댓글 삭제
-export const deleteComment = async ({ commentId, email }) => {
-  const res = await fetch(`${BASE}/comments/${commentId}`, {
-    method: "DELETE",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.message || "댓글 삭제 실패");
-  return data;
-};
+export async function deleteComment({ school, token, commentId }) {
+  const s = String(school || "").toLowerCase().trim();
+  const res = await fetch(`${API_URL}/${s}/comments/${commentId}`, { method: "DELETE", headers: authHeaders(token) });
+  if (!res.ok) throw new Error("Failed to delete comment");
+  return res.json();
+}
 
-// 📌 댓글 좋아요 토글
-export const toggleCommentLike = async ({ commentId, email }) => {
-  const res = await fetch(`${BASE}/comments/${commentId}/thumb`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.message || "추천 실패");
-  return data;
-};
+export async function toggleCommentThumbs({ school, token, commentId }) {
+  const s = String(school || "").toLowerCase().trim();
+  const res = await fetch(`${API_URL}/${s}/comments/${commentId}/thumbs`, { method: "POST", headers: authHeaders(token) });
+  if (!res.ok) throw new Error("Failed to toggle comment like");
+  return res.json();
+}

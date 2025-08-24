@@ -158,12 +158,10 @@
 
 // backend/routes/comments.js
 const express = require("express");
-const router = express.Router();
+const router = express.Router({ mergeParams: true });
 const mongoose = require("mongoose");
-
 const requireAuth = require("../middleware/requireAuth");
 const schoolGuard = require("../middleware/schoolGuard");
-
 const Comment = require("../models/Comment");
 const Post = require("../models/Post");
 const User = require("../models/User");
