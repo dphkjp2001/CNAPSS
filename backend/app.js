@@ -62,15 +62,12 @@ app.use("/api/:school/posts", postsRoutes);
 app.use("/api/posts", postsRoutes);
 
 app.use("/api/:school/comments", commentRoutes);
-app.use("/api/comments", commentRoutes);
 
 app.use("/api/notification", notificationRoute);
 
 app.use("/api/:school/market", marketRoutes);
-app.use("/api/market", marketRoutes);
 
 app.use("/api/:school/chat", chatRoutes);
-app.use("/api/chat", chatRoutes);
 
 
 app.use("/api/request", requestRoutes);

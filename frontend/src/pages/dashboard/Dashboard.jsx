@@ -4,7 +4,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useSchool } from "../../contexts/SchoolContext";
 import { useSchoolPath } from "../../utils/schoolPath";
 import { Navigate, Link, useNavigate } from "react-router-dom";
-import { fetchPosts } from "../../api/posts";
+import { listPosts } from "../../api/posts"; // ✅ 변경: fetchPosts → listPosts
 
 // Mini map preview (Leaflet)
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
@@ -12,7 +12,7 @@ import "leaflet/dist/leaflet.css";
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, token } = useAuth();               // ✅ 토큰 사용
   const { school, schoolTheme, loading } = useSchool();
   const schoolPath = useSchoolPath();
 
@@ -20,7 +20,6 @@ export default function Dashboard() {
 
   // Center for mini map (NYU fallback)
   const SCHOOL_CENTER = useMemo(() => {
-    // You can store per-school center in SchoolContext and branch here.
     return { lat: 40.7291, lon: -73.9965 }; // NYU
   }, []);
 
@@ -28,17 +27,19 @@ export default function Dashboard() {
   if (!school) return <Navigate to="/select-school" />;
 
   useEffect(() => {
+    if (!token || !school) return;                 // ✅ 토큰/스쿨 준비되면 호출
     (async () => {
       try {
-        const data = await fetchPosts(school); // ✅ scoped list
+        const data = await listPosts({ school, token, limit: 5 }); // ✅ /api/:school/posts + Authorization
         const sliced = Array.isArray(data) ? data.slice(0, 5) : [];
         setLatestPosts(sliced);
       } catch (err) {
+        // 토큰 만료면 재로그인 안내(원하면 여기서 자동 로그아웃/리프레시 처리도 가능)
         console.error("Failed to load posts:", err);
         setLatestPosts([]);
       }
     })();
-  }, [school]);
+  }, [school, token]);
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: schoolTheme.bg }}>
@@ -154,7 +155,7 @@ export default function Dashboard() {
                 <span className="ml-2 text-xs text-blue-600 underline">Open map</span>
               </h2>
               <p className="text-sm text-gray-700">
-                Discover top‑rated restaurants and cafes near campus. Click to open the full map.
+                Discover top-rated restaurants and cafes near campus. Click to open the full map.
               </p>
             </div>
 
@@ -181,4 +182,5 @@ export default function Dashboard() {
     </div>
   );
 }
+
 

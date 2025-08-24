@@ -1,66 +1,84 @@
-// src/api/posts.js
-const BASE = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
+// frontend/src/api/posts.js
+const API_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, ""); // e.g. https://api.cnapss.com/api
 
-function authHeaders() {
-  const token = localStorage.getItem("token");
-  return token ? { Authorization: `Bearer ${token}` } : {};
+const authHeaders = (token) => ({
+  "Content-Type": "application/json",
+  Authorization: `Bearer ${token}`,
+});
+
+// 목록
+export async function listPosts({ school, token, page, limit } = {}) {
+  const url = new URL(`${API_URL}/${school}/posts`);
+  if (page) url.searchParams.set("page", String(page));
+  if (limit) url.searchParams.set("limit", String(limit));
+  const res = await fetch(url, { headers: authHeaders(token) });
+  if (!res.ok) throw new Error("Failed to load posts");
+  return res.json();
 }
 
-async function request(path, { method = "GET", headers = {}, body } = {}) {
-  const res = await fetch(`${BASE}${path}`, {
-    method,
-    headers: {
-      "Content-Type": "application/json",
-      ...authHeaders(),
-      ...headers,
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  let data = null;
-  try {
-    data = await res.json();
-  } catch (_) {}
-  if (!res.ok) throw new Error(data?.message || `HTTP ${res.status}`);
-  return data;
+// 상세
+export async function getPost({ school, token, id }) {
+  const res = await fetch(`${API_URL}/${school}/posts/${id}`, { headers: authHeaders(token) });
+  if (!res.ok) throw new Error("Failed to load post");
+  return res.json();
 }
 
-// 목록 (학교별)
-export const fetchPosts = async (school) => {
-  if (!school) return [];
-  return request(`/posts?school=${encodeURIComponent(school)}`);
-};
-
-// 단일 (학교 스코프)
-export const fetchPostById = async (id, school) => {
-  return request(`/posts/${id}?school=${encodeURIComponent(school)}`);
-};
-
-// 생성
-export const createPost = async ({ email, nickname, title, content, school }) => {
-  if (!school) throw new Error("School is required.");
-  return request(`/posts`, {
+// 작성
+export async function createPost({ school, token, title, content }) {
+  const res = await fetch(`${API_URL}/${school}/posts`, {
     method: "POST",
-    body: { email, nickname, title, content, school },
+    headers: authHeaders(token),
+    body: JSON.stringify({ title, content }),
   });
-};
+  if (!res.ok) throw new Error("Failed to create post");
+  return res.json();
+}
 
-// 수정/삭제/좋아요
-export const updatePost = async (id, { email, title, content }) =>
-  request(`/posts/${id}`, { method: "PUT", body: { email, title, content } });
+// 수정
+export async function updatePost({ school, token, id, title, content }) {
+  const res = await fetch(`${API_URL}/${school}/posts/${id}`, {
+    method: "PUT",
+    headers: authHeaders(token),
+    body: JSON.stringify({ title, content }),
+  });
+  if (!res.ok) throw new Error("Failed to update post");
+  return res.json();
+}
 
-export const deletePost = async (id, email) =>
-  request(`/posts/${id}`, { method: "DELETE", body: { email } });
+// 삭제
+export async function deletePost({ school, token, id }) {
+  const res = await fetch(`${API_URL}/${school}/posts/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
+  });
+  if (!res.ok) throw new Error("Failed to delete post");
+  return res.json();
+}
 
-export const togglePostLike = async (id, email) =>
-  request(`/posts/${id}/thumbs`, { method: "POST", body: { email } });
+// 좋아요 토글
+export async function toggleThumbs({ school, token, id }) {
+  const res = await fetch(`${API_URL}/${school}/posts/${id}/thumbs`, {
+    method: "POST",
+    headers: authHeaders(token),
+  });
+  if (!res.ok) throw new Error("Failed to toggle like");
+  return res.json();
+}
 
-// 대시보드용
-export const fetchLikedPosts = async (email, school) =>
-  request(`/posts/liked/${encodeURIComponent(email)}?school=${encodeURIComponent(school)}`);
+// 내가 좋아요한 글
+export async function listLiked({ school, token, email }) {
+  const res = await fetch(`${API_URL}/${school}/posts/liked/${encodeURIComponent(email)}`, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) throw new Error("Failed to load liked posts");
+  return res.json();
+}
 
-export const fetchCommentedPosts = async (email, school) =>
-  request(`/posts/commented/${encodeURIComponent(email)}?school=${encodeURIComponent(school)}`);
-
-export const fetchMyPosts = async (email, school) =>
-  request(`/posts?author=${encodeURIComponent(email)}&school=${encodeURIComponent(school)}`);
-
+// 내가 댓글 단 글
+export async function listCommented({ school, token, email }) {
+  const res = await fetch(`${API_URL}/${school}/posts/commented/${encodeURIComponent(email)}`, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) throw new Error("Failed to load commented posts");
+  return res.json();
+}
