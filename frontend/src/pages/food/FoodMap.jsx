@@ -1,113 +1,122 @@
 // frontend/src/pages/food/FoodMap.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import {
-  MapContainer, TileLayer, Marker, Popup, Circle, Tooltip, useMap
-} from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, Circle, Tooltip, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
+
+import { useAuth } from "../../contexts/AuthContext";
+import { useSchool } from "../../contexts/SchoolContext";
 import { fetchNearbyPlaces, fetchPlaceSuggestions } from "../../api/places";
 
-// ---- utilities ----
-function markerIcon(score = 0, active = false) {
-  const s = Number.isFinite(score) ? score : 0;
-  const size = active ? 34 : 28;
-  const hue = Math.round(120 * s); // 0=red -> 120=green
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24">
-      <path d="M12 2C8.14 2 5 5.14 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.86-3.14-7-7-7z"
-        fill="hsl(${hue},80%,${active ? "40%" : "45%"})" stroke="${active ? "#111" : "none"}" stroke-width="${active ? 0.8 : 0}"/>
-      <circle cx="12" cy="9" r="3.2" fill="white"/>
-    </svg>`;
-  return L.divIcon({ html: svg, iconSize: [size, size], className: "" });
-}
-
-function Stars({ value = 0 }) {
-  const full = Math.floor(value);
-  const half = value - full >= 0.5;
-  return (
-    <span className="text-[11px]">
-      {"★".repeat(full)}
-      {half ? "☆" : ""}
-      <span className="text-gray-300">{"☆".repeat(5 - full - (half ? 1 : 0))}</span>
-    </span>
-  );
-}
-
-function metersToMinWalk(m) {
-  if (!Number.isFinite(m)) return null;
-  return Math.round(m / 80); // 80m/min
-}
-
-function FlyToAndOpen({ target, open }) {
+// Simple center helper for panning after center changes
+function PanTo({ center }) {
   const map = useMap();
   useEffect(() => {
-    if (!target) return;
-    map.flyTo([target.lat, target.lon], 17, { duration: 0.6 });
-    const t = setTimeout(() => open?.(), 650);
-    return () => clearTimeout(t);
-  }, [target, open, map]);
+    if (center?.lat && center?.lon) {
+      map.setView([center.lat, center.lon], map.getZoom(), { animate: true });
+    }
+  }, [center, map]);
   return null;
 }
 
-export default function FoodMap() {
-  const BOBST = useMemo(() => ({ lat: 40.729513, lon: -73.997649 }), []);
+// A simple dot marker icon to avoid asset issues
+const dotIcon = L.divIcon({
+  className:
+    "w-3 h-3 rounded-full bg-rose-600 ring-2 ring-white shadow-[0_0_0_2px_rgba(244,63,94,0.35)]",
+  iconSize: [12, 12],
+  iconAnchor: [6, 6],
+});
 
-  const [data, setData] = useState(null);
-  const [types, setTypes] = useState(["restaurant", "cafe", "fast food"]);
+export default function FoodMap() {
+  const { token } = useAuth();
+  const { school } = useSchool();
+
+  // Server-driven center/radius/items (server returns center per-school)
+  const [center, setCenter] = useState({ lat: 40.729513, lon: -73.997649 }); // NYU Bobst fallback
   const [radius, setRadius] = useState(1200);
+
+  // Filters
+  const [types, setTypes] = useState(["restaurant", "cafe", "fast food"]);
+  const [minRating, setMinRating] = useState(0);
+  const [minReviews, setMinReviews] = useState(0);
+  const [sortBy, setSortBy] = useState("best_match"); // rating | review_count | distance | best_match
+
+  // Search term and address toggle
+  const [term, setTerm] = useState("");
+  const [useAddress, setUseAddress] = useState(false); // when true, server geocodes 'address' first
+
+  // Data / UI states
+  const [items, setItems] = useState([]);
+  const [activeId, setActiveId] = useState(null);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [unavailable, setUnavailable] = useState(false);
 
-  // search/sort filters
-  const [term, setTerm] = useState("");
-  const [sortBy, setSortBy] = useState("rating"); // rating | review_count | distance | best_match
-  const [minRating, setMinRating] = useState(4.0);
-  const [minReviews, setMinReviews] = useState(20);
-
-  // autocomplete
+  // Suggestions (typeahead)
   const [suggests, setSuggests] = useState([]);
   const [showSuggests, setShowSuggests] = useState(false);
   const [highlightIdx, setHighlightIdx] = useState(-1);
+  const inputRef = useRef(null);
 
-  // selection highlight
-  const [activeId, setActiveId] = useState(null);
-  const markersRef = useRef(new Map());
-  const activePlace = useMemo(
-    () => (data?.items || []).find((x) => x.id === activeId) || null,
-    [data, activeId]
-  );
+  const SCHOOL_LABEL = useMemo(() => String(school || "").toUpperCase(), [school]);
 
-  // fetch places
+  // Guard: require auth
+  if (!token) {
+    return (
+      <div className="mx-auto max-w-4xl p-6">
+        <div className="rounded-xl border border-gray-200 bg-white p-6 text-sm text-gray-700">
+          Please log in to use Food Map.
+        </div>
+      </div>
+    );
+  }
+
+  // Load places whenever key inputs change
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        setLoading(true); setErrorMsg("");
+        setLoading(true);
+        setErrorMsg("");
+        setUnavailable(false);
+
         const res = await fetchNearbyPlaces({
-          lat: BOBST.lat,
-          lon: BOBST.lon,
+          school,
+          token,
+          ...(useAddress ? { address: term } : { term }),
           radius,
           types,
           minRating,
           minReviews,
           sortBy,
-          term: term.trim(),
         });
-        if (!cancelled) {
-          setData(res);
-          if (!activeId && res.items?.length) setActiveId(res.items[0].id);
-        }
+
+        if (cancelled) return;
+        setCenter(res.center || center);
+        setItems(Array.isArray(res.items) ? res.items : []);
+        if (!activeId && res.items?.length) setActiveId(res.items[0].id);
       } catch (err) {
-        console.error(err);
-        if (!cancelled) setErrorMsg("Failed to load places.");
+        if (cancelled) return;
+        // Our API helper throws { code: "FEATURE_UNAVAILABLE" } for 501
+        if (err && err.code === "FEATURE_UNAVAILABLE") {
+          setUnavailable(true);
+          setItems([]);
+        } else {
+          setErrorMsg("Failed to load places.");
+          setItems([]);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
-    return () => { cancelled = true; };
-  }, [BOBST, radius, types, minRating, minReviews, sortBy, term]);
 
-  // suggestions (debounced)
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [school, token, radius, types.join("|"), minRating, minReviews, sortBy, term, useAddress]);
+
+  // Typeahead suggestions for address/keyword
   useEffect(() => {
     let timer;
     const q = term.trim();
@@ -115,7 +124,12 @@ export default function FoodMap() {
       timer = setTimeout(async () => {
         try {
           const { suggestions } = await fetchPlaceSuggestions({
-            text: q, lat: BOBST.lat, lon: BOBST.lon, limit: 8,
+            school,
+            token,
+            text: q,
+            lat: center.lat,
+            lon: center.lon,
+            limit: 8,
           });
           setSuggests(suggestions || []);
           setShowSuggests(true);
@@ -124,260 +138,324 @@ export default function FoodMap() {
           setSuggests([]);
           setShowSuggests(false);
         }
-      }, 200);
+      }, 220);
     } else {
       setSuggests([]);
       setShowSuggests(false);
     }
     return () => clearTimeout(timer);
-  }, [term, BOBST]);
+  }, [term, school, token, center]);
 
-  function chooseSuggestion(s) {
-    // 간단하게: 선택 시 텍스트를 term으로 넣고 검색
-    setTerm(s.text);
-    setShowSuggests(false);
-  }
-
-  function onTermKeyDown(e) {
-    if (!showSuggests || suggests.length === 0) return;
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      setHighlightIdx((i) => (i + 1) % suggests.length);
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setHighlightIdx((i) => (i - 1 + suggests.length) % suggests.length);
-    } else if (e.key === "Enter") {
-      if (highlightIdx >= 0) {
-        e.preventDefault();
-        chooseSuggestion(suggests[highlightIdx]);
-      }
-    } else if (e.key === "Escape") {
-      setShowSuggests(false);
-    }
-  }
-
-  const items = useMemo(
-    () =>
-      (data?.items || []).filter(
-        (p) => Number.isFinite(p.lat) && Number.isFinite(p.lon)
-      ),
-    [data]
+  const activeItem = useMemo(
+    () => items.find((x) => x.id === activeId) || null,
+    [items, activeId]
   );
 
-  return (
-    <div className="w-full h-[calc(100vh-80px)] flex">
-      {/* Left: map */}
-      <div className="flex-1 flex flex-col border-r">
-        <div className="p-2 flex flex-wrap items-center gap-3 border-b">
-          <div className="text-sm font-semibold">Food Map (NYU · Bobst Library)</div>
+  const onPickSuggest = (s) => {
+    setTerm(s.text || "");
+    setShowSuggests(false);
+    // If user is in address mode, keep it; otherwise leave as keyword.
+    // We could auto-enable address for business/category terms, but keep behavior predictable.
+  };
 
-          <label className="text-sm">Radius (m)</label>
-          <input
-            className="border rounded px-2 py-1 w-24"
-            type="number" min={200} max={3000}
-            value={radius}
-            onChange={(e) => setRadius(Number(e.target.value))}
+  const toggleType = (t) => {
+    setTypes((prev) =>
+      prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]
+    );
+  };
+
+  return (
+    <div className="flex h-[calc(100vh-80px)]">
+      {/* Left: Map */}
+      <div className="relative flex-1">
+        <MapContainer
+          center={[center.lat, center.lon]}
+          zoom={15}
+          style={{ height: "100%", width: "100%" }}
+          scrollWheelZoom
+        >
+          <PanTo center={center} />
+          <TileLayer
+            attribution='&copy; OpenStreetMap contributors'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
 
-          <div className="flex gap-3 text-sm">
-            {["restaurant", "cafe", "fast food"].map((t) => (
-              <label key={t} className="flex items-center gap-1">
+          {/* School anchor marker and radius rings */}
+          <Marker
+            position={[center.lat, center.lon]}
+            icon={L.divIcon({
+              className:
+                "flex items-center justify-center rounded-full border-2 border-white bg-indigo-600 shadow-lg",
+              html: '<div style="width:18px;height:18px;border-radius:9999px"></div>',
+              iconSize: [18, 18],
+              iconAnchor: [9, 9],
+            })}
+          >
+            <Tooltip direction="top" offset={[0, -10]} opacity={1} permanent>
+              {SCHOOL_LABEL}
+            </Tooltip>
+            <Popup>Center • {SCHOOL_LABEL}</Popup>
+          </Marker>
+          <Circle
+            center={[center.lat, center.lon]}
+            radius={80}
+            color="#6b21a8"
+            fillColor="#c4b5fd"
+            fillOpacity={0.25}
+          />
+          <Circle
+            center={[center.lat, center.lon]}
+            radius={radius}
+            color="#6b21a8"
+            fillOpacity={0}
+            dashArray="6 6"
+          />
+
+          {/* Result markers */}
+          {items.map((p) => (
+            <Marker
+              key={p.id}
+              position={[p.lat, p.lon]}
+              icon={dotIcon}
+              eventHandlers={{
+                click: () => setActiveId(p.id),
+              }}
+            >
+              <Popup>
+                <div className="text-sm">
+                  <div className="font-semibold">{p.name}</div>
+                  <div className="text-gray-600">{p.address || "-"}</div>
+                  <div className="mt-1 text-gray-600">
+                    ⭐ {p.rating ?? "-"} · {p.review_count ?? 0} reviews
+                  </div>
+                  {p.price ? (
+                    <div className="text-gray-600">{"$".repeat(p.price)}</div>
+                  ) : null}
+                  {p.website ? (
+                    <a
+                      href={p.website}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-1 inline-block text-indigo-600 underline"
+                    >
+                      Yelp
+                    </a>
+                  ) : null}
+                </div>
+              </Popup>
+            </Marker>
+          ))}
+        </MapContainer>
+
+        {/* Top-left controls */}
+        <div className="pointer-events-auto absolute left-3 top-3 w-[min(560px,95%)] rounded-xl border border-gray-200 bg-white/95 p-3 shadow-md backdrop-blur">
+          <div className="mb-2 flex items-center justify-between">
+            <div className="text-sm font-semibold">Food Map ({SCHOOL_LABEL})</div>
+            <div className="flex items-center gap-3 text-xs text-gray-600">
+              <label className="flex items-center gap-1">
                 <input
                   type="checkbox"
-                  checked={types.includes(t)}
-                  onChange={() =>
-                    setTypes((prev) =>
-                      prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]
-                    )
-                  }
+                  checked={useAddress}
+                  onChange={(e) => setUseAddress(e.target.checked)}
                 />
-                {t}
+                by address
               </label>
-            ))}
+              <div className="flex items-center gap-1">
+                <span>Radius</span>
+                <select
+                  className="rounded border px-1 py-0.5"
+                  value={radius}
+                  onChange={(e) => setRadius(parseInt(e.target.value, 10))}
+                >
+                  {[600, 800, 1000, 1200, 1500, 2000].map((r) => (
+                    <option key={r} value={r}>
+                      {r} m
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
           </div>
 
-          {loading && <span className="text-xs text-gray-500">Loading…</span>}
-          {data && <span className="text-xs text-gray-500">{items.length} spots</span>}
-          {errorMsg && <span className="text-xs text-red-500">{errorMsg}</span>}
-        </div>
-
-        <div className="flex-1">
-          <MapContainer
-            center={[BOBST.lat, BOBST.lon]}
-            zoom={16}
-            style={{ height: "100%", width: "100%" }}
-          >
-            <TileLayer
-              attribution="&copy; OpenStreetMap contributors"
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
-
-            {/* Bobst pin */}
-            <Marker position={[BOBST.lat, BOBST.lon]} icon={L.divIcon({
-              html: `
-                <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24">
-                  <path d="M12 2C8.14 2 5 5.14 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.86-3.14-7-7-7z" fill="#6b21a8"/>
-                  <path d="M7.5 8.2h9v.8h-9z" fill="white"/>
-                </svg>`,
-              iconSize: [30, 30], className: ""
-            })}>
-              <Popup>Elmer Holmes Bobst Library (NYU)</Popup>
-              <Tooltip direction="top" offset={[0, -18]} opacity={1} permanent>
-                Bobst Library
-              </Tooltip>
-            </Marker>
-
-            <Circle center={[BOBST.lat, BOBST.lon]} radius={80} color="#6b21a8" fillColor="#c4b5fd" fillOpacity={0.25} />
-            <Circle center={[BOBST.lat, BOBST.lon]} radius={radius} color="#6b21a8" fillOpacity={0} dashArray="6 6" />
-
-            {items.map((p) => (
-              <Marker
-                key={p.id}
-                position={[p.lat, p.lon]}
-                icon={markerIcon(p.score, p.id === activeId)}
-                ref={(m) => { if (m) markersRef.current.set(p.id, m); }}
-                eventHandlers={{ click: () => setActiveId(p.id) }}
-              >
-                <Popup>
-                  <div className="space-y-1 text-sm">
-                    <div className="font-semibold">{p.name}</div>
-                    {p.categories?.length ? <div className="text-xs">{p.categories.join(", ")}</div> : null}
-                    {p.address && <div className="text-xs">{p.address}</div>}
-                    <div className="text-xs">Score: {Math.floor((p.score || 0) * 100)}/100</div>
-                    {typeof p.rating === "number" && (
-                      <div className="text-xs">Rating: {p.rating.toFixed(1)}/5 ({p.review_count ?? 0})</div>
-                    )}
-                    {typeof p.price === "number" && <div className="text-xs">Price: {"$".repeat(p.price)}</div>}
-                    <div className="flex gap-2 pt-1">
-                      {p.website && <a className="text-blue-600 underline text-xs" href={p.website} target="_blank" rel="noreferrer">Yelp Page</a>}
-                      {p.phone && <a className="text-blue-600 underline text-xs" href={`tel:${p.phone}`}>Call</a>}
-                    </div>
-                    <div className="text-[10px] text-gray-400 pt-1">Ratings & reviews data © Yelp</div>
-                  </div>
-                </Popup>
-              </Marker>
-            ))}
-
-            <FlyToAndOpen
-              target={activePlace}
-              open={() => {
-                const m = activePlace ? markersRef.current.get(activePlace.id) : null;
-                m?.openPopup();
-              }}
-            />
-          </MapContainer>
-        </div>
-      </div>
-
-      {/* Right: list + search */}
-      <aside className="w-full max-w-md shrink-0 flex flex-col">
-        <div className="p-3 border-b bg-white/80 backdrop-blur">
-          <div className="relative mb-2">
+          {/* Search bar + suggestions */}
+          <div className="relative">
             <input
+              ref={inputRef}
               value={term}
               onChange={(e) => setTerm(e.target.value)}
-              onKeyDown={onTermKeyDown}
-              onFocus={() => suggests.length && setShowSuggests(true)}
-              placeholder="Search (e.g., ramen, korean, pizza)"
-              className="border rounded px-3 py-2 w-full text-sm"
+              placeholder={
+                useAddress
+                  ? "Search by address or place (e.g., 'Washington Square Park')"
+                  : "Search keyword (e.g., ramen, coffee)"
+              }
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10"
+              onKeyDown={(e) => {
+                if (!showSuggests || suggests.length === 0) return;
+                if (e.key === "ArrowDown") {
+                  e.preventDefault();
+                  setHighlightIdx((v) => Math.min(v + 1, suggests.length - 1));
+                } else if (e.key === "ArrowUp") {
+                  e.preventDefault();
+                  setHighlightIdx((v) => Math.max(v - 1, 0));
+                } else if (e.key === "Enter" && highlightIdx >= 0) {
+                  e.preventDefault();
+                  onPickSuggest(suggests[highlightIdx]);
+                }
+              }}
             />
             {showSuggests && suggests.length > 0 && (
-              <ul
-                className="absolute z-[1000] mt-1 w-full bg-white border rounded shadow text-sm max-h-64 overflow-auto"
-                onMouseLeave={() => setHighlightIdx(-1)}
-              >
-                {suggests.map((s, idx) => (
-                  <li
-                    key={`${s.type}-${s.text}-${s.id || idx}`}
-                    className={`px-3 py-2 cursor-pointer flex items-center gap-2 ${
-                      idx === highlightIdx ? "bg-violet-50" : "hover:bg-gray-50"
+              <div className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-gray-200 bg-white shadow">
+                {suggests.map((s, i) => (
+                  <button
+                    key={`${s.type}-${s.text}-${i}`}
+                    onClick={() => onPickSuggest(s)}
+                    className={`block w-full px-3 py-2 text-left text-sm ${
+                      i === highlightIdx ? "bg-gray-100" : ""
                     }`}
-                    onMouseEnter={() => setHighlightIdx(idx)}
-                    onMouseDown={(e) => { e.preventDefault(); chooseSuggestion(s); }}
+                    onMouseEnter={() => setHighlightIdx(i)}
                   >
-                    <span className="text-[10px] px-1.5 py-0.5 rounded border bg-gray-50 text-gray-600">
+                    <span className="mr-2 rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-700">
                       {s.type}
                     </span>
-                    <span>{s.text}</span>
-                  </li>
+                    {s.text}
+                  </button>
                 ))}
-              </ul>
+              </div>
             )}
           </div>
 
-          <div className="flex items-center gap-2 text-xs">
-            <label>Sort</label>
+          {/* Quick filters */}
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+            <span className="text-gray-600">Types:</span>
+            {["restaurant", "cafe", "fast food"].map((t) => {
+              const on = types.includes(t);
+              return (
+                <button
+                  key={t}
+                  onClick={() => toggleType(t)}
+                  className={`rounded-full px-2 py-1 ${
+                    on
+                      ? "bg-gray-900 text-white"
+                      : "border border-gray-300 text-gray-700 hover:bg-gray-50"
+                  }`}
+                >
+                  {t}
+                </button>
+              );
+            })}
+            <span className="ml-2 text-gray-600">Min ⭐</span>
             <select
+              className="rounded border px-1 py-0.5"
+              value={minRating}
+              onChange={(e) => setMinRating(parseFloat(e.target.value))}
+            >
+              {[0, 3.5, 4.0, 4.5].map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
+            <span className="ml-2 text-gray-600">Min reviews</span>
+            <select
+              className="rounded border px-1 py-0.5"
+              value={minReviews}
+              onChange={(e) => setMinReviews(parseInt(e.target.value, 10))}
+            >
+              {[0, 20, 50, 100, 200].map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+            <span className="ml-2 text-gray-600">Sort</span>
+            <select
+              className="rounded border px-1 py-0.5"
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
-              className="border rounded px-2 py-1"
             >
-              <option value="rating">Rating</option>
-              <option value="review_count">Review count</option>
-              <option value="distance">Distance</option>
-              <option value="best_match">Best match</option>
+              <option value="best_match">best match</option>
+              <option value="rating">rating</option>
+              <option value="review_count">review count</option>
+              <option value="distance">distance</option>
             </select>
-
-            <label className="ml-3">Min ⭐</label>
-            <input
-              type="number" min={0} max={5} step={0.1}
-              value={minRating}
-              onChange={(e) => setMinRating(Number(e.target.value))}
-              className="border rounded px-2 py-1 w-16"
-            />
-
-            <label className="ml-3">Min reviews</label>
-            <input
-              type="number" min={0} step={10}
-              value={minReviews}
-              onChange={(e) => setMinReviews(Number(e.target.value))}
-              className="border rounded px-2 py-1 w-20"
-            />
           </div>
         </div>
 
-        <div className="flex-1 overflow-auto">
-          {items.length === 0 && !loading && (
-            <div className="p-4 text-sm text-gray-500">No results. Try widening radius or lowering filters.</div>
+        {/* Bottom-left status */}
+        <div className="pointer-events-none absolute left-3 bottom-3 rounded-lg bg-white/90 px-3 py-1 text-xs text-gray-700 shadow">
+          {loading ? "Loading…" : `${items.length} places`}
+          {errorMsg && <span className="ml-2 text-red-600">{errorMsg}</span>}
+          {unavailable && (
+            <span className="ml-2">
+              Feature not available for <b>{SCHOOL_LABEL}</b> yet.
+            </span>
           )}
-          <ul>
-            {items.map((p, idx) => {
-              const walk = metersToMinWalk(p.distance);
-              const active = p.id === activeId;
-              return (
-                <li
-                  key={p.id}
-                  className={`px-4 py-3 border-b cursor-pointer ${active ? "bg-violet-50" : "bg-white hover:bg-gray-50"}`}
-                  onClick={() => {
-                    setActiveId(p.id);
-                    const m = markersRef.current.get(p.id);
-                    if (m) m.openPopup();
-                  }}
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="text-xs text-gray-500 w-6 mt-[3px]">#{idx + 1}</div>
-                    <div className="flex-1">
-                      <div className="font-medium">{p.name}</div>
-                      <div className="text-xs text-gray-600">
-                        <Stars value={p.rating ?? 0} />{" "}
-                        {typeof p.rating === "number" ? p.rating.toFixed(1) : "–"}/5
-                        {p.review_count ? ` · ${p.review_count} reviews` : ""}
-                        {p.price ? ` · ${"$".repeat(p.price)}` : ""}
-                        {walk ? ` · ${walk} min walk` : ""}
-                      </div>
-                      {p.categories?.length ? (
-                        <div className="text-[11px] text-gray-500">{p.categories.join(", ")}</div>
-                      ) : null}
-                      {p.address && <div className="text-[11px] text-gray-500">{p.address}</div>}
-                    </div>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
         </div>
-      </aside>
+      </div>
+
+      {/* Right: List */}
+      <div className="w-[380px] border-l bg-white">
+        <div className="flex items-center justify-between border-b px-4 py-3">
+          <div className="text-sm font-semibold">Results</div>
+          <div className="text-xs text-gray-500">{items.length}</div>
+        </div>
+
+        <div className="flex-1 overflow-auto">
+          {unavailable ? (
+            <div className="p-4 text-sm text-gray-700">
+              This feature is not available for <b>{SCHOOL_LABEL}</b> yet.
+            </div>
+          ) : !loading && items.length === 0 ? (
+            <div className="p-4 text-sm text-gray-500">
+              No results. Try widening radius or changing filters.
+            </div>
+          ) : (
+            <ul className="divide-y">
+              {items.map((p) => {
+                const on = activeId === p.id;
+                return (
+                  <li
+                    key={p.id}
+                    className={`cursor-pointer px-4 py-3 hover:bg-gray-50 ${
+                      on ? "bg-indigo-50" : ""
+                    }`}
+                    onClick={() => setActiveId(p.id)}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <div className="font-medium">{p.name}</div>
+                        <div className="text-xs text-gray-600">
+                          {p.categories?.join(" • ") || "-"}
+                        </div>
+                        <div className="mt-1 text-xs text-gray-600">
+                          ⭐ {p.rating ?? "-"} · {p.review_count ?? 0} reviews
+                          {p.price ? <span> · {"$".repeat(p.price)}</span> : null}
+                        </div>
+                        <div className="mt-1 text-xs text-gray-500">
+                          {p.address || "-"}
+                        </div>
+                      </div>
+                      {p.website ? (
+                        <a
+                          href={p.website}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="ml-3 rounded bg-gray-900 px-2 py-1 text-xs text-white"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          Yelp
+                        </a>
+                      ) : null}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
+
 
