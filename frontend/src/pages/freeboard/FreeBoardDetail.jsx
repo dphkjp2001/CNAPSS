@@ -1,15 +1,15 @@
 // frontend/src/pages/freeboard/FreeBoardDetail.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { useAuth } from "../../contexts/AuthContext";
-import { useSchool } from "../../contexts/SchoolContext";
 import { useSchoolPath } from "../../utils/schoolPath";
 import CommentSection from "../../components/CommentSection";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import "dayjs/locale/en";
 
-import { fetchPostById, deletePost, togglePostLike } from "../../api/posts";
+import { getPost, deletePost, toggleThumbs } from "../../api/posts";
+import { useAuth } from "../../contexts/AuthContext";
+import { useSchool } from "../../contexts/SchoolContext";
 
 dayjs.extend(relativeTime);
 dayjs.locale("en");
@@ -20,13 +20,14 @@ export default function FreeBoardDetail() {
   const { user } = useAuth();
   const { school, schoolTheme } = useSchool();
   const schoolPath = useSchoolPath();
+  const { token } = useAuth();
 
   const [post, setPost] = useState(null);
   const [error, setError] = useState("");
 
   const loadPost = async () => {
     try {
-      const data = await fetchPostById(id, school); // ✅ guard with school
+      const data = await getPost({ school, token, id }); // ✅ guard with school
       setPost(data);
     } catch (err) {
       setError(err.message || "Failed to load the post.");
@@ -53,7 +54,14 @@ export default function FreeBoardDetail() {
 
   const handleThumb = async () => {
     try {
-      await togglePostLike(id, user.email);
+      await toggleThumbs({ school, token, id: post._id }); // ✅ /api/:school/posts/:id/thumbs
+ // 성공 시 로컬 상태 갱신 (예: setPost)
+      setPost((p) =>
+      !p ? p : {...p,
+      thumbsUpUsers: (p.thumbsUpUsers || []).includes((user?.email||"").toLowerCase())
+       ? p.thumbsUpUsers.filter(e => e.toLowerCase() !== (user?.email||"").toLowerCase())
+       : [...(p.thumbsUpUsers||[]), (user?.email||"").toLowerCase()],
+    });
       await loadPost();
     } catch (err) {
       alert("Failed to like: " + (err.message || "Unknown error"));

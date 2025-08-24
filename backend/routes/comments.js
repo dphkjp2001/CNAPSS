@@ -305,33 +305,34 @@ router.delete("/:id", async (req, res) => {
  * - 댓글 좋아요 토글 (내 계정)
  * - `thumbsUpUsers` 기준으로 토글하고, `thumbsUp` 숫자 동기화
  */
-router.post("/:id/thumbs", async (req, res) => {
-  const { id } = req.params;
-
-  if (!mongoose.Types.ObjectId.isValid(id)) {
-    return res.status(400).json({ message: "Invalid comment id" });
-  }
-
+router.post("/:commentId/thumbs", async (req, res) => {
   try {
-    const comment = await Comment.findOne({ _id: id, school: req.user.school });
-    if (!comment) return res.status(404).json({ message: "Comment not found." });
+    const { commentId } = req.params;
+    const school = req.user.school;
+    const email = (req.user.email || "").toLowerCase();
 
-    const me = req.user.email;
-    const list = comment.thumbsUpUsers || [];
-    const idx = list.indexOf(me);
+    // 현재 상태 확인 (lean으로 가볍게 조회)
+    const cur = await Comment.findOne({ _id: commentId /* , school */ }).lean();
+    if (!cur) return res.status(404).json({ message: "Not found" });
 
-    if (idx >= 0) {
-      list.splice(idx, 1);
-    } else {
-      list.push(me);
-    }
-    comment.thumbsUpUsers = list;
-    comment.thumbsUp = list.length; // 동기화
+    const has = (cur.thumbsUpUsers || []).map((e) => e.toLowerCase()).includes(email);
+    const update = has
+      ? { $pull: { thumbsUpUsers: email }, $inc: { thumbsUp: -1 } }
+      : { $addToSet: { thumbsUpUsers: email }, $inc: { thumbsUp: 1 } };
 
-    await comment.save();
-    res.json({ thumbsUpCount: comment.thumbsUp });
-  } catch (err) {
-    console.error("Toggle comment like error:", err);
+    // 원자적 업데이트로 저장 충돌 방지
+    const next = await Comment.findOneAndUpdate(
+      { _id: commentId, school }, // ← Comment 스키마에 school 필드가 있으면 주석 해제
+      update,
+      { new: true }
+    ).lean();
+
+    return res.json({
+      thumbs: next.thumbsUpUsers || [],
+      count: Array.isArray(next.thumbsUpUsers) ? next.thumbsUpUsers.length : 0,
+    });
+  } catch (e) {
+    console.error("comments:thumbs", e);
     res.status(500).json({ message: "Failed to toggle like." });
   }
 });
