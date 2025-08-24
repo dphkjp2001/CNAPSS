@@ -237,6 +237,7 @@ function ChatBox({ conversationId, userEmail, onClose, fullSize = false, otherNi
 
         // 📌 읽음 처리(소켓)
         emit && emit("chat:read", { conversationId });
+        try { await chatApi.markRead?.({ school, token, conversationId }); } catch {}
       } catch (err) {
         console.error("❌ failed to load messages:", err);
       } finally {
@@ -285,14 +286,22 @@ function ChatBox({ conversationId, userEmail, onClose, fullSize = false, otherNi
   }, [socket, emit, on, off, conversationId]);
 
   // 3) 전송
-  const handleSend = () => {
-    const trimmed = input.trim();
-    if (!trimmed || !conversationId) return;
-
-    // 소켓으로 서버에 전송 → 서버가 DB 저장 후 브로드캐스트
-    emit("chat:send", { conversationId, content: trimmed });
-    setInput("");
-  };
+  const handleSend = async () => {
+       const trimmed = input.trim();
+       if (!trimmed || !conversationId) return;
+       try {
+         // 1) REST로 저장
+         const saved = await chatApi.sendMessage({ school, token, conversationId, content: trimmed });
+         setMessages((prev) => [...prev, saved]);
+         // 2) 소켓 브로드캐스트(서버가 받으면 실시간 갱신)
+         emit && emit("chat:send", { conversationId, content: trimmed });
+       } catch (e) {
+         console.error("send failed:", e);
+         alert("메시지 전송 실패");
+       } finally {
+         setInput("");
+       }
+   };
 
   // 4) 자동 스크롤
   useEffect(() => {

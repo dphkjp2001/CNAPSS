@@ -18,11 +18,20 @@ import {
 dayjs.extend(relativeTime);
 dayjs.locale("en");
 
-export default function CommentSection({ postId }) {
+const toId = (v) => (v == null ? "" : String(v));
+const normEmail = (e) => String(e || "").toLowerCase().trim();
+
+/**
+ * Props:
+ * - postId (required)
+ * - authorEmail (optional)  // post author email for "anonymous (게시자)" label
+ */
+export default function CommentSection({ postId, authorEmail = "" }) {
   const { user, token } = useAuth();
   const { school } = useSchool();
 
-  const me = (user?.email || "").toLowerCase();
+  const me = normEmail(user?.email);
+  const author = normEmail(authorEmail);
 
   const [comments, setComments] = useState([]);
   const [listLoading, setListLoading] = useState(true);
@@ -45,7 +54,6 @@ export default function CommentSection({ postId }) {
   const [deletingId, setDeletingId] = useState(null);
   const [likingId, setLikingId] = useState(null);
 
-  // fetch list once
   const load = useCallback(async () => {
     if (!postId || !school || !token) return;
     setListLoading(true);
@@ -62,50 +70,86 @@ export default function CommentSection({ postId }) {
     }
   }, [postId, school, token]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useEffect(() => { load(); }, [load]);
 
-  // build tree
-  const tree = useMemo(() => {
+  /* ---------- build stable anonymous labels per post ---------- */
+  const anonLabelByEmail = useMemo(() => {
+    // 최초 작성 시각 기록
+    const firstSeen = new Map(); // email -> timestamp
+    for (const c of comments) {
+      const em = normEmail(c.email);
+      if (!em) continue;
+      const ts = new Date(c.createdAt || 0).getTime();
+      if (!firstSeen.has(em)) firstSeen.set(em, ts);
+      else firstSeen.set(em, Math.min(firstSeen.get(em), ts));
+    }
+
+    // 비작성자 이메일만 시간순 정렬
+    const others = Array.from(firstSeen.keys()).filter((e) => e && e !== author);
+    others.sort((a, b) => (firstSeen.get(a) || 0) - (firstSeen.get(b) || 0));
+
+    // 라벨 할당
     const map = new Map();
-    const nodes = (comments || []).map((c) => ({ ...c, children: [] }));
+    if (author) map.set(author, "anonymous (게시자)");
+    others.forEach((e, i) => map.set(e, `anonymous ${i + 1}`));
+    return map;
+  }, [comments, author]);
+
+  const labelOf = useCallback(
+    (email) => anonLabelByEmail.get(normEmail(email)) || "anonymous",
+    [anonLabelByEmail]
+  );
+
+  /* ---------- tree build (string IDs) ---------- */
+  const tree = useMemo(() => {
+    const nodes = (comments || []).map((c) => ({
+      ...c,
+      _id: toId(c._id),
+      parentId: c.parentId ? toId(c.parentId) : null,
+      children: [],
+    }));
+
+    const map = new Map();
     nodes.forEach((n) => map.set(n._id, n));
+
     const roots = [];
     nodes.forEach((n) => {
-      if (n.parentId && map.has(n.parentId)) map.get(n.parentId).children.push(n);
+      const pid = n.parentId ? toId(n.parentId) : "";
+      if (pid && map.has(pid)) map.get(pid).children.push(n);
       else roots.push(n);
     });
-    // optional: sort by time inside each level
-    const sortByTime = (arr) => arr.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-    const walk = (arr) => { sortByTime(arr); arr.forEach((n) => walk(n.children)); };
+
+    // sort by time within each level
+    const byTime = (a, b) => new Date(a.createdAt) - new Date(b.createdAt);
+    const walk = (arr) => { arr.sort(byTime); arr.forEach((n) => walk(n.children)); };
     walk(roots);
+
     return roots;
   }, [comments]);
 
-  // helpers to update local state
+  /* ---------- helpers ---------- */
   const replaceById = (id, next) =>
-    setComments((prev) => prev.map((c) => (c._id === id ? next : c)));
+    setComments((prev) => prev.map((c) => (toId(c._id) === toId(id) ? next : c)));
+
   const removeByIdWithChildren = (id) =>
     setComments((prev) => {
-      // remove target and its descendants
-      const ids = new Set([id]);
+      const target = toId(id);
+      const set = new Set([target]);
       let changed = true;
       while (changed) {
         changed = false;
         prev.forEach((c) => {
-          if (c.parentId && ids.has(c.parentId) && !ids.has(c._id)) {
-            ids.add(c._id);
+          const pid = c.parentId ? toId(c.parentId) : "";
+          if (pid && set.has(pid) && !set.has(toId(c._id))) {
+            set.add(toId(c._id));
             changed = true;
           }
         });
       }
-      return prev.filter((c) => !ids.has(c._id));
+      return prev.filter((c) => !set.has(toId(c._id)));
     });
 
-  /* ====================== actions ====================== */
-
-  // add root comment
+  /* ---------- actions ---------- */
   const submitRoot = async () => {
     const content = rootText.trim();
     if (!content) return;
@@ -122,9 +166,8 @@ export default function CommentSection({ postId }) {
     }
   };
 
-  // start reply
   const startReply = (commentId) => {
-    setReplyingId(commentId);
+    setReplyingId(toId(commentId));
     setReplyText("");
   };
   const cancelReply = () => {
@@ -134,9 +177,10 @@ export default function CommentSection({ postId }) {
   const submitReply = async (parentId) => {
     const content = replyText.trim();
     if (!content) return;
-    setPostingReplyId(parentId);
+    const pid = toId(parentId);
+    setPostingReplyId(pid);
     try {
-      const doc = await addComment({ school, token, postId, content, parentId });
+      const doc = await addComment({ school, token, postId, content, parentId: pid });
       setComments((prev) => [...prev, doc]);
       cancelReply();
     } catch (e) {
@@ -147,9 +191,8 @@ export default function CommentSection({ postId }) {
     }
   };
 
-  // edit
   const startEdit = (c) => {
-    setEditingId(c._id);
+    setEditingId(toId(c._id));
     setEditText(c.content || "");
   };
   const cancelEdit = () => {
@@ -162,7 +205,7 @@ export default function CommentSection({ postId }) {
     setSavingId(editingId);
     try {
       const updated = await apiUpdateComment({ school, token, commentId: editingId, content });
-      replaceById(editingId, updated);
+      replaceById(editingId, { ...updated, _id: toId(updated._id), parentId: updated.parentId ? toId(updated.parentId) : null });
       cancelEdit();
     } catch (e) {
       console.error("comments:update failed", e);
@@ -172,13 +215,13 @@ export default function CommentSection({ postId }) {
     }
   };
 
-  // delete
   const deleteOne = async (id) => {
     if (!window.confirm("Delete this comment? Replies will also be removed in the list view.")) return;
-    setDeletingId(id);
+    const target = toId(id);
+    setDeletingId(target);
     try {
-      await apiDeleteComment({ school, token, commentId: id });
-      removeByIdWithChildren(id);
+      await apiDeleteComment({ school, token, commentId: target });
+      removeByIdWithChildren(target);
     } catch (e) {
       console.error("comments:delete failed", e);
       alert("Failed to delete comment.");
@@ -187,16 +230,22 @@ export default function CommentSection({ postId }) {
     }
   };
 
-  // like
   const toggleLike = async (id) => {
-    setLikingId(id);
+    const target = toId(id);
+    setLikingId(target);
     try {
-      const res = await toggleCommentThumbs({ school, token, commentId: id });
-      replaceById(id, (prev => {
-        const p = comments.find((c) => c._id === id);
-        if (!p) return p;
-        return { ...p, thumbs: res.thumbs ?? [], thumbsCount: res.count ?? (res.thumbs?.length || 0) };
-      })());
+      const res = await toggleCommentThumbs({ school, token, commentId: target });
+      setComments((prev) =>
+        prev.map((c) =>
+          toId(c._id) === target
+            ? {
+                ...c,
+                thumbs: res.thumbs ?? [],
+                thumbsCount: res.count ?? (res.thumbs?.length || 0),
+              }
+            : c
+        )
+      );
     } catch (e) {
       console.error("comments:thumb toggle failed", e);
     } finally {
@@ -258,6 +307,7 @@ export default function CommentSection({ postId }) {
                 key={n._id}
                 node={n}
                 me={me}
+                getLabel={labelOf}
                 replyingId={replyingId}
                 replyText={replyText}
                 postingReplyId={postingReplyId}
@@ -266,8 +316,8 @@ export default function CommentSection({ postId }) {
                 savingId={savingId}
                 deletingId={deletingId}
                 likingId={likingId}
-                onStartReply={startReply}
-                onCancelReply={cancelReply}
+                onStartReply={(id) => setReplyingId(toId(id))}
+                onCancelReply={() => { setReplyingId(null); setReplyText(""); }}
                 onChangeReply={setReplyText}
                 onSubmitReply={submitReply}
                 onStartEdit={startEdit}
@@ -289,6 +339,7 @@ function CommentNode(props) {
   const {
     node,
     me,
+    getLabel,
     replyingId,
     replyText,
     postingReplyId,
@@ -309,9 +360,9 @@ function CommentNode(props) {
     onToggleLike,
   } = props;
 
-  const mine = (node.email || "").toLowerCase() === me;
-  const liked = (node.thumbs || []).map((e) => e.toLowerCase()).includes(me);
-  const likeCount = node.thumbsCount ?? (node.thumbs ? node.thumbs.length : 0);
+  const thumbsArr = node.thumbs ?? node.thumbsUpUsers ?? [];
+  const liked = thumbsArr.map((e) => String(e || "").toLowerCase()).includes(me);
+  const likeCount = node.thumbsCount ?? thumbsArr.length;
 
   return (
     <li>
@@ -320,7 +371,7 @@ function CommentNode(props) {
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium text-gray-900">
-              {(node.email || "").split("@")[0] || "anon"}
+              {getLabel(node.email)}
             </span>
             <span className="text-xs text-gray-500">• {dayjs(node.createdAt).fromNow()}</span>
           </div>
@@ -365,7 +416,7 @@ function CommentNode(props) {
               Reply
             </button>
 
-            {mine && (
+            {String(node.email || "").toLowerCase() === me && (
               <>
                 <button onClick={() => onStartEdit(node)} className="rounded px-2 py-1 hover:bg-gray-100">
                   Edit
@@ -381,30 +432,6 @@ function CommentNode(props) {
             )}
           </div>
 
-          {/* reply box */}
-          {replyingId === node._id && (
-            <div className="mt-2">
-              <textarea
-                value={replyText}
-                onChange={(e) => onChangeReply(e.target.value)}
-                className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10"
-                placeholder="Write a reply…"
-              />
-              <div className="mt-2 flex gap-2">
-                <button
-                  onClick={() => onSubmitReply(node._id)}
-                  disabled={postingReplyId === node._id}
-                  className="rounded-lg bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-black disabled:opacity-60"
-                >
-                  {postingReplyId === node._id ? "Posting…" : "Reply"}
-                </button>
-                <button onClick={onCancelReply} className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700">
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
-
           {/* children */}
           {node.children?.length > 0 && (
             <ul className="mt-3 space-y-3 border-l-2 border-gray-200 pl-6">
@@ -413,6 +440,7 @@ function CommentNode(props) {
                   key={child._id}
                   node={child}
                   me={me}
+                  getLabel={getLabel}
                   replyingId={replyingId}
                   replyText={replyText}
                   postingReplyId={postingReplyId}
@@ -437,9 +465,35 @@ function CommentNode(props) {
           )}
         </div>
       </div>
+
+      {/* reply box */}
+      {replyingId === node._id && (
+        <div className="ml-11 mt-2">
+          <textarea
+            value={replyText}
+            onChange={(e) => onChangeReply(e.target.value)}
+            className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10"
+            placeholder="Write a reply…"
+          />
+          <div className="mt-2 flex gap-2">
+            <button
+              onClick={() => onSubmitReply(node._id)}
+              disabled={postingReplyId === node._id}
+              className="rounded-lg bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-black disabled:opacity-60"
+            >
+              {postingReplyId === node._id ? "Posting…" : "Reply"}
+            </button>
+            <button onClick={onCancelReply} className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </li>
   );
 }
+
+
 
 
 

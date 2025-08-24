@@ -11,6 +11,7 @@ import { getPost, deletePost, toggleThumbs } from "../../api/posts";
 import { useAuth } from "../../contexts/AuthContext";
 import { useSchool } from "../../contexts/SchoolContext";
 
+
 dayjs.extend(relativeTime);
 dayjs.locale("en");
 
@@ -147,7 +148,7 @@ export default function FreeBoardDetail() {
 
         {post?._id && (
           <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
-            <CommentSection postId={post._id} postAuthorEmail={post.email} />
+            <CommentSection postId={post._id} authorEmail={post.email} />
           </div>
         )}
       </div>

@@ -158,7 +158,7 @@
 // backend/routes/chat.js
 const express = require("express");
 const mongoose = require("mongoose");
-const router = express.Router();
+const router = express.Router({ mergeParams: true });
 
 const requireAuth = require("../middleware/requireAuth");
 const schoolGuard = require("../middleware/schoolGuard");
