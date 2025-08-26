@@ -6,15 +6,22 @@ import { openGate } from "../utils/gateBus";
 
 export default function RequireAuth({ children }) {
   const { user } = useAuth();
-  const location = useLocation();
-  const full = `${location.pathname}${location.search || ""}`;
+  const { pathname, search } = useLocation();
+  const from = `${pathname}${search || ""}`;
 
+  // Open the login gate modal when not authenticated
   useEffect(() => {
-    if (!user) openGate(full);
-  }, [user, full]);
+    if (!user) openGate(from);
+  }, [user, from]);
 
-  if (!user) return null; // Don't render protected content
+  if (user) return children;
 
-  return children;
+  // Small fallback so page is never blank while the modal opens
+  return (
+    <div className="p-8 text-center text-sm text-gray-600">
+      This feature requires login. Opening sign-in dialog…
+    </div>
+  );
 }
+
 

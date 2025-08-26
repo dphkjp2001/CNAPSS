@@ -65,12 +65,14 @@ app.use("/api/:school/posts", postsRoutes);
 
 // ⬇️ 나머지는 이후 단계에서 차례로 :school 적용 예정
 app.use("/api/:school/comments", commentRoutes);
-app.use("/api/notification", notificationRoute);
 app.use("/api/:school/market", marketRoutes);
 app.use("/api/:school/chat", chatRoutes);
-app.use("/api/request", requestRoutes);
+app.use("/api/:school/notification", requireAuth, schoolGuard, notificationRoute);
+app.use("/api/:school/request", requireAuth, schoolGuard, requestRoutes);
+
 app.use("/api/course", courseRoutes);
 app.use("/api/schedule", scheduleRoutes);
+
 
 // places는 여전히 보호 (토큰+가드)
 app.use("/api/:school/places", requireAuth, schoolGuard, placesRouter);

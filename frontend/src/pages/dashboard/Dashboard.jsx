@@ -1,93 +1,114 @@
 // frontend/src/pages/dashboard/Dashboard.jsx
 import React, { useEffect, useMemo, useState } from "react";
+import { Navigate, Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { useSchool } from "../../contexts/SchoolContext";
 import { useSchoolPath } from "../../utils/schoolPath";
-import { Navigate, Link, useNavigate } from "react-router-dom";
-import { listPosts } from "../../api/posts"; // ✅ 변경: fetchPosts → listPosts
+import { listPosts, getPublicPosts } from "../../api/posts";
+import { useLoginGate } from "../../hooks/useLoginGate";
 
 // Mini map preview (Leaflet)
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 
+import dayjs from "dayjs";
+import relativeTime from "dayjs/plugin/relativeTime";
+import "dayjs/locale/en";
+dayjs.extend(relativeTime);
+dayjs.locale("en");
+
+const PREVIEW_COUNT = 3;
+
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { user, token } = useAuth();               // ✅ 토큰 사용
+  const { user, token } = useAuth();
   const { school, schoolTheme, loading } = useSchool();
   const schoolPath = useSchoolPath();
+  const { ensureAuth } = useLoginGate();
 
   const [latestPosts, setLatestPosts] = useState([]);
+  const [loadingPosts, setLoadingPosts] = useState(true);
 
   // Center for mini map (NYU fallback)
-  const SCHOOL_CENTER = useMemo(() => {
-    return { lat: 40.7291, lon: -73.9965 }; // NYU
-  }, []);
+  const SCHOOL_CENTER = useMemo(() => ({ lat: 40.7291, lon: -73.9965 }), []);
 
   if (loading) return null;
-  if (!school) return <Navigate to="/select-school" />;
+  if (!school) return <Navigate to="/select-school" replace />;
 
+  // 🔹 Load Free Board preview
   useEffect(() => {
-    if (!token || !school) return;                 // ✅ 토큰/스쿨 준비되면 호출
+    let alive = true;
+    if (!school) return;
+
     (async () => {
+      setLoadingPosts(true);
       try {
-        const data = await listPosts({ school, token, limit: 5 }); // ✅ /api/:school/posts + Authorization
-        const sliced = Array.isArray(data) ? data.slice(0, 5) : [];
-        setLatestPosts(sliced);
-      } catch (err) {
-        // 토큰 만료면 재로그인 안내(원하면 여기서 자동 로그아웃/리프레시 처리도 가능)
-        console.error("Failed to load posts:", err);
-        setLatestPosts([]);
+        let rows = [];
+        if (token) {
+          const data = await listPosts({ school, token, page: 1, limit: PREVIEW_COUNT });
+          rows = Array.isArray(data) ? data.slice(0, PREVIEW_COUNT) : [];
+        } else {
+          const pub = await getPublicPosts({ school, page: 1, limit: PREVIEW_COUNT, sort: "new" });
+          rows = Array.isArray(pub?.items) ? pub.items.slice(0, PREVIEW_COUNT) : [];
+        }
+        if (alive) setLatestPosts(rows);
+      } catch {
+        if (alive) setLatestPosts([]);
+      } finally {
+        if (alive) setLoadingPosts(false);
       }
     })();
+
+    return () => {
+      alive = false;
+    };
   }, [school, token]);
 
+  const bg = schoolTheme?.bg || "#f6f3ff";
+  const primary = schoolTheme?.primary || "#6b46c1";
+  const textColor = schoolTheme?.text || "#111827";
+
   return (
-    <div className="min-h-screen" style={{ backgroundColor: schoolTheme.bg }}>
+    <div className="min-h-screen" style={{ backgroundColor: bg }}>
       <div className="mx-auto flex w-full max-w-screen-xl flex-col gap-8 px-6 py-12 lg:flex-row">
         {/* Sidebar */}
         <aside className="w-full shrink-0 rounded-2xl border border-sand bg-white/80 p-6 shadow-md backdrop-blur-md lg:w-72">
           <div className="text-center">
-            <div
-              className="mx-auto h-20 w-20 rounded-full"
-              style={{ backgroundColor: schoolTheme.primary }}
-            />
-            <p className="mt-4 text-xl font-bold" style={{ color: schoolTheme.text }}>
-              {user?.nickname}
+            <div className="mx-auto h-20 w-20 rounded-full" style={{ backgroundColor: primary }} />
+            <p className="mt-4 text-xl font-bold" style={{ color: textColor }}>
+              {user?.nickname || school.toUpperCase()}
             </p>
             <p className="text-sm text-gray-500">{school.toUpperCase()}</p>
           </div>
 
           <ul className="mt-6 space-y-3 text-sm text-gray-700">
             <li>
-              <Link to={schoolPath("/myposts")} className="transition hover:text-softGold">
+              <Link to={schoolPath("/myposts")} className="transition hover:text-indigo-600">
                 My Posts
               </Link>
             </li>
             <li>
-              <Link to={schoolPath("/liked")} className="transition hover:text-softGold">
+              <Link to={schoolPath("/liked")} className="transition hover:text-indigo-600">
                 Liked
               </Link>
             </li>
             <li>
-              <Link to={schoolPath("/commented")} className="transition hover:text-softGold">
+              <Link to={schoolPath("/commented")} className="transition hover:text-indigo-600">
                 Commented
               </Link>
             </li>
             <li>
-              <Link
-                to={schoolPath("/personal-schedule")}
-                className="transition hover:text-softGold"
-              >
+              <Link to={schoolPath("/personal-schedule")} className="transition hover:text-indigo-600">
                 Schedule
               </Link>
             </li>
             <li>
-              <Link to={schoolPath("/market")} className="transition hover:text-softGold">
+              <Link to={schoolPath("/market")} className="transition hover:text-indigo-600">
                 Marketplace
               </Link>
             </li>
             <li>
-              <Link to={schoolPath("/foodmap")} className="transition hover:text-softGold">
+              <Link to={schoolPath("/foodmap")} className="transition hover:text-indigo-600">
                 Food Map
               </Link>
             </li>
@@ -100,44 +121,55 @@ export default function Dashboard() {
           <section className="w-full rounded-2xl border border-sand bg-white p-6 shadow-md">
             <div className="mb-4 flex items-center justify-between">
               <Link to={schoolPath("/freeboard")}>
-                <h2
-                  className="cursor-pointer text-2xl font-bold hover:underline"
-                  style={{ color: schoolTheme.text }}
-                >
+                <h2 className="cursor-pointer text-2xl font-bold hover:underline" style={{ color: textColor }}>
                   Free Board
                 </h2>
               </Link>
 
-              <Link
-                to={schoolPath("/freeboard")}
-                className="text-sm text-blue-600 hover:underline"
-              >
+              {/* View All → 공개 리스트로 이동 (비로그인도 OK) */}
+              <Link to={schoolPath("/freeboard")} className="text-sm text-blue-600 hover:underline">
                 View All
               </Link>
             </div>
 
-            {latestPosts.length > 0 ? (
+            {loadingPosts ? (
               <ul className="space-y-3">
-                {latestPosts.map((post) => (
-                  <li
-                    key={post._id}
-                    className="rounded-xl border border-gray-200 px-6 py-4 shadow transition hover:shadow-md"
-                  >
-                    <Link
-                      to={schoolPath(`/freeboard/${post._id}`)}
-                      className="block text-base font-semibold text-gray-900 hover:underline"
-                    >
-                      {post.title}
-                    </Link>
-                    <p className="mt-1 text-xs text-gray-500">
-                      {new Date(post.createdAt).toLocaleDateString()}
-                    </p>
+                {Array.from({ length: PREVIEW_COUNT }).map((_, i) => (
+                  <li key={i} className="animate-pulse">
+                    <div className="h-5 w-2/3 rounded bg-gray-100" />
+                    <div className="mt-2 h-3 w-1/3 rounded bg-gray-100" />
                   </li>
                 ))}
               </ul>
-            ) : (
+            ) : latestPosts.length === 0 ? (
               <p className="text-sm text-gray-500">Latest posts will appear here.</p>
+            ) : (
+              <ul className="divide-y">
+                {latestPosts.map((p) => (
+                  <li key={p._id || p.id} className="py-3">
+                    <button
+                      className="block w-full text-left"
+                      onClick={() => ensureAuth(() => navigate(schoolPath(`/freeboard/${p._id || p.id}`)))}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="font-medium text-gray-900 line-clamp-2">{p.title}</div>
+                        <div className="ml-3 shrink-0 text-xs text-gray-500">{dayjs(p.createdAt).fromNow()}</div>
+                      </div>
+                    </button>
+                  </li>
+                ))}
+              </ul>
             )}
+
+            <div className="mt-4 flex justify-end">
+              <button
+                onClick={() => ensureAuth(() => navigate(schoolPath("/freeboard/write")))}
+                className="rounded-xl px-4 py-2 text-sm font-semibold text-white shadow"
+                style={{ backgroundColor: primary }}
+              >
+                + Write Post
+              </button>
+            </div>
           </section>
 
           {/* Food Map Card with mini map preview */}
@@ -147,10 +179,7 @@ export default function Dashboard() {
             title="Go to Food Map"
           >
             <div className="p-6">
-              <h2
-                className="mb-1 flex items-center gap-2 text-lg font-semibold"
-                style={{ color: schoolTheme.text }}
-              >
+              <h2 className="mb-1 flex items-center gap-2 text-lg font-semibold" style={{ color: textColor }}>
                 🍽️ Explore Nearby Food
                 <span className="ml-2 text-xs text-blue-600 underline">Open map</span>
               </h2>
@@ -182,5 +211,6 @@ export default function Dashboard() {
     </div>
   );
 }
+
 
 

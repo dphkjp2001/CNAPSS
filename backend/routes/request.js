@@ -1,7 +1,7 @@
 // backend/routes/request.js
 const express = require("express");
 const mongoose = require("mongoose");
-const router = express.Router();
+const router = express.Router({ mergeParams: true });
 
 const Request = require("../models/Request");
 const MarketItem = require("../models/MarketItem");
@@ -10,31 +10,35 @@ const Message = require("../models/Message");
 
 const norm = (v) => String(v || "").trim().toLowerCase();
 
+/**
+ * POST /api/:school/request
+ * body: { itemId, message }
+ * - buyer email은 req.user.email에서 가져온다(신뢰 가능한 소스)
+ * - item.school과 req.params.school이 일치해야 한다
+ */
 router.post("/", async (req, res) => {
   try {
-    let { itemId, buyer, message } = req.body;
-    if (!itemId || !buyer || !message) {
-      // 필수 값 누락
+    const school = norm(req.params.school);
+    const buyerEmail = norm(req.user?.email);
+    const { itemId, message } = req.body || {};
+
+    if (!school || !buyerEmail || !itemId || !message) {
       return res.status(400).json({ message: "Missing required fields." });
     }
 
     const objectId = new mongoose.Types.ObjectId(itemId);
-    const buyerEmail = norm(buyer);
 
     // 1) 아이템 + 학교 확인
-    const item = await MarketItem.findById(objectId).lean();
+    const item = await MarketItem.findOne({ _id: objectId, school }).lean();
     if (!item) return res.status(404).json({ message: "Item not found." });
-    const sellerEmail = norm(item.seller);
-    const school = norm(item.school);
-    if (!sellerEmail || !school) {
-      return res.status(400).json({ message: "Seller or school info not found." });
-    }
 
-    // 2) 중복 요청 방지
-    const exists = await Request.findOne({ itemId: objectId, buyer: buyerEmail });
+    const sellerEmail = norm(item.seller);
+
+    // 2) 중복 요청 방지(학교 단위)
+    const exists = await Request.findOne({ school, itemId: objectId, buyer: buyerEmail });
     if (exists) return res.status(409).json({ message: "Request already sent." });
 
-    await Request.create({ itemId: objectId, buyer: buyerEmail, message });
+    await Request.create({ school, itemId: objectId, buyer: buyerEmail, message });
 
     // 3) 대화방 조회/생성 (학교 포함)
     let conversation = await Conversation.findOne({
@@ -54,7 +58,7 @@ router.post("/", async (req, res) => {
       });
     }
 
-    // 4) 메시지 저장 (학교 필수)
+    // 4) 메시지 저장 (학교 포함)
     await Message.create({
       conversationId: conversation._id,
       sender: buyerEmail,
@@ -77,13 +81,17 @@ router.post("/", async (req, res) => {
   }
 });
 
-router.get("/:itemId/:buyer", async (req, res) => {
+/**
+ * GET /api/:school/request/:itemId/:buyer(ignored)
+ * - 프런트 호환을 위해 경로는 유지하되, 실제 buyer는 req.user.email을 사용
+ */
+router.get("/:itemId/:buyer?", async (req, res) => {
   try {
+    const school = norm(req.params.school);
+    const buyerEmail = norm(req.user?.email);
     const objectId = new mongoose.Types.ObjectId(req.params.itemId);
-    const buyerEmail = norm(req.params.buyer);
 
-    // 이미 요청했는지 여부 확인
-    const exists = await Request.findOne({ itemId: objectId, buyer: buyerEmail });
+    const exists = await Request.findOne({ school, itemId: objectId, buyer: buyerEmail });
     res.json({ alreadySent: !!exists });
   } catch (err) {
     console.error("❌ Lookup failed:", err);
@@ -92,5 +100,6 @@ router.get("/:itemId/:buyer", async (req, res) => {
 });
 
 module.exports = router;
+
 
 

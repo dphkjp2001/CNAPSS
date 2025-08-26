@@ -13,7 +13,7 @@ import SchoolSelect from "./pages/SchoolSelect";
 import About from "./pages/About";
 import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
-import AuthRequired from "./pages/auth/AuthRequired"; // not used for modal flow but kept if needed
+import AuthRequired from "./pages/auth/AuthRequired"; // kept for compatibility
 
 // Lazy pages
 const Dashboard = lazy(() => import("./pages/dashboard/Dashboard"));
@@ -72,7 +72,7 @@ function App() {
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard" element={<Dashboard />} />
 
-            {/* FreeBoard: list public(read-only), detail/write require auth */}
+            {/* FreeBoard: list is public (read-only); detail/write/edit require auth */}
             <Route path="freeboard" element={<FreeBoardList />} />
             <Route
               path="freeboard/:id"
@@ -125,9 +125,23 @@ function App() {
               }
             />
 
-            {/* Market */}
-            <Route path="market" element={<MarketList />} />
-            <Route path="market/:id" element={<MarketDetail />} />
+            {/* ✅ Market: lock everything behind auth */}
+            <Route
+              path="market"
+              element={
+                <RequireAuth>
+                  <MarketList />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="market/:id"
+              element={
+                <RequireAuth>
+                  <MarketDetail />
+                </RequireAuth>
+              }
+            />
             <Route
               path="market/write"
               element={
@@ -193,6 +207,7 @@ function App() {
 }
 
 export default App;
+
 
 
 

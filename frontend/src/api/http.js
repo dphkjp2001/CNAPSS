@@ -7,39 +7,32 @@ import { openGate } from "../utils/gateBus";
  * - Auto-JSONify plain objects (sets Content-Type)
  * - On 401: open auth gate modal and stop the promise chain
  */
+import { openGate } from "../utils/gateBus";
+
 export async function apiFetch(input, init = {}) {
   const headers = new Headers(init.headers || {});
-  const hasBody = init.body != null;
-
-  // Auto-JSON encode plain objects (but keep FormData as-is)
   let body = init.body;
-  if (hasBody && !(body instanceof FormData) && typeof body === "object") {
+  if (body && !(body instanceof FormData) && typeof body === "object") {
     if (!headers.has("Content-Type")) headers.set("Content-Type", "application/json");
     body = JSON.stringify(body);
   }
-
-  // Attach token if present
   const token = localStorage.getItem("token");
-  if (token && !headers.has("Authorization")) {
-    headers.set("Authorization", `Bearer ${token}`);
-  }
+  if (token && !headers.has("Authorization")) headers.set("Authorization", `Bearer ${token}`);
 
   const res = await fetch(input, { ...init, headers, body });
 
-  // 🔐 Unauthorized → open login gate modal
   if (res.status === 401) {
-    try {
-      const next = window.location.pathname + window.location.search;
+    const path = window.location.pathname;
+    // ✅ 로그인/회원가입/게이트 페이지에선 모달 띄우지 않음
+    if (!/^\/(login|register|auth-required)(\/|$)/.test(path)) {
+      const next = path + window.location.search;
       openGate(next);
-    } catch (_) {
-      /* no-op */
+      return new Promise(() => {}); // stop chain
     }
-    // Stop further handling so callers don't continue assuming success
-    return new Promise(() => {});
   }
-
   return res;
 }
+
 
 /* ---------------- Convenience JSON helpers ---------------- */
 

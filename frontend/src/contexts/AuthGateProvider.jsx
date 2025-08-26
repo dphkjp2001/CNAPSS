@@ -15,6 +15,7 @@ export default function AuthGateProvider({ children }) {
 
   const close = useCallback(() => setOpen(false), []);
 
+  // Listen for "openGate" / "closeGate"
   useEffect(() => {
     const unsub = subscribeGate((evt) => {
       if (evt.type === "open") {
@@ -27,13 +28,28 @@ export default function AuthGateProvider({ children }) {
     return unsub;
   }, [pathname, search]);
 
-  // If user logs in while modal is open, just close it.
+  // If user logs in while modal is open, close it.
   useEffect(() => {
     if (user && open) setOpen(false);
   }, [user, open]);
 
-  const goLogin = () => navigate("/login", { state: { from } });
-  const goRegister = () => navigate("/register", { state: { from } });
+  // ✅ 이동한 경로가 /login or /register 이면 모달 자동 닫기
+  useEffect(() => {
+    if (open && /^\/(login|register)(\/|$)/.test(pathname)) {
+      setOpen(false);
+    }
+  }, [open, pathname]);
+
+  const goLogin = () => {
+    setOpen(false);            // ✅ 먼저 닫고
+    busClose();
+    navigate("/login", { state: { from } });
+  };
+  const goRegister = () => {
+    setOpen(false);            // ✅ 먼저 닫고
+    busClose();
+    navigate("/register", { state: { from } });
+  };
 
   const ctx = useMemo(() => ({ open, from, close }), [open, from, close]);
 
@@ -42,7 +58,10 @@ export default function AuthGateProvider({ children }) {
       {children}
 
       {open && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/40 p-4">
+        <div
+          className="fixed inset-0 flex items-center justify-center bg-black/40 p-4"
+          style={{ zIndex: 1000 }} // ensure on top in any build
+        >
           <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
             <h3 className="text-lg font-semibold mb-1 text-gray-900">Login required</h3>
             <p className="text-sm text-gray-600 mb-5">
@@ -71,3 +90,4 @@ export default function AuthGateProvider({ children }) {
     </AuthGateContext.Provider>
   );
 }
+
