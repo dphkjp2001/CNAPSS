@@ -1,29 +1,52 @@
 // frontend/src/api/posts.js
-const API_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, ""); // e.g. https://api.cnapss.com/api
+
+// e.g. VITE_API_URL = "https://api.cnapss.com/api"
+// ensure no trailing slash
+const API_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 
 const authHeaders = (token) => ({
   "Content-Type": "application/json",
-  Authorization: `Bearer ${token}`,
+  ...(token ? { Authorization: `Bearer ${token}` } : {}),
 });
 
-// 목록
+/* ===================== Public (no auth) ===================== */
+/**
+ * GET /api/public/:school/posts
+ * Query: page, limit, q, sort(new|old)
+ * Response: { page, limit, total, items: [{ _id, title, createdAt, commentsCount, likesCount }] }
+ */
+export async function getPublicPosts({ school, page = 1, limit = 20, q = "", sort = "new" }) {
+  const url = new URL(`${API_URL}/public/${school}/posts`);
+  if (page) url.searchParams.set("page", String(page));
+  if (limit) url.searchParams.set("limit", String(limit));
+  if (q) url.searchParams.set("q", q);
+  if (sort) url.searchParams.set("sort", sort);
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("Failed to load public posts");
+  return res.json(); // { page, limit, total, items: [...] }
+}
+
+/* ===================== Protected (auth) ===================== */
+// List (protected)
 export async function listPosts({ school, token, page, limit } = {}) {
   const url = new URL(`${API_URL}/${school}/posts`);
   if (page) url.searchParams.set("page", String(page));
   if (limit) url.searchParams.set("limit", String(limit));
   const res = await fetch(url, { headers: authHeaders(token) });
   if (!res.ok) throw new Error("Failed to load posts");
-  return res.json();
+  return res.json(); // usually an array
 }
 
-// 상세
+// Detail (protected)
 export async function getPost({ school, token, id }) {
-  const res = await fetch(`${API_URL}/${school}/posts/${id}`, { headers: authHeaders(token) });
+  const res = await fetch(`${API_URL}/${school}/posts/${id}`, {
+    headers: authHeaders(token),
+  });
   if (!res.ok) throw new Error("Failed to load post");
   return res.json();
 }
 
-// 작성
+// Create (protected)
 export async function createPost({ school, token, title, content }) {
   const res = await fetch(`${API_URL}/${school}/posts`, {
     method: "POST",
@@ -34,7 +57,7 @@ export async function createPost({ school, token, title, content }) {
   return res.json();
 }
 
-// 수정
+// Update (protected)
 export async function updatePost({ school, token, id, title, content }) {
   const res = await fetch(`${API_URL}/${school}/posts/${id}`, {
     method: "PUT",
@@ -45,7 +68,7 @@ export async function updatePost({ school, token, id, title, content }) {
   return res.json();
 }
 
-// 삭제
+// Delete (protected)
 export async function deletePost({ school, token, id }) {
   const res = await fetch(`${API_URL}/${school}/posts/${id}`, {
     method: "DELETE",
@@ -55,7 +78,7 @@ export async function deletePost({ school, token, id }) {
   return res.json();
 }
 
-// 좋아요 토글
+// Toggle like (protected)
 export async function toggleThumbs({ school, token, id }) {
   const res = await fetch(`${API_URL}/${school}/posts/${id}/thumbs`, {
     method: "POST",
@@ -65,7 +88,7 @@ export async function toggleThumbs({ school, token, id }) {
   return res.json();
 }
 
-// 내가 좋아요한 글
+// Liked by me (protected)
 export async function listLiked({ school, token, email }) {
   const res = await fetch(`${API_URL}/${school}/posts/liked/${encodeURIComponent(email)}`, {
     headers: authHeaders(token),
@@ -74,7 +97,7 @@ export async function listLiked({ school, token, email }) {
   return res.json();
 }
 
-// 내가 댓글 단 글
+// Commented by me (protected)
 export async function listCommented({ school, token, email }) {
   const res = await fetch(`${API_URL}/${school}/posts/commented/${encodeURIComponent(email)}`, {
     headers: authHeaders(token),
@@ -83,13 +106,21 @@ export async function listCommented({ school, token, email }) {
   return res.json();
 }
 
-
-// ===== Backward-compat ADAPTERS (keep old imports working) =====
-// Old calls used: fetchPosts(school), fetchPostById(id, school), togglePostLike(id, school),
-// fetchLikedPosts(email, school), fetchCommentedPosts(email, school)
-// These adapters pull token from localStorage so old pages don't need to pass it explicitly.
+/* ===== Backward-compat ADAPTERS (keep old imports working) =====
+   Old usages:
+   - fetchPosts(school)
+   - fetchPostById(id, school)
+   - togglePostLike(id, school)
+   - fetchLikedPosts(email, school)
+   - fetchCommentedPosts(email, school)
+   These adapters pull token from localStorage so old pages don't need to pass it explicitly.
+*/
 const tokenFromStorage = () => {
-  try { return localStorage.getItem("token"); } catch { return ""; }
+  try {
+    return localStorage.getItem("token");
+  } catch {
+    return "";
+  }
 };
 
 export async function fetchPosts(school, opts = {}) {
@@ -122,3 +153,4 @@ export async function fetchCommentedPosts(email, school, opts = {}) {
   return listCommented({ school, token, email });
 }
 // ================================================================
+

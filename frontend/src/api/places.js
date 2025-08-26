@@ -80,5 +80,4 @@ export async function geocodeAddress({ school, token, address }) {
   return res.json();
 }
 
-}
 

@@ -1,5 +1,4 @@
 // 📁 frontend/src/pages/auth/Register.jsx
-
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import AsyncButton from "../../components/AsyncButton";
@@ -14,13 +13,10 @@ const ALLOWED_SCHOOLS = [
 
 function Register() {
   const navigate = useNavigate();
-  const { school: schoolParam } = useParams(); // when route is /register/:school
   const location = useLocation();
+  const { school: schoolParam } = useParams();
   const { login } = useAuth();
 
-  // -----------------------------
-  // Form states
-  // -----------------------------
   const [email, setEmail] = useState("");
   const [nickname, setNickname] = useState("");
   const [password, setPassword] = useState("");
@@ -34,35 +30,22 @@ function Register() {
 
   const baseURL = import.meta.env.VITE_API_URL;
 
-  // -----------------------------
-  // Prefill school
-  // Priority:
-  // 1) URL param (:school)
-  // 2) navigation state prefill (e.g., from a modal CTA)
-  // 3) localStorage lastVisitedSchool
-  // -----------------------------
+  // Prefill school (param/state/localStorage)
   useEffect(() => {
     const fromState = location?.state?.prefillSchool;
     const fromStorage = localStorage.getItem("lastVisitedSchool") || "";
     const candidate = (schoolParam || fromState || fromStorage || "").toLowerCase();
-
-    // ensure candidate is allowed
     const valid = ALLOWED_SCHOOLS.some((s) => s.value === candidate);
     setSchool(valid ? candidate : "");
   }, [schoolParam, location?.state?.prefillSchool]);
 
-  // -----------------------------
-  // Cooldown timer for resend
-  // -----------------------------
+  // Cooldown timer
   useEffect(() => {
     if (!cooldown) return;
     const id = setInterval(() => setCooldown((s) => (s > 0 ? s - 1 : 0)), 1000);
     return () => clearInterval(id);
   }, [cooldown]);
 
-  // -----------------------------
-  // Handlers
-  // -----------------------------
   const sendCode = async () => {
     if (!email) return alert("Enter your email first.");
     if (cooldown) return;
@@ -76,7 +59,7 @@ function Register() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.message || "Failed to send code");
       setCodeSent(true);
-      setCooldown(60); // 60s resend cooldown
+      setCooldown(60);
       alert("Verification code sent. Please check your email.");
     } catch (err) {
       alert(err.message);
@@ -114,7 +97,6 @@ function Register() {
       const res = await fetch(`${baseURL}/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // ✅ include school
         body: JSON.stringify({ email, password, nickname, school }),
       });
       const data = await res.json();
@@ -122,9 +104,7 @@ function Register() {
       if (!res.ok) {
         const msg = data?.message || "Sign up failed.";
         if (msg.toLowerCase().includes("email already")) {
-          const goToLogin = window.confirm(
-            "An account with this email already exists.\nWould you like to log in instead?"
-          );
+          const goToLogin = window.confirm("An account with this email already exists.\nWould you like to log in instead?");
           if (goToLogin) navigate("/login", { replace: true });
         } else if (msg.toLowerCase().includes("nickname")) {
           alert("This nickname is already taken. Please choose another.");
@@ -136,22 +116,24 @@ function Register() {
         return;
       }
 
-      // If backend returns token + user (recommended), log in immediately
+      // If backend returns token + user, log in immediately
       if (data?.user && data?.token) {
         try {
           login({ user: data.user, token: data.token });
-        } catch (e) {
-          // If current AuthContext doesn't yet accept token, ignore
-          console.warn("login() did not store token (update AuthContext to store it).");
+        } catch {
+          // ignore if AuthContext doesn't accept yet
         }
-        // Navigate to the chosen school dashboard
-        const dest = `/${data.user.school}/dashboard`;
+
+        const from = location.state?.from;
+        const bad = ["/auth-required", "/login", "/register"];
+        const fallback = `/${data.user.school}/dashboard`;
+        const dest = bad.includes(from) ? fallback : (from || fallback);
         alert("Registration complete! Welcome 👋");
         navigate(dest, { replace: true });
         return;
       }
 
-      // Legacy fallback: no token/user in response
+      // Legacy fallback
       alert("Registration complete! You can log in now.");
       navigate("/login", { replace: true });
     } catch (err) {
@@ -162,9 +144,6 @@ function Register() {
     }
   };
 
-  // -----------------------------
-  // UI
-  // -----------------------------
   const schoolOptions = useMemo(
     () =>
       ALLOWED_SCHOOLS.map((s) => (
@@ -180,7 +159,6 @@ function Register() {
       <h2 className="text-2xl font-bold mb-6">Sign Up</h2>
 
       <form onSubmit={(e) => e.preventDefault()} className="space-y-4">
-        {/* Email */}
         <input
           type="email"
           placeholder="Email"
@@ -190,8 +168,6 @@ function Register() {
           required
           autoComplete="email"
         />
-
-        {/* Nickname */}
         <input
           type="text"
           placeholder="Nickname"
@@ -200,8 +176,6 @@ function Register() {
           onChange={(e) => setNickname(e.target.value)}
           required
         />
-
-        {/* Password */}
         <input
           type="password"
           placeholder="Password"
@@ -212,7 +186,6 @@ function Register() {
           autoComplete="new-password"
         />
 
-        {/* School select (prefilled but changeable) */}
         <div className="mt-2">
           <label className="block mb-1 font-medium">School</label>
           <select
@@ -224,12 +197,9 @@ function Register() {
             <option value="">Select your school</option>
             {schoolOptions}
           </select>
-          <p className="text-xs text-gray-500 mt-1">
-            Prefilled from the school you were browsing. You can change it if needed.
-          </p>
+          <p className="text-xs text-gray-500 mt-1">Prefilled from the school you were browsing. You can change it.</p>
         </div>
 
-        {/* Email verification row */}
         <div className="flex gap-2 items-center">
           <input
             type="text"
@@ -258,13 +228,10 @@ function Register() {
           </AsyncButton>
         </div>
 
-        {/* Submit */}
         <AsyncButton
           onClick={handleRegister}
           loadingText="Signing up..."
-          className={`px-4 py-2 rounded text-white ${
-            emailVerified && school ? "bg-blue-500" : "bg-blue-300 cursor-not-allowed"
-          }`}
+          className={`px-4 py-2 rounded text-white ${emailVerified && school ? "bg-blue-500" : "bg-blue-300 cursor-not-allowed"}`}
           disabled={!emailVerified || !school || busy}
         >
           Sign Up
@@ -275,4 +242,5 @@ function Register() {
 }
 
 export default Register;
+
 

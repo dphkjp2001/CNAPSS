@@ -1,20 +1,20 @@
 // src/components/RequireAuth.jsx
-import React from "react";
-import { Navigate, useLocation } from "react-router-dom";
+import React, { useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { openGate } from "../utils/gateBus";
 
-function RequireAuth({ children }) {
+export default function RequireAuth({ children }) {
   const { user } = useAuth();
   const location = useLocation();
+  const full = `${location.pathname}${location.search || ""}`;
 
-  if (!user) {
-    // ✅ '/auth-required' 페이지가 from이면 무한 루프 방지를 위해 '/'로 대체
-    const from = location.pathname === "/auth-required" ? "/" : location.pathname;
-    return <Navigate to="/auth-required" replace state={{ from }} />;
-  }
+  useEffect(() => {
+    if (!user) openGate(full);
+  }, [user, full]);
+
+  if (!user) return null; // Don't render protected content
 
   return children;
 }
-
-export default RequireAuth;
 

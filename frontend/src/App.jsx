@@ -1,17 +1,19 @@
-// 📁 파일 경로: frontend/src/App.jsx
+// 📁 frontend/src/App.jsx
 import React, { Suspense, lazy } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
+
 import Layout from "./components/Layout";
 import PublicLayout from "./components/PublicLayout";
 import RequireAuth from "./components/RequireAuth";
 import { useAuth } from "./contexts/AuthContext";
+import AuthGateProvider from "./contexts/AuthGateProvider";
 
 import Splash from "./pages/Splash";
 import SchoolSelect from "./pages/SchoolSelect";
 import About from "./pages/About";
 import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
-import AuthRequired from "./pages/auth/AuthRequired";
+import AuthRequired from "./pages/auth/AuthRequired"; // not used for modal flow but kept if needed
 
 // Lazy pages
 const Dashboard = lazy(() => import("./pages/dashboard/Dashboard"));
@@ -34,11 +36,7 @@ const PersonalSchedule = lazy(() => import("./pages/schedule/PersonalSchedule"))
 const GroupAvailability = lazy(() => import("./pages/schedule/GroupAvailability"));
 const FoodMap = lazy(() => import("./pages/food/FoodMap"));
 
-/**
- * 🔧 NormalizeDashboard
- * '/dashboard', '/dashboard/dashboard' 등 잘못된/옛 링크를
- * 올바른 '/{user.school}/dashboard' 또는 '/select-school' 로 정리한다.
- */
+/** NormalizeDashboard: fix old/invalid dashboard links */
 function NormalizeDashboard() {
   const { user } = useAuth();
   if (user?.school) return <Navigate to={`/${user.school}/dashboard`} replace />;
@@ -47,151 +45,155 @@ function NormalizeDashboard() {
 
 function App() {
   return (
-    <Suspense fallback={<div className="p-6 text-sm text-gray-500">Loading…</div>}>
-      <Routes>
-        {/* Public (no school scope) */}
-        <Route element={<PublicLayout />}>
-          <Route path="/" element={<Splash />} />
-          <Route path="/select-school" element={<SchoolSelect />} />
-          <Route path="/about" element={<About />} />
-        </Route>
+    <AuthGateProvider>
+      <Suspense fallback={<div className="p-6 text-sm text-gray-500">Loading…</div>}>
+        <Routes>
+          {/* Public (no school scope) */}
+          <Route element={<PublicLayout />}>
+            <Route path="/" element={<Splash />} />
+            <Route path="/select-school" element={<SchoolSelect />} />
+            <Route path="/about" element={<About />} />
+          </Route>
 
-        {/* Auth pages (unscoped) */}
-        <Route element={<Layout />}>
-          <Route path="/login" element={<Login />} />
-          {/* ✅ allow optional school param to prefill on Register page */}
-          <Route path="/register" element={<Register />} />
-          <Route path="/register/:school" element={<Register />} />
-          <Route path="/auth-required" element={<AuthRequired />} />
-        </Route>
+          {/* Auth pages (unscoped) */}
+          <Route element={<Layout />}>
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/register/:school" element={<Register />} />
+            <Route path="/auth-required" element={<AuthRequired />} />
+          </Route>
 
-        {/* ✅ 잘못된 경로 정리: /dashboard*, //dashboard* 등 */}
-        <Route path="/dashboard/*" element={<NormalizeDashboard />} />
-        <Route path="//dashboard/*" element={<NormalizeDashboard />} />
+          {/* Normalize odd paths */}
+          <Route path="/dashboard/*" element={<NormalizeDashboard />} />
+          <Route path="//dashboard/*" element={<NormalizeDashboard />} />
 
-        {/* School-scoped routes */}
-        <Route path="/:school" element={<Layout />}>
-          {/* Default -> dashboard (상대경로 OK: 여기선 '/:school'이 base) */}
-          <Route index element={<Navigate to="dashboard" replace />} />
+          {/* School-scoped */}
+          <Route path="/:school" element={<Layout />}>
+            <Route index element={<Navigate to="dashboard" replace />} />
+            <Route path="dashboard" element={<Dashboard />} />
 
-          {/* ✅ Guest preview allowed: dashboard is readable without auth */}
-          <Route path="dashboard" element={<Dashboard />} />
+            {/* FreeBoard: list public(read-only), detail/write require auth */}
+            <Route path="freeboard" element={<FreeBoardList />} />
+            <Route
+              path="freeboard/:id"
+              element={
+                <RequireAuth>
+                  <FreeBoardDetail />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="freeboard/write"
+              element={
+                <RequireAuth>
+                  <FreeBoardWrite />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="freeboard/edit/:id"
+              element={
+                <RequireAuth>
+                  <FreeBoardEdit />
+                </RequireAuth>
+              }
+            />
 
-          {/* Free Board */}
-          {/* ✅ List & Detail are public(read-only), write/edit require auth */}
-          <Route path="freeboard" element={<FreeBoardList />} />
-          <Route path="freeboard/:id" element={<FreeBoardDetail />} />
-          <Route
-            path="freeboard/write"
-            element={
-              <RequireAuth>
-                <FreeBoardWrite />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="freeboard/edit/:id"
-            element={
-              <RequireAuth>
-                <FreeBoardEdit />
-              </RequireAuth>
-            }
-          />
+            {/* Dashboard sub-pages */}
+            <Route
+              path="myposts"
+              element={
+                <RequireAuth>
+                  <MyPosts />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="liked"
+              element={
+                <RequireAuth>
+                  <LikedPosts />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="commented"
+              element={
+                <RequireAuth>
+                  <CommentedPosts />
+                </RequireAuth>
+              }
+            />
 
-          {/* Dashboard sub-pages (user-specific) */}
-          <Route
-            path="myposts"
-            element={
-              <RequireAuth>
-                <MyPosts />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="liked"
-            element={
-              <RequireAuth>
-                <LikedPosts />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="commented"
-            element={
-              <RequireAuth>
-                <CommentedPosts />
-              </RequireAuth>
-            }
-          />
+            {/* Market */}
+            <Route path="market" element={<MarketList />} />
+            <Route path="market/:id" element={<MarketDetail />} />
+            <Route
+              path="market/write"
+              element={
+                <RequireAuth>
+                  <MarketWrite />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="market/:id/edit"
+              element={
+                <RequireAuth>
+                  <MarketEdit />
+                </RequireAuth>
+              }
+            />
 
-          {/* Marketplace */}
-          {/* ✅ List & Detail public, write/edit require auth */}
-          <Route path="market" element={<MarketList />} />
-          <Route path="market/:id" element={<MarketDetail />} />
-          <Route
-            path="market/write"
-            element={
-              <RequireAuth>
-                <MarketWrite />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="market/:id/edit"
-            element={
-              <RequireAuth>
-                <MarketEdit />
-              </RequireAuth>
-            }
-          />
+            {/* Messages */}
+            <Route
+              path="messages"
+              element={
+                <RequireAuth>
+                  <Messages />
+                </RequireAuth>
+              }
+            />
 
-          {/* Messages (private) */}
-          <Route
-            path="messages"
-            element={
-              <RequireAuth>
-                <Messages />
-              </RequireAuth>
-            }
-          />
+            {/* Schedule */}
+            <Route
+              path="personal-schedule"
+              element={
+                <RequireAuth>
+                  <PersonalSchedule />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="group-availability"
+              element={
+                <RequireAuth>
+                  <GroupAvailability />
+                </RequireAuth>
+              }
+            />
 
-          {/* Schedule (private) */}
-          <Route
-            path="personal-schedule"
-            element={
-              <RequireAuth>
-                <PersonalSchedule />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="group-availability"
-            element={
-              <RequireAuth>
-                <GroupAvailability />
-              </RequireAuth>
-            }
-          />
+            {/* Food Map (protected) */}
+            <Route
+              path="foodmap"
+              element={
+                <RequireAuth>
+                  <FoodMap />
+                </RequireAuth>
+              }
+            />
+          </Route>
 
-          {/* Food Map (private — if it should be public, remove RequireAuth) */}
-          <Route
-            path="foodmap"
-            element={
-              <RequireAuth>
-                <FoodMap />
-              </RequireAuth>
-            }
-          />
-        </Route>
-
-        {/* Fallback */}
-        <Route path="*" element={<Navigate to="/select-school" replace />} />
-      </Routes>
-    </Suspense>
+          {/* Fallback */}
+          <Route path="*" element={<Navigate to="/select-school" replace />} />
+        </Routes>
+      </Suspense>
+    </AuthGateProvider>
   );
 }
 
 export default App;
+
 
 
 

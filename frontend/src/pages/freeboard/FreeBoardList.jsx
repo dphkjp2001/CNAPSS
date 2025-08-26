@@ -1,15 +1,17 @@
 /// src/pages/freeboard/FreeBoardList.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { useSchool } from "../../contexts/SchoolContext";
 import { useSchoolPath } from "../../utils/schoolPath";
+import { useLoginGate } from "../../hooks/useLoginGate";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import "dayjs/locale/en";
 
-// ✅ NEW: use the new API wrapper
-import { listPosts } from "../../api/posts";
+// Using the existing API for now (Step 2 will switch to /api/public)
+import { listPosts, getPublicPosts } from "../../api/posts";
+
 
 dayjs.extend(relativeTime);
 dayjs.locale("en");
@@ -46,10 +48,11 @@ function EmptyState({ onWrite, primary }) {
 }
 
 export default function FreeBoardList() {
-  const { user, token } = useAuth();              // ✅ token 필요
+  const { user, token } = useAuth();
   const { school, schoolTheme } = useSchool();
   const schoolPath = useSchoolPath();
   const navigate = useNavigate();
+  const { ensureAuth } = useLoginGate();
 
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -60,28 +63,42 @@ export default function FreeBoardList() {
   const [sort, setSort] = useState("new"); // "new" | "old"
   const [page, setPage] = useState(1);
 
-  // ✅ school + token으로 목록 불러오기
+  // Load list (requires token for now; Step 2 will make it public)
   useEffect(() => {
     let alive = true;
-    if (!school || !token) return;
-
+    if (!school) return;
+  
     (async () => {
       setLoading(true);
       setError("");
       try {
-        const data = await listPosts({ school, token }); // ← /api/:school/posts + Authorization
-        if (alive) setPosts(Array.isArray(data) ? data : []);
+        let data;
+        if (token) {
+          // 🔐 logged-in: protected API
+          data = await listPosts({ school, token });
+        } else {
+          // 🌐 logged-out: public API
+          data = await getPublicPosts({ school, page: 1, limit: 20 });
+        }
+        // normalize response
+        const rows = Array.isArray(data)
+          ? data
+          : Array.isArray(data?.items)
+          ? data.items
+          : [];
+        if (alive) setPosts(rows);
       } catch (e) {
         if (alive) setError("Failed to load posts.");
       } finally {
         if (alive) setLoading(false);
       }
     })();
-
+  
     return () => {
       alive = false;
     };
   }, [school, token]);
+  
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -135,15 +152,13 @@ export default function FreeBoardList() {
               <option value="old">Oldest</option>
             </select>
 
-            {user && (
-              <button
-                onClick={() => navigate(schoolPath("/freeboard/write"))}
-                className="inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold text-white shadow focus:outline-none focus:ring-2 focus:ring-offset-0"
-                style={{ backgroundColor: schoolTheme?.primary || "#6b46c1" }}
-              >
-                + Write Post
-              </button>
-            )}
+            <button
+              onClick={() => ensureAuth(() => navigate(schoolPath("/freeboard/write")))}
+              className="inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold text-white shadow focus:outline-none focus:ring-2 focus:ring-offset-0"
+              style={{ backgroundColor: schoolTheme?.primary || "#6b46c1" }}
+            >
+              + Write Post
+            </button>
           </div>
         </div>
 
@@ -160,7 +175,7 @@ export default function FreeBoardList() {
           </div>
         ) : filtered.length === 0 ? (
           <EmptyState
-            onWrite={() => navigate(schoolPath("/freeboard/write"))}
+            onWrite={() => ensureAuth(() => navigate(schoolPath("/freeboard/write")))}
             primary={schoolTheme?.primary || "#6b46c1"}
           />
         ) : (
@@ -168,14 +183,19 @@ export default function FreeBoardList() {
             <ul className="rounded-2xl border border-gray-200 bg-white shadow-sm">
               {paged.map((post, idx) => (
                 <li key={post._id} className="px-4 py-4 sm:px-6">
-                  <Link to={schoolPath(`/freeboard/${post._id}`)} className="block">
+                  <button
+                    onClick={() =>
+                      ensureAuth(() => navigate(schoolPath(`/freeboard/${post._id}`)))
+                    }
+                    className="block w-full text-left"
+                  >
                     <h3 className="line-clamp-2 text-base font-semibold text-gray-900 hover:underline">
                       {post.title}
                     </h3>
                     <p className="mt-1 text-xs text-gray-500">
                       Posted by anonymous • {dayjs(post.createdAt).fromNow()}
                     </p>
-                  </Link>
+                  </button>
                   {idx !== paged.length - 1 && <div className="mt-4 h-px w-full bg-gray-100" />}
                 </li>
               ))}
@@ -208,6 +228,7 @@ export default function FreeBoardList() {
     </div>
   );
 }
+
 
 
 

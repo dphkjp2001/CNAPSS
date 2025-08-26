@@ -1,18 +1,17 @@
 // src/pages/auth/Login.jsx
 import React, { useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom"; 
+import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import AsyncButton from "../../components/AsyncButton";
 
 function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation(); // ✅ 추가
-  const from = location.state?.from || "/"; // ✅ 로그인 후 복귀 경로 설정
+  const location = useLocation();
+  const from = location.state?.from || "/";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
   const baseURL = import.meta.env.VITE_API_URL;
 
   const handleLogin = async () => {
@@ -26,14 +25,9 @@ function Login() {
 
     if (!res.ok) {
       const msg = data.message || "";
-
       if (msg.toLowerCase().includes("user not found")) {
-        const goToRegister = window.confirm(
-          "No account found with this email.\nWould you like to sign up?"
-        );
-        if (goToRegister) {
-          navigate("/register");
-        }
+        const goToRegister = window.confirm("No account found with this email.\nWould you like to sign up?");
+        if (goToRegister) navigate("/register");
       } else if (msg.toLowerCase().includes("incorrect password")) {
         alert("Incorrect password. Please try again.");
       } else {
@@ -43,7 +37,12 @@ function Login() {
     }
 
     login(data);
-    navigate(from); // ✅ 로그인 후 원래 페이지로 이동
+
+    const bad = ["/auth-required", "/login", "/register"];
+    const school = data?.user?.school;
+    const fallback = school ? `/${school}/dashboard` : "/";
+    const dest = bad.includes(from) ? fallback : (from || fallback);
+    navigate(dest, { replace: true });
   };
 
   return (
@@ -57,6 +56,7 @@ function Login() {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
+          autoComplete="email"
         />
         <input
           type="password"
@@ -65,12 +65,9 @@ function Login() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
+          autoComplete="current-password"
         />
-        <AsyncButton
-          onClick={handleLogin}
-          loadingText="Logging in..."
-          className="bg-blue-500 text-white px-4 py-2 rounded"
-        >
+        <AsyncButton onClick={handleLogin} loadingText="Logging in..." className="bg-blue-500 text-white px-4 py-2 rounded">
           Log In
         </AsyncButton>
       </form>
@@ -79,6 +76,7 @@ function Login() {
 }
 
 export default Login;
+
 
 
  
