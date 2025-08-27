@@ -11,11 +11,15 @@ const notificationRoute = require("./routes/notification");
 const marketRoutes = require("./routes/market");
 const chatRoutes = require("./routes/chat");
 const requestRoutes = require("./routes/request");
-const courseRoutes = require("./routes/course");
+
+// const courseRoutes = require("./routes/courses");
 const scheduleRoutes = require("./routes/schedule");
 const placesRouter = require("./routes/places");
 const requireAuth = require("./middleware/requireAuth");
 const schoolGuard = require("./middleware/schoolGuard");
+
+const courseHubRoutes = require("./routes/courses");
+const materialsRoutes = require("./routes/materials");
 
 // ✅ NEW: public posts router
 const publicPostsRouter = require("./routes/public.posts");
@@ -71,7 +75,11 @@ app.use("/api/:school/notification", requireAuth, schoolGuard, notificationRoute
 app.use("/api/:school/request", requireAuth, schoolGuard, requestRoutes);
 app.use("/api/:school/schedule", requireAuth, schoolGuard, scheduleRoutes);
 
-app.use("/api/course", courseRoutes);
+// Course Hub (login-only: list/search/upload all gated)
+app.use("/api/:school/courses", requireAuth, schoolGuard, courseHubRoutes);
+app.use("/api/:school/materials", requireAuth, schoolGuard, materialsRoutes);
+
+// app.use("/api/course", courseRoutes);
 
 
 

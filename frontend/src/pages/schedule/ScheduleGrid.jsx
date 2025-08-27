@@ -130,6 +130,7 @@
 
 // src/pages/schedule/ScheduleGrid.jsx
 import React from "react";
+
 const pastelColors = [
   "bg-red-200",
   "bg-yellow-200",
@@ -144,7 +145,7 @@ const pastelColors = [
 
 const DAYS = ["MON", "TUE", "WED", "THU", "FRI"];
 const START_HOUR = 8;
-const END_HOUR = 21; // 20:45까지 포함
+const END_HOUR = 21; // up to 20:45
 const INTERVAL_MINUTES = 15;
 
 function generateTimeSlots() {
@@ -162,7 +163,7 @@ function timeToIndex(time) {
   return (hour - START_HOUR) * (60 / INTERVAL_MINUTES) + Math.floor(minute / INTERVAL_MINUTES);
 }
 
-function ScheduleGrid({ schedules, onRemove }) {
+export default function ScheduleGrid({ schedules, onRemove }) {
   const timeSlots = generateTimeSlots();
   const getDayIndex = (day) => DAYS.indexOf(day);
   const getColorByLabel = (label) => {
@@ -229,7 +230,7 @@ function ScheduleGrid({ schedules, onRemove }) {
           ))
         )}
 
-        {/* Blocks */}
+        {/* Course blocks */}
         {schedules.map((slot, index) => {
           const col = getDayIndex(slot.day) + 2;
           const startRow = timeToIndex(slot.start) + 2;
@@ -239,11 +240,24 @@ function ScheduleGrid({ schedules, onRemove }) {
             <div
               key={`${slot.day}-${slot.start}-${slot.class_number || index}`}
               style={{ gridColumn: col, gridRow: `${startRow} / ${endRow}`, margin: "1px" }}
-              className={`${getColorByLabel(slot.label)} flex items-start justify-start rounded p-1 text-xs text-black shadow-sm`}
-              title={`${slot.label || ""} ${slot.start}-${slot.end}`}
+              className={`${getColorByLabel(
+                slot.label
+              )} rounded p-1 text-black shadow-sm flex`}
               onDoubleClick={() => onRemove && slot.class_number && onRemove(slot.class_number)}
+              title={`${slot.label || ""} • ${slot.title || ""} • ${slot.start}-${slot.end}`}
             >
-              {slot.label || ""}
+              <div className="w-full leading-tight">
+                {/* 1) Code */}
+                <div className="text-[12px] font-semibold truncate">{slot.label || ""}</div>
+                {/* 2) Title (optional) */}
+                {slot.title ? (
+                  <div className="text-[11px] whitespace-normal break-words">
+                    {slot.title}
+                  </div>
+                ) : null}
+                {/* 3) Time */}
+                <div className="mt-0.5 text-[10px] opacity-80">{slot.start}–{slot.end}</div>
+              </div>
             </div>
           );
         })}
@@ -252,7 +266,6 @@ function ScheduleGrid({ schedules, onRemove }) {
   );
 }
 
-export default ScheduleGrid;
 
 
 

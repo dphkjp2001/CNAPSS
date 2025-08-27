@@ -1,4 +1,4 @@
-// frontend/src/pages/dashboard/Dashboard.jsx
+// src/pages/dashboard/Dashboard.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { Navigate, Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
@@ -6,6 +6,7 @@ import { useSchool } from "../../contexts/SchoolContext";
 import { useSchoolPath } from "../../utils/schoolPath";
 import { listPosts, getPublicPosts } from "../../api/posts";
 import { useLoginGate } from "../../hooks/useLoginGate";
+import CourseHubPreview from "./CourseHubPreview";
 
 // Mini map preview (Leaflet)
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
@@ -17,7 +18,7 @@ import "dayjs/locale/en";
 dayjs.extend(relativeTime);
 dayjs.locale("en");
 
-const PREVIEW_COUNT = 3;
+const PREVIEW_COUNT = 5;
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -35,7 +36,7 @@ export default function Dashboard() {
   if (loading) return null;
   if (!school) return <Navigate to="/select-school" replace />;
 
-  // 🔹 Load Free Board preview
+  // Load Free Board preview
   useEffect(() => {
     let alive = true;
     if (!school) return;
@@ -115,67 +116,84 @@ export default function Dashboard() {
           </ul>
         </aside>
 
-        {/* Main content */}
-        <main className="flex w-full flex-1 flex-col gap-6">
-          {/* Free Board Preview */}
-          <section className="w-full rounded-2xl border border-sand bg-white p-6 shadow-md">
-            <div className="mb-4 flex items-center justify-between">
-              <Link to={schoolPath("/freeboard")}>
-                <h2 className="cursor-pointer text-2xl font-bold hover:underline" style={{ color: textColor }}>
-                  Free Board
-                </h2>
-              </Link>
+        {/* Main area */}
+        <main className="flex w-full flex-1 flex-col">
+          {/* Top row: Free Board (8) + Course Hub (4) */}
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+            {/* Free Board Preview */}
+            <section className="lg:col-span-8 rounded-2xl border border-sand bg-white p-6 shadow-md">
+              <div className="mb-4 flex items-center justify-between">
+                <Link to={schoolPath("/freeboard")}>
+                  <h2 className="cursor-pointer text-2xl font-bold hover:underline" style={{ color: textColor }}>
+                    Free Board
+                  </h2>
+                </Link>
 
-              {/* View All → 공개 리스트로 이동 (비로그인도 OK) */}
-              <Link to={schoolPath("/freeboard")} className="text-sm text-blue-600 hover:underline">
-                View All
-              </Link>
-            </div>
+                {/* View All → 공개 리스트로 이동 (비로그인도 OK) */}
+                <Link to={schoolPath("/freeboard")} className="text-sm text-blue-600 hover:underline">
+                  View All
+                </Link>
+              </div>
 
-            {loadingPosts ? (
-              <ul className="space-y-3">
-                {Array.from({ length: PREVIEW_COUNT }).map((_, i) => (
-                  <li key={i} className="animate-pulse">
-                    <div className="h-5 w-2/3 rounded bg-gray-100" />
-                    <div className="mt-2 h-3 w-1/3 rounded bg-gray-100" />
-                  </li>
-                ))}
-              </ul>
-            ) : latestPosts.length === 0 ? (
-              <p className="text-sm text-gray-500">Latest posts will appear here.</p>
-            ) : (
-              <ul className="divide-y">
-                {latestPosts.map((p) => (
-                  <li key={p._id || p.id} className="py-3">
-                    <button
-                      className="block w-full text-left"
-                      onClick={() => ensureAuth(() => navigate(schoolPath(`/freeboard/${p._id || p.id}`)))}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="font-medium text-gray-900 line-clamp-2">{p.title}</div>
-                        <div className="ml-3 shrink-0 text-xs text-gray-500">{dayjs(p.createdAt).fromNow()}</div>
-                      </div>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
+              {loadingPosts ? (
+                <ul className="space-y-3">
+                  {Array.from({ length: PREVIEW_COUNT }).map((_, i) => (
+                    <li key={i} className="animate-pulse">
+                      <div className="h-5 w-2/3 rounded bg-gray-100" />
+                      <div className="mt-2 h-3 w-1/3 rounded bg-gray-100" />
+                    </li>
+                  ))}
+                </ul>
+              ) : latestPosts.length === 0 ? (
+                <p className="text-sm text-gray-500">Latest posts will appear here.</p>
+              ) : (
+                <ul className="divide-y">
+                  {latestPosts.map((p) => (
+                    <li key={p._id || p.id} className="py-3">
+                      <button
+                        className="block w-full text-left"
+                        onClick={() => ensureAuth(() => navigate(schoolPath(`/freeboard/${p._id || p.id}`)))}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="font-medium text-gray-900 line-clamp-2">{p.title}</div>
+                          <div className="ml-3 shrink-0 text-xs text-gray-500">
+                            {p.createdAt ? dayjs(p.createdAt).fromNow() : ""}
+                          </div>
+                        </div>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
 
-            <div className="mt-4 flex justify-end">
-              <button
-                onClick={() => ensureAuth(() => navigate(schoolPath("/freeboard/write")))}
-                className="rounded-xl px-4 py-2 text-sm font-semibold text-white shadow"
-                style={{ backgroundColor: primary }}
-              >
-                + Write Post
-              </button>
-            </div>
-          </section>
+              <div className="mt-4 flex justify-end">
+                <button
+                  onClick={() => ensureAuth(() => navigate(schoolPath("/freeboard/write")))}
+                  className="rounded-xl px-4 py-2 text-sm font-semibold text-white shadow"
+                  style={{ backgroundColor: primary }}
+                >
+                  + Write Post
+                </button>
+              </div>
+            </section>
 
-          {/* Food Map Card with mini map preview */}
+            {/* Course Hub Preview (materials) */}
+            <section className="lg:col-span-4">
+              <CourseHubPreview
+                school={school}
+                primary={primary}
+                textColor={textColor}
+                ensureAuth={ensureAuth}
+                schoolPath={schoolPath}
+                navigate={navigate}
+              />
+            </section>
+          </div>
+
+          {/* Bottom: compact Food Map */}
           <section
             onClick={() => navigate(schoolPath("/foodmap"))}
-            className="cursor-pointer overflow-hidden rounded-2xl border border-sand bg-white p-0 shadow-inner transition hover:shadow-lg"
+            className="mt-6 cursor-pointer overflow-hidden rounded-2xl border border-sand bg-white p-0 shadow-inner transition hover:shadow-lg"
             title="Go to Food Map"
           >
             <div className="p-6">
@@ -211,6 +229,7 @@ export default function Dashboard() {
     </div>
   );
 }
+
 
 
 

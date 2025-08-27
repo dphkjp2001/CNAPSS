@@ -15,6 +15,12 @@ import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
 import AuthRequired from "./pages/auth/AuthRequired"; // kept for compatibility
 
+// 수업관련 자료 관련 페이지
+import CourseBrowser from "./pages/courses/CourseBrowser";
+import CourseMaterials from "./pages/courses/CourseMaterials";
+import UploadMaterial from "./pages/courses/UploadMaterial";
+
+
 // Lazy pages
 const Dashboard = lazy(() => import("./pages/dashboard/Dashboard"));
 const MyPosts = lazy(() => import("./pages/dashboard/MyPosts"));
@@ -197,6 +203,39 @@ function App() {
               }
             />
           </Route>
+
+          <Route
+            path="/:school/courses"
+            element={
+              <RequireAuth>
+                <CourseBrowser />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/:school/courses/:courseId/materials"
+            element={
+              <RequireAuth>
+                <CourseMaterials />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/:school/courses/upload"
+            element={
+              <RequireAuth>
+                <UploadMaterial />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/:school/courses/:courseId/upload"
+            element={
+              <RequireAuth>
+                <UploadMaterial />
+              </RequireAuth>
+            }
+          />
 
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/select-school" replace />} />
