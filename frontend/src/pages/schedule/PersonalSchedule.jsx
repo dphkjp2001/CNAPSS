@@ -7,6 +7,8 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useSchoolPath } from "../../utils/schoolPath";
 import { getMySchedule, saveMySchedule } from "../../api/schedule";
 
+/* ---------------- Helpers ---------------- */
+
 // Parse "MTWRF 9:30a-12:30p" → blocks for grid
 function parseMeeting(meetingStr, label, class_number) {
   if (!meetingStr) return [];
@@ -15,12 +17,15 @@ function parseMeeting(meetingStr, label, class_number) {
   if (!match) return [];
 
   const dayStr = match[1];
+
   const startHour = parseInt(match[2]);
   const startMin = parseInt(match[3] || "0");
   const startMeridiemRaw = match[4];
   const endHourRaw = parseInt(match[5]);
   const endMin = parseInt(match[6] || "0");
   const endMeridiem = match[7].toLowerCase();
+
+  // if start meridiem omitted, infer from end
   const startMeridiem = (startMeridiemRaw || endMeridiem).toLowerCase();
 
   const startHour24 = startHour % 12 + (startMeridiem === "p" ? 12 : 0);
@@ -40,7 +45,7 @@ function parseMeeting(meetingStr, label, class_number) {
   }));
 }
 
-// slot key helper
+// stable key for dedup
 const keyOf = (s) => `${s.day}-${s.start}-${s.end}`;
 
 // semester helpers
@@ -54,9 +59,6 @@ function currentSemesterString() {
 function buildSemesterOptions() {
   const now = new Date();
   const y = now.getFullYear();
-  const opts = [];
-  const terms = ["spring", "summer", "fall"];
-  // last year fall → this year (spring/summer/fall) → next year spring
   const seed = [
     `${y - 1}-fall`,
     `${y}-spring`,
@@ -64,27 +66,30 @@ function buildSemesterOptions() {
     `${y}-fall`,
     `${y + 1}-spring`,
   ];
-  for (const s of seed) if (!opts.includes(s)) opts.push(s);
-  return opts;
+  return Array.from(new Set(seed));
 }
+
+/* ---------------- Component ---------------- */
 
 function PersonalSchedule() {
   const { school } = useSchool();
   const { token } = useAuth();
   const schoolPath = useSchoolPath();
-  const [courseList, setCourseList] = useState([]);
-  const [selected, setSelected] = useState([]); // [{day,start,end,label,class_number}]
-  const [loadingCourses, setLoadingCourses] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [saveMsg, setSaveMsg] = useState("");
-  const [error, setError] = useState("");
 
   const isNYU = (school || "").toLowerCase() === "nyu";
 
   const semesterOptions = useMemo(buildSemesterOptions, []);
   const [semester, setSemester] = useState(currentSemesterString());
 
-  // Load my saved schedule for this semester
+  const [courseList, setCourseList] = useState([]);
+  const [selected, setSelected] = useState([]); // [{day,start,end,label,class_number}]
+  const [loadingCourses, setLoadingCourses] = useState(false);
+
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState("");
+  const [error, setError] = useState("");
+
+  /* ----- Load my saved schedule (semester-scoped) ----- */
   useEffect(() => {
     let alive = true;
     if (!school || !token || !semester) return;
@@ -95,13 +100,13 @@ function PersonalSchedule() {
         const data = await getMySchedule({ school, token, semester });
         const slots = Array.isArray(data?.slots) ? data.slots : [];
 
-        // Map saved slots to grid blocks with stable pseudo class_number
+        // Use label/classNumber if present (fallback "Saved")
         const mapped = slots.map((s) => ({
           day: s.day,
           start: s.start,
           end: s.end,
-          label: "Saved",
-          class_number: `saved-${keyOf(s)}`,
+          label: s.label || "Saved",
+          class_number: s.classNumber || `saved-${keyOf(s)}`,
         }));
         if (alive) setSelected(mapped);
       } catch (e) {
@@ -115,7 +120,7 @@ function PersonalSchedule() {
     };
   }, [school, token, semester]);
 
-  // Load NYU course data only when school === "nyu"
+  /* ----- Load NYU course data (NYU only) ----- */
   useEffect(() => {
     let alive = true;
 
@@ -140,6 +145,7 @@ function PersonalSchedule() {
     };
   }, [isNYU]);
 
+  /* ----- Add/remove courses to grid ----- */
   const handleAddCourse = (section) => {
     const isAlreadyAdded = selected.some(
       (s) => s.label === section.course_code && s.class_number === section.class_number
@@ -188,12 +194,19 @@ function PersonalSchedule() {
     setSelected((prev) => prev.filter((s) => s.class_number !== class_number));
   };
 
-  // Normalize to unique {day,start,end}
+  /* ----- Build payload to save (dedup by day/start/end) ----- */
   const toSlotsPayload = () => {
     const map = new Map();
     for (const s of selected) {
       const key = keyOf(s);
-      map.set(key, { day: s.day, start: s.start, end: s.end });
+      map.set(key, {
+        day: s.day,
+        start: s.start,
+        end: s.end,
+        // persist label / classNumber if available
+        label: s.label || undefined,
+        classNumber: s.class_number || undefined,
+      });
     }
     return Array.from(map.values());
   };
@@ -216,6 +229,8 @@ function PersonalSchedule() {
       setTimeout(() => setSaveMsg(""), 3000);
     }
   };
+
+  /* ---------------- Render ---------------- */
 
   return (
     <div className="p-6">
@@ -296,6 +311,7 @@ function PersonalSchedule() {
 }
 
 export default PersonalSchedule;
+
 
 
 
