@@ -69,9 +69,10 @@ app.use("/api/:school/market", marketRoutes);
 app.use("/api/:school/chat", chatRoutes);
 app.use("/api/:school/notification", requireAuth, schoolGuard, notificationRoute);
 app.use("/api/:school/request", requireAuth, schoolGuard, requestRoutes);
+app.use("/api/:school/schedule", requireAuth, schoolGuard, scheduleRoutes);
 
 app.use("/api/course", courseRoutes);
-app.use("/api/schedule", scheduleRoutes);
+
 
 
 // places는 여전히 보호 (토큰+가드)

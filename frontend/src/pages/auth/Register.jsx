@@ -1,10 +1,11 @@
-// 📁 frontend/src/pages/auth/Register.jsx
+// src/pages/auth/Register.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams, useLocation } from "react-router-dom";
+import { Link, useNavigate, useParams, useLocation } from "react-router-dom";
 import AsyncButton from "../../components/AsyncButton";
 import { useAuth } from "../../contexts/AuthContext";
+import { useSchool } from "../../contexts/SchoolContext";
 
-// Keep this synced with backend allowedSchools
+// keep in sync with backend
 const ALLOWED_SCHOOLS = [
   { value: "nyu", label: "NYU" },
   { value: "columbia", label: "Columbia" },
@@ -16,6 +17,15 @@ function Register() {
   const location = useLocation();
   const { school: schoolParam } = useParams();
   const { login } = useAuth();
+  const { schoolTheme } = useSchool();
+  const theme = useMemo(
+    () => ({
+      bg: schoolTheme?.bg || "#f6f3ff",
+      primary: schoolTheme?.primary || "#6b46c1",
+      text: schoolTheme?.text || "#111827",
+    }),
+    [schoolTheme?.bg, schoolTheme?.primary, schoolTheme?.text]
+  );
 
   const [email, setEmail] = useState("");
   const [nickname, setNickname] = useState("");
@@ -27,10 +37,11 @@ function Register() {
   const [emailVerified, setEmailVerified] = useState(false);
   const [cooldown, setCooldown] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
 
   const baseURL = import.meta.env.VITE_API_URL;
 
-  // Prefill school (param/state/localStorage)
+  // prefill school from URL/state/localStorage
   useEffect(() => {
     const fromState = location?.state?.prefillSchool;
     const fromStorage = localStorage.getItem("lastVisitedSchool") || "";
@@ -39,7 +50,6 @@ function Register() {
     setSchool(valid ? candidate : "");
   }, [schoolParam, location?.state?.prefillSchool]);
 
-  // Cooldown timer
   useEffect(() => {
     if (!cooldown) return;
     const id = setInterval(() => setCooldown((s) => (s > 0 ? s - 1 : 0)), 1000);
@@ -47,8 +57,8 @@ function Register() {
   }, [cooldown]);
 
   const sendCode = async () => {
-    if (!email) return alert("Enter your email first.");
-    if (cooldown) return;
+    if (!email || busy || cooldown) return;
+    setError("");
     try {
       setBusy(true);
       const res = await fetch(`${baseURL}/auth/send-code`, {
@@ -62,14 +72,15 @@ function Register() {
       setCooldown(60);
       alert("Verification code sent. Please check your email.");
     } catch (err) {
-      alert(err.message);
+      setError(err.message);
     } finally {
       setBusy(false);
     }
   };
 
   const verifyCode = async () => {
-    if (!email || !code) return alert("Enter email and code.");
+    if (!email || !code || busy) return;
+    setError("");
     try {
       setBusy(true);
       const res = await fetch(`${baseURL}/auth/verify-code`, {
@@ -82,16 +93,15 @@ function Register() {
       setEmailVerified(true);
       alert("Email verified!");
     } catch (err) {
-      alert(err.message);
+      setError(err.message);
     } finally {
       setBusy(false);
     }
   };
 
   const handleRegister = async () => {
-    if (!emailVerified) return alert("Please verify your email first.");
-    if (!school) return alert("Please select your school.");
-
+    if (!emailVerified || !school || busy) return;
+    setError("");
     try {
       setBusy(true);
       const res = await fetch(`${baseURL}/auth/register`, {
@@ -104,41 +114,34 @@ function Register() {
       if (!res.ok) {
         const msg = data?.message || "Sign up failed.";
         if (msg.toLowerCase().includes("email already")) {
-          const goToLogin = window.confirm("An account with this email already exists.\nWould you like to log in instead?");
-          if (goToLogin) navigate("/login", { replace: true });
+          const go = window.confirm("Email already exists.\nGo to Log In?");
+          if (go) navigate("/login", { replace: true, state: { from: location.state?.from } });
         } else if (msg.toLowerCase().includes("nickname")) {
-          alert("This nickname is already taken. Please choose another.");
-        } else if (msg.toLowerCase().includes("invalid school")) {
-          alert("Please choose a valid school.");
+          setError("This nickname is already taken. Please choose another.");
         } else {
-          alert(msg);
+          setError(msg);
         }
         return;
       }
 
-      // If backend returns token + user, log in immediately
       if (data?.user && data?.token) {
         try {
           login({ user: data.user, token: data.token });
-        } catch {
-          // ignore if AuthContext doesn't accept yet
-        }
-
+        } catch {}
         const from = location.state?.from;
         const bad = ["/auth-required", "/login", "/register"];
         const fallback = `/${data.user.school}/dashboard`;
-        const dest = bad.includes(from) ? fallback : (from || fallback);
+        const dest = bad.includes(from) ? fallback : from || fallback;
         alert("Registration complete! Welcome 👋");
         navigate(dest, { replace: true });
         return;
       }
 
-      // Legacy fallback
       alert("Registration complete! You can log in now.");
-      navigate("/login", { replace: true });
+      navigate("/login", { replace: true, state: { from: location.state?.from } });
     } catch (err) {
+      setError("Unexpected error occurred. Please try again later.");
       console.error("Register error:", err);
-      alert("Unexpected error occurred. Please try again later.");
     } finally {
       setBusy(false);
     }
@@ -155,92 +158,145 @@ function Register() {
   );
 
   return (
-    <div className="p-6 max-w-md mx-auto">
-      <h2 className="text-2xl font-bold mb-6">Sign Up</h2>
+    <div className="min-h-[calc(100vh-64px)]" style={{ backgroundColor: theme.bg }}>
+      <div className="mx-auto flex max-w-4xl items-center justify-center px-4 py-12">
+        <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-lg">
+          <div className="mb-6 text-center">
+            <h1 className="text-2xl font-bold" style={{ color: theme.text }}>
+              Sign Up
+            </h1>
+            <p className="mt-1 text-sm text-gray-600">
+              Create your CNAPSS account to join your campus community.
+            </p>
+          </div>
 
-      <form onSubmit={(e) => e.preventDefault()} className="space-y-4">
-        <input
-          type="email"
-          placeholder="Email"
-          className="w-full border px-3 py-2"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-          autoComplete="email"
-        />
-        <input
-          type="text"
-          placeholder="Nickname"
-          className="w-full border px-3 py-2"
-          value={nickname}
-          onChange={(e) => setNickname(e.target.value)}
-          required
-        />
-        <input
-          type="password"
-          placeholder="Password"
-          className="w-full border px-3 py-2"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-          autoComplete="new-password"
-        />
+          {error && (
+            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {error}
+            </div>
+          )}
 
-        <div className="mt-2">
-          <label className="block mb-1 font-medium">School</label>
-          <select
-            value={school}
-            onChange={(e) => setSchool(e.target.value)}
-            required
-            className="w-full border px-3 py-2"
-          >
-            <option value="">Select your school</option>
-            {schoolOptions}
-          </select>
-          <p className="text-xs text-gray-500 mt-1">Prefilled from the school you were browsing. You can change it.</p>
+          <form onSubmit={(e) => e.preventDefault()} className="space-y-4">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Email</label>
+              <input
+                type="email"
+                placeholder="your.email@school.edu"
+                className="w-full rounded-xl border px-3 py-2 outline-none focus:ring-2"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                autoComplete="email"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Nickname</label>
+              <input
+                type="text"
+                placeholder="Display name"
+                className="w-full rounded-xl border px-3 py-2 outline-none focus:ring-2"
+                value={nickname}
+                onChange={(e) => setNickname(e.target.value)}
+                required
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Password</label>
+              <input
+                type="password"
+                placeholder="••••••••"
+                className="w-full rounded-xl border px-3 py-2 outline-none focus:ring-2"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                autoComplete="new-password"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">School</label>
+              <select
+                value={school}
+                onChange={(e) => setSchool(e.target.value)}
+                required
+                className="w-full rounded-xl border px-3 py-2 outline-none focus:ring-2"
+              >
+                <option value="">Select your school</option>
+                {schoolOptions}
+              </select>
+              <p className="mt-1 text-xs text-gray-500">
+                Prefilled from the school you were browsing. You can change it.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+              <div className="flex-1">
+                <label className="mb-1 block text-sm font-medium text-gray-700">
+                  Verification Code
+                </label>
+                <input
+                  type="text"
+                  placeholder="6-digit code"
+                  className="w-full rounded-xl border px-3 py-2 uppercase outline-none focus:ring-2"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.toUpperCase())}
+                  maxLength={6}
+                  inputMode="latin"
+                />
+              </div>
+              <div className="flex gap-2">
+                <AsyncButton
+                  onClick={sendCode}
+                  disabled={!email || cooldown > 0 || emailVerified || busy}
+                  className="rounded-xl border bg-gray-50 px-3 py-2 text-sm"
+                  loadingText="Sending..."
+                >
+                  {cooldown > 0 ? `Resend (${cooldown}s)` : codeSent ? "Resend" : "Send Code"}
+                </AsyncButton>
+                <AsyncButton
+                  onClick={verifyCode}
+                  disabled={!email || !code || emailVerified || busy}
+                  className="rounded-xl px-3 py-2 text-sm text-white"
+                  style={{ backgroundColor: theme.text }}
+                  loadingText="Verifying..."
+                >
+                  {emailVerified ? "Verified" : "Verify"}
+                </AsyncButton>
+              </div>
+            </div>
+
+            <AsyncButton
+              onClick={handleRegister}
+              loadingText="Signing up..."
+              className="mt-2 w-full rounded-xl px-4 py-2 font-semibold text-white shadow hover:opacity-95 disabled:opacity-60"
+              style={{ backgroundColor: theme.primary }}
+              disabled={!emailVerified || !school || busy}
+            >
+              Sign Up
+            </AsyncButton>
+          </form>
+
+          <div className="mt-6 text-center text-sm text-gray-600">
+            Already have an account?{" "}
+            <Link
+              to="/login"
+              state={{ from: location.state?.from }}
+              className="font-semibold hover:underline"
+              style={{ color: theme.primary }}
+            >
+              Log In
+            </Link>
+          </div>
         </div>
-
-        <div className="flex gap-2 items-center">
-          <input
-            type="text"
-            placeholder="Verification Code"
-            className="flex-1 border px-3 py-2 uppercase"
-            value={code}
-            onChange={(e) => setCode(e.target.value.toUpperCase())}
-            maxLength={6}
-            inputMode="latin"
-          />
-          <AsyncButton
-            onClick={sendCode}
-            disabled={!email || cooldown > 0 || emailVerified || busy}
-            className="bg-gray-100 px-3 py-2 rounded border"
-            loadingText="Sending..."
-          >
-            {cooldown > 0 ? `Resend (${cooldown}s)` : codeSent ? "Resend" : "Send Code"}
-          </AsyncButton>
-          <AsyncButton
-            onClick={verifyCode}
-            disabled={!email || !code || emailVerified || busy}
-            className="bg-gray-800 text-white px-3 py-2 rounded"
-            loadingText="Verifying..."
-          >
-            {emailVerified ? "Verified" : "Verify"}
-          </AsyncButton>
-        </div>
-
-        <AsyncButton
-          onClick={handleRegister}
-          loadingText="Signing up..."
-          className={`px-4 py-2 rounded text-white ${emailVerified && school ? "bg-blue-500" : "bg-blue-300 cursor-not-allowed"}`}
-          disabled={!emailVerified || !school || busy}
-        >
-          Sign Up
-        </AsyncButton>
-      </form>
+      </div>
     </div>
   );
 }
 
 export default Register;
+
+
 
 

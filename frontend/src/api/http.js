@@ -7,7 +7,6 @@ import { openGate } from "../utils/gateBus";
  * - Auto-JSONify plain objects (sets Content-Type)
  * - On 401: open auth gate modal and stop the promise chain
  */
-import { openGate } from "../utils/gateBus";
 
 export async function apiFetch(input, init = {}) {
   const headers = new Headers(init.headers || {});
