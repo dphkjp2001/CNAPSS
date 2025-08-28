@@ -6,7 +6,7 @@ import { useSchool } from "../../contexts/SchoolContext";
 import { useSchoolPath } from "../../utils/schoolPath";
 import CourseCodePicker from "../../components/CourseCodePicker";
 import { createMaterial } from "../../api/materials";
-import uploadToCloudinary from "../../utils/uploadToCloudinary";
+import { uploadToCloudinary } from "../../utils/uploadToCloudinary"; // <-- fixed
 
 const termOfMonth = (m) => (m >= 8 ? "fall" : m >= 5 ? "summer" : "spring");
 const currentSemester = () => {
@@ -24,7 +24,7 @@ export default function CourseWrite() {
 
   const [courseCode, setCourseCode] = useState(decodeURIComponent(params.courseId || ""));
   const [semester, setSemester] = useState(sp.get("sem") || currentSemester());
-  const [kind, setKind] = useState("note"); // server enum: note | syllabus | exam | slide | link | other
+  const [kind, setKind] = useState("note"); // note | syllabus | exam | slide | link | other
   const [file, setFile] = useState(null);
   const [link, setLink] = useState("");
   const [busy, setBusy] = useState(false);
@@ -34,7 +34,7 @@ export default function CourseWrite() {
     () => [
       { ui: "class notes", value: "note" },
       { ui: "syllabus", value: "syllabus" },
-      { ui: "quiz", value: "exam" }, // map quiz → exam
+      { ui: "quiz", value: "exam" }, // quiz → exam
       { ui: "exam", value: "exam" },
       { ui: "slide", value: "slide" },
       { ui: "link", value: "link" },
@@ -62,20 +62,21 @@ export default function CourseWrite() {
       let fileMeta = {};
       if (file) {
         const uploaded = await uploadToCloudinary(file, { folder: "materials" });
+        const secureUrl = typeof uploaded === "string" ? uploaded : uploaded?.secure_url;
         fileMeta = {
-          fileUrl: uploaded?.secure_url,
-          filePublicId: uploaded?.public_id,
-          fileMime: file?.type || "",
-          fileSize: file?.size || 0,
+        fileUrl: secureUrl || "",
+        filePublicId: typeof uploaded === "object" ? (uploaded?.public_id || "") : "",
+        fileMime: file?.type || "",
+        fileSize: file?.size || 0,
         };
       }
 
       const payload = {
-        courseCode: courseCode.toUpperCase(), // 제목 = courseCode (서버에서 강제 세팅)
-        courseTitle: "",                       // optional, 있으면 전달
+        courseCode: courseCode.toUpperCase(), // 제목=코드 (서버에서 강제)
+        courseTitle: "",
         semester,
-        kind: kind,
-        title: courseCode.toUpperCase(),       // 서버에서 다시 강제하지만 호환성 차원에서 넣음
+        kind,
+        title: courseCode.toUpperCase(),       // 호환용
         tags: [],
         url: link || "",
         ...fileMeta,
@@ -83,7 +84,6 @@ export default function CourseWrite() {
 
       await createMaterial({ school, token, payload });
 
-      // 완료 후 코스 자료 페이지로
       navigate(
         schoolPath(`/courses/${encodeURIComponent(courseCode.toUpperCase())}/materials?sem=${encodeURIComponent(semester)}`)
       );
@@ -180,3 +180,4 @@ export default function CourseWrite() {
     </div>
   );
 }
+
