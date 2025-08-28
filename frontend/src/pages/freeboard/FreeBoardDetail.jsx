@@ -1,6 +1,6 @@
 // frontend/src/pages/freeboard/FreeBoardDetail.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useNavigate, Link, useLocation } from "react-router-dom";
 import { useSchoolPath } from "../../utils/schoolPath";
 import CommentSection from "../../components/CommentSection";
 import dayjs from "dayjs";
@@ -10,7 +10,7 @@ import "dayjs/locale/en";
 import { getPost, deletePost, toggleThumbs } from "../../api/posts";
 import { useAuth } from "../../contexts/AuthContext";
 import { useSchool } from "../../contexts/SchoolContext";
-
+import { apiFetch } from "../../api/http";
 
 dayjs.extend(relativeTime);
 dayjs.locale("en");
@@ -18,6 +18,7 @@ dayjs.locale("en");
 export default function FreeBoardDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const { school, schoolTheme } = useSchool();
   const schoolPath = useSchoolPath();
@@ -28,7 +29,7 @@ export default function FreeBoardDetail() {
 
   const loadPost = async () => {
     try {
-      const data = await getPost({ school, token, id }); // ✅ guard with school
+      const data = await getPost({ school, token, id });
       setPost(data);
     } catch (err) {
       setError(err.message || "Failed to load the post.");
@@ -40,12 +41,32 @@ export default function FreeBoardDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, school]);
 
+  // ✅ 딥링크 (?nid=...) 로 진입 시에도 읽음 처리
+  useEffect(() => {
+    const sp = new URLSearchParams(location.search);
+    const nid = sp.get("nid");
+    async function markRead() {
+      if (!nid || !user?.email || !school) return;
+      try {
+        const base = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
+        await apiFetch(`${base}/${school}/notification/mark-read`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: { commentId: nid, email: user.email },
+        });
+      } catch {
+        // ignore
+      }
+    }
+    markRead();
+  }, [location.search, user?.email, school]);
+
   const isAuthor = useMemo(() => user?.email === post?.email, [user, post]);
 
   const handleDelete = async () => {
     if (!window.confirm("Delete this post?")) return;
     try {
-      await deletePost(id, user.email, school); // ✅ scoped delete
+      await deletePost(id, user.email, school);
       alert("Post deleted.");
       navigate(schoolPath("/freeboard"));
     } catch (err) {
@@ -55,14 +76,17 @@ export default function FreeBoardDetail() {
 
   const handleThumb = async () => {
     try {
-      await toggleThumbs({ school, token, id: post._id }); // ✅ /api/:school/posts/:id/thumbs
- // 성공 시 로컬 상태 갱신 (예: setPost)
+      await toggleThumbs({ school, token, id: post._id });
       setPost((p) =>
-      !p ? p : {...p,
-      thumbsUpUsers: (p.thumbsUpUsers || []).includes((user?.email||"").toLowerCase())
-       ? p.thumbsUpUsers.filter(e => e.toLowerCase() !== (user?.email||"").toLowerCase())
-       : [...(p.thumbsUpUsers||[]), (user?.email||"").toLowerCase()],
-    });
+        !p
+          ? p
+          : {
+              ...p,
+              thumbsUpUsers: (p.thumbsUpUsers || []).includes((user?.email || "").toLowerCase())
+                ? p.thumbsUpUsers.filter((e) => e.toLowerCase() !== (user?.email || "").toLowerCase())
+                : [...(p.thumbsUpUsers || []), (user?.email || "").toLowerCase()],
+            }
+      );
       await loadPost();
     } catch (err) {
       alert("Failed to like: " + (err.message || "Unknown error"));
@@ -72,7 +96,7 @@ export default function FreeBoardDetail() {
   if (error) {
     return (
       <div
-        className="min-h-screen flex items-center justify-center text-sm text-red-700"
+        className="flex min-h-screen items-center justify-center text-sm text-red-700"
         style={{ backgroundColor: schoolTheme?.bg || "#f6f3ff" }}
       >
         {error}
@@ -82,7 +106,7 @@ export default function FreeBoardDetail() {
   if (!post) {
     return (
       <div
-        className="min-h-screen flex items-center justify-center text-sm text-gray-600"
+        className="flex min-h-screen items-center justify-center text-sm text-gray-600"
         style={{ backgroundColor: schoolTheme?.bg || "#f6f3ff" }}
       >
         Loading…
@@ -155,4 +179,5 @@ export default function FreeBoardDetail() {
     </div>
   );
 }
+
 

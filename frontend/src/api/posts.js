@@ -1,156 +1,83 @@
 // frontend/src/api/posts.js
+import { getJson, postJson, putJson, deleteJson } from "./http";
 
 // e.g. VITE_API_URL = "https://api.cnapss.com/api"
-// ensure no trailing slash
 const API_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 
-const authHeaders = (token) => ({
-  "Content-Type": "application/json",
-  ...(token ? { Authorization: `Bearer ${token}` } : {}),
-});
-
-/* ===================== Public (no auth) ===================== */
-/**
- * GET /api/public/:school/posts
- * Query: page, limit, q, sort(new|old)
- * Response: { page, limit, total, items: [{ _id, title, createdAt, commentsCount, likesCount }] }
- */
+// ============== Public (no auth) ==============
 export async function getPublicPosts({ school, page = 1, limit = 20, q = "", sort = "new" }) {
   const url = new URL(`${API_URL}/public/${school}/posts`);
   if (page) url.searchParams.set("page", String(page));
   if (limit) url.searchParams.set("limit", String(limit));
   if (q) url.searchParams.set("q", q);
   if (sort) url.searchParams.set("sort", sort);
-  const res = await fetch(url);
-  if (!res.ok) throw new Error("Failed to load public posts");
-  return res.json(); // { page, limit, total, items: [...] }
+  return getJson(url);
 }
 
-/* ===================== Protected (auth) ===================== */
-// List (protected)
-export async function listPosts({ school, token, page, limit } = {}) {
+// ============== Protected (auth) ==============
+// 주의: getJson/postJson 등은 내부적으로 apiFetch를 사용하고,
+// apiFetch가 localStorage의 token을 자동으로 Authorization에 주입해준다.
+// (별도로 headers를 안 넘겨도 됨. 필요하면 { headers: { Authorization: `Bearer ${token}` } } 가능)
+
+export async function listPosts({ school, page, limit } = {}) {
   const url = new URL(`${API_URL}/${school}/posts`);
   if (page) url.searchParams.set("page", String(page));
   if (limit) url.searchParams.set("limit", String(limit));
-  const res = await fetch(url, { headers: authHeaders(token) });
-  if (!res.ok) throw new Error("Failed to load posts");
-  return res.json(); // usually an array
+  return getJson(url);
 }
 
-// Detail (protected)
-export async function getPost({ school, token, id }) {
-  const res = await fetch(`${API_URL}/${school}/posts/${id}`, {
-    headers: authHeaders(token),
-  });
-  if (!res.ok) throw new Error("Failed to load post");
-  return res.json();
+export async function getPost({ school, id }) {
+  const url = `${API_URL}/${school}/posts/${id}`;
+  return getJson(url);
 }
 
-// Create (protected)
-export async function createPost({ school, token, title, content }) {
-  const res = await fetch(`${API_URL}/${school}/posts`, {
-    method: "POST",
-    headers: authHeaders(token),
-    body: JSON.stringify({ title, content }),
-  });
-  if (!res.ok) throw new Error("Failed to create post");
-  return res.json();
+export async function createPost({ school, title, content }) {
+  const url = `${API_URL}/${school}/posts`;
+  return postJson(url, { title, content });
 }
 
-// Update (protected)
-export async function updatePost({ school, token, id, title, content }) {
-  const res = await fetch(`${API_URL}/${school}/posts/${id}`, {
-    method: "PUT",
-    headers: authHeaders(token),
-    body: JSON.stringify({ title, content }),
-  });
-  if (!res.ok) throw new Error("Failed to update post");
-  return res.json();
+export async function updatePost({ school, id, title, content }) {
+  const url = `${API_URL}/${school}/posts/${id}`;
+  return putJson(url, { title, content });
 }
 
-// Delete (protected)
-export async function deletePost({ school, token, id }) {
-  const res = await fetch(`${API_URL}/${school}/posts/${id}`, {
-    method: "DELETE",
-    headers: authHeaders(token),
-  });
-  if (!res.ok) throw new Error("Failed to delete post");
-  return res.json();
+export async function deletePost({ school, id }) {
+  const url = `${API_URL}/${school}/posts/${id}`;
+  return deleteJson(url);
 }
 
-// Toggle like (protected)
-export async function toggleThumbs({ school, token, id }) {
-  const res = await fetch(`${API_URL}/${school}/posts/${id}/thumbs`, {
-    method: "POST",
-    headers: authHeaders(token),
-  });
-  if (!res.ok) throw new Error("Failed to toggle like");
-  return res.json();
+export async function toggleThumbs({ school, id }) {
+  const url = `${API_URL}/${school}/posts/${id}/thumbs`;
+  // 토글은 바디가 필요 없으니 postJson 대신 apiFetch를 써도 되지만 일관성 위해 빈 객체 전송
+  return postJson(url, {});
 }
 
-// Liked by me (protected)
-export async function listLiked({ school, token, email }) {
-  const res = await fetch(`${API_URL}/${school}/posts/liked/${encodeURIComponent(email)}`, {
-    headers: authHeaders(token),
-  });
-  if (!res.ok) throw new Error("Failed to load liked posts");
-  return res.json();
+export async function listLiked({ school, email }) {
+  const url = `${API_URL}/${school}/posts/liked/${encodeURIComponent(email)}`;
+  return getJson(url);
 }
 
-// Commented by me (protected)
-export async function listCommented({ school, token, email }) {
-  const res = await fetch(`${API_URL}/${school}/posts/commented/${encodeURIComponent(email)}`, {
-    headers: authHeaders(token),
-  });
-  if (!res.ok) throw new Error("Failed to load commented posts");
-  return res.json();
+export async function listCommented({ school, email }) {
+  const url = `${API_URL}/${school}/posts/commented/${encodeURIComponent(email)}`;
+  return getJson(url);
 }
 
-/* ===== Backward-compat ADAPTERS (keep old imports working) =====
-   Old usages:
-   - fetchPosts(school)
-   - fetchPostById(id, school)
-   - togglePostLike(id, school)
-   - fetchLikedPosts(email, school)
-   - fetchCommentedPosts(email, school)
-   These adapters pull token from localStorage so old pages don't need to pass it explicitly.
-*/
-const tokenFromStorage = () => {
-  try {
-    return localStorage.getItem("token");
-  } catch {
-    return "";
-  }
-};
-
-export async function fetchPosts(school, opts = {}) {
-  const token = opts.token || tokenFromStorage();
-  return listPosts({ school, token });
+/* ---- 구버전 API 어댑터 (기존 코드 호환용) ---- */
+export async function fetchPosts(school) {
+  return listPosts({ school });
 }
-
-export async function fetchPost(id, school, opts = {}) {
-  const token = opts.token || tokenFromStorage();
-  return getPost({ school, token, id });
+export async function fetchPost(id, school) {
+  return getPost({ school, id });
 }
-
-export async function fetchPostById(id, school, opts = {}) {
-  const token = opts.token || tokenFromStorage();
-  return getPost({ school, token, id });
+export async function fetchPostById(id, school) {
+  return getPost({ school, id });
 }
-
-export async function togglePostLike(id, school, opts = {}) {
-  const token = opts.token || tokenFromStorage();
-  return toggleThumbs({ school, token, id });
+export async function togglePostLike(id, school) {
+  return toggleThumbs({ school, id });
 }
-
-export async function fetchLikedPosts(email, school, opts = {}) {
-  const token = opts.token || tokenFromStorage();
-  return listLiked({ school, token, email });
+export async function fetchLikedPosts(email, school) {
+  return listLiked({ school, email });
 }
-
-export async function fetchCommentedPosts(email, school, opts = {}) {
-  const token = opts.token || tokenFromStorage();
-  return listCommented({ school, token, email });
+export async function fetchCommentedPosts(email, school) {
+  return listCommented({ school, email });
 }
-// ================================================================
-
