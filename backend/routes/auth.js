@@ -27,7 +27,7 @@ const allowedSchools = ["nyu", "columbia", "boston"];
 
 // JWT 발급
 function signJwt(payload) {
-  return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "24h" });
+  return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "1h" });
 }
 
 // 공통 사용자 응답 정규화
