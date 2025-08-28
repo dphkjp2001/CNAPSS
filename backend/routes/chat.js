@@ -162,63 +162,40 @@ const router = express.Router({ mergeParams: true });
 
 const requireAuth = require("../middleware/requireAuth");
 const schoolGuard = require("../middleware/schoolGuard");
-
 const Conversation = require("../models/Conversation");
 const Message = require("../models/Message");
 const User = require("../models/User");
 
 router.use(requireAuth, schoolGuard);
 
-function isValidId(id) {
-  return mongoose.Types.ObjectId.isValid(id);
-}
+function isValidId(id) { return mongoose.Types.ObjectId.isValid(id); }
 
 async function authorizeConversation(conversationId, userEmail, userSchool) {
   if (!isValidId(conversationId)) return { ok: false, code: 400, msg: "Invalid conversation id" };
-
   const convo = await Conversation.findById(conversationId);
   if (!convo) return { ok: false, code: 404, msg: "Conversation not found" };
-
   const isParticipant = [convo.buyer, convo.seller].includes(userEmail);
   if (!isParticipant) return { ok: false, code: 403, msg: "Not a participant" };
   if (convo.school !== userSchool) return { ok: false, code: 403, msg: "Wrong tenant" };
-
   return { ok: true, convo };
 }
 
-/** GET /conversations */
+// GET 내 대화 목록
 router.get("/conversations", async (req, res) => {
   try {
     const email = req.user.email;
     const school = req.user.school;
-
     const list = await Conversation.find({
       school,
       $or: [{ buyer: email }, { seller: email }],
-    })
-      .sort({ updatedAt: -1 })
-      .lean();
-
+    }).sort({ updatedAt: -1 }).lean();
     res.json(list);
   } catch (err) {
-    console.error("List conversations error:", err);
     res.status(500).json({ message: "Failed to load conversations." });
   }
 });
 
-/** GET /conversations/:id */
-router.get("/conversations/:id", async (req, res) => {
-  try {
-    const auth = await authorizeConversation(req.params.id, req.user.email, req.user.school);
-    if (!auth.ok) return res.status(auth.code).json({ message: auth.msg });
-    res.json(auth.convo);
-  } catch (err) {
-    console.error("Conversation detail error:", err);
-    res.status(500).json({ message: "Failed to load conversation." });
-  }
-});
-
-/** GET /conversations/:id/messages?cursor=&limit=50  (최신순) */
+// GET 대화 메시지(최신순)
 router.get("/conversations/:id/messages", async (req, res) => {
   try {
     const auth = await authorizeConversation(req.params.id, req.user.email, req.user.school);
@@ -230,13 +207,12 @@ router.get("/conversations/:id/messages", async (req, res) => {
 
     const items = await Message.find(q).sort({ createdAt: -1 }).limit(Number(limit));
     res.json(items);
-  } catch (err) {
-    console.error("List messages error:", err);
+  } catch {
     res.status(500).json({ message: "Failed to load messages." });
   }
 });
 
-/** POST /conversations/:id/messages  (메시지 전송) */
+// POST 메시지 전송
 router.post("/conversations/:id/messages", async (req, res) => {
   try {
     const auth = await authorizeConversation(req.params.id, req.user.email, req.user.school);
@@ -256,11 +232,10 @@ router.post("/conversations/:id/messages", async (req, res) => {
     auth.convo.updatedAt = new Date();
     await auth.convo.save();
 
-    // ✅ 실시간 브로드캐스트 (REST 경로에서도 즉시 반영)
+    // 실시간 브로드캐스트
     try {
       const io = req.app.get("io");
       if (io) {
-        // 대화방에 있는 사람들에게 수신
         io.to(`conv:${auth.convo._id}`).emit("chat:receive", {
           _id: msg._id,
           conversationId: String(auth.convo._id),
@@ -269,8 +244,6 @@ router.post("/conversations/:id/messages", async (req, res) => {
           createdAt: msg.createdAt,
           readBy: msg.readBy || [],
         });
-
-        // 상대방에게 리스트 미리보기 업데이트 + 하단 Chatbox 트리거
         const peer = auth.convo.buyer === req.user.email ? auth.convo.seller : auth.convo.buyer;
         io.to(`user:${peer}`).emit("chat:preview", {
           conversationId: String(auth.convo._id),
@@ -278,68 +251,48 @@ router.post("/conversations/:id/messages", async (req, res) => {
           updatedAt: auth.convo.updatedAt,
         });
       }
-    } catch (e) {
-      console.warn("socket broadcast failed:", e.message);
-    }
+    } catch {}
 
     res.status(201).json(msg);
-  } catch (err) {
-    console.error("Send message error:", err);
+  } catch {
     res.status(500).json({ message: "Failed to send message." });
   }
 });
 
-/** POST /start  (새 대화 시작) */
+// POST 대화 시작(없으면 생성)
 router.post("/start", async (req, res) => {
   try {
     const { peerEmail, itemId = null } = req.body;
     const me = req.user.email;
     const school = req.user.school;
-
-    if (!peerEmail || peerEmail === me) {
-      return res.status(400).json({ message: "Invalid peerEmail" });
-    }
+    if (!peerEmail || peerEmail === me) return res.status(400).json({ message: "Invalid peerEmail" });
 
     const peer = await User.findOne({ email: peerEmail }).select("school");
-    if (!peer || peer.school !== school) {
-      return res.status(403).json({ message: "Peer is not in your school." });
-    }
+    if (!peer || peer.school !== school) return res.status(403).json({ message: "Peer is not in your school." });
 
     let convo = await Conversation.findOne({
       school,
-      $or: [
-        { buyer: me, seller: peerEmail },
-        { buyer: peerEmail, seller: me },
-      ],
+      $or: [{ buyer: me, seller: peerEmail }, { buyer: peerEmail, seller: me }],
       ...(itemId ? { itemId } : {}),
     });
 
-    if (!convo) {
-      const roles = { buyer: me, seller: peerEmail }; // arbitrary
-      convo = await Conversation.create({ ...roles, itemId, school });
-    }
+    if (!convo) convo = await Conversation.create({ buyer: me, seller: peerEmail, itemId, school });
 
-    // ✅ 대화가 없었거나 방금 생성된 경우, 상대에게 즉시 알림
     try {
       const io = req.app.get("io");
-      if (io) {
-        io.to(`user:${peerEmail}`).emit("newConversation", {
-          targetEmail: peerEmail,
-          conversationId: String(convo._id),
-        });
-      }
-    } catch (e) {
-      console.warn("emit newConversation failed:", e.message);
-    }
+      io && io.to(`user:${peerEmail}`).emit("newConversation", {
+        targetEmail: peerEmail,
+        conversationId: String(convo._id),
+      });
+    } catch {}
 
     res.status(201).json(convo);
-  } catch (err) {
-    console.error("Start conversation error:", err);
+  } catch {
     res.status(500).json({ message: "Failed to start conversation." });
   }
 });
 
-/** POST /conversations/:id/read  (읽음 처리) */
+// POST 읽음 처리
 router.post("/conversations/:id/read", async (req, res) => {
   try {
     const auth = await authorizeConversation(req.params.id, req.user.email, req.user.school);
@@ -349,15 +302,14 @@ router.post("/conversations/:id/read", async (req, res) => {
       { conversationId: auth.convo._id, readBy: { $ne: req.user.email }, sender: { $ne: req.user.email } },
       { $addToSet: { readBy: req.user.email } }
     );
-
     res.json({ ok: true });
-  } catch (err) {
-    console.error("Mark read error:", err);
+  } catch {
     res.status(500).json({ message: "Failed to mark as read." });
   }
 });
 
 module.exports = router;
+
 
 
 

@@ -142,18 +142,20 @@
 // }
 
 
-// 대화 목록/선택 화면: 미읽음 뱃지, 소켓 미리보기 반영, ?conversation=<id> 자동 선택.
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import ChatBox from "../../components/Chatbox";
 import { useAuth } from "../../contexts/AuthContext";
-import { io } from "socket.io-client";
-import { getConversations } from "../../api/chat";
+import { useSocket } from "../../contexts/SocketContext";
+import * as chatApi from "../../api/chat";
 
+/** 좌측 목록 + 우측 대화, 미읽음 배지/미리보기 실시간 반영 */
 export default function Messages() {
-  const { user, token } = useAuth();
+  const { user, token } = useAuth() || {};
   const { school: schoolParam } = useParams();
   const [searchParams] = useSearchParams();
+  const { on, off } = useSocket();
+
   const school = useMemo(
     () => String(schoolParam || localStorage.getItem("selectedSchool") || "").toLowerCase(),
     [schoolParam]
@@ -162,43 +164,28 @@ export default function Messages() {
   const [convos, setConvos] = useState([]);
   const [selected, setSelected] = useState(null);
 
-  // 소켓 연결(인증+학교)
-  const socketRef = useRef(null);
-  useEffect(() => {
-    if (!token || !school) return;
-    const s = io(import.meta.env.VITE_SOCKET_URL, {
-      transports: ["websocket"],
-      auth: { token },
-      query: { school },
-    });
-    socketRef.current = s;
+  const myEmail = (user?.email || "").toLowerCase();
+  const otherNickname = (c) =>
+    ((c?.buyer || "").toLowerCase() === myEmail ? c?.sellerNickname : c?.buyerNickname) || "Unknown";
+  const otherEmail = (c) =>
+    ((c?.buyer || "").toLowerCase() === myEmail ? c?.seller : c?.buyer) || "";
 
-    const handleReceive = () => refresh();
-    const handleUpdate = ({ conversationId, lastMessage, updatedAt }) => {
-      setConvos((prev) => prev.map((c) => (c._id === conversationId ? { ...c, lastMessage, updatedAt } : c)));
-    };
-    s.on("receiveMessage", handleReceive);
-    s.on("conversationUpdated", handleUpdate);
+  const unreadCount = (c) =>
+    (c?.messages || []).filter(
+      (m) => (m.sender || "").toLowerCase() !== myEmail && !(m.readBy || []).includes(myEmail)
+    ).length;
 
-    return () => {
-      s.off("receiveMessage", handleReceive);
-      s.off("conversationUpdated", handleUpdate);
-      s.close();
-    };
-  }, [token, school]);
-
-  // 목록 갱신
   const refresh = useCallback(async () => {
     if (!token || !school) return;
     try {
-      const data = await getConversations({ school, token }); // /:school/chat/conversations
+      const data = await chatApi.getConversations({ school, token }); // 최신순
       setConvos(Array.isArray(data) ? data : []);
 
       const paramId = searchParams.get("conversation");
       if (paramId) {
-        const found = data.find((c) => c._id === paramId);
+        const found = (data || []).find((c) => c._id === paramId);
         if (found) setSelected(found);
-      } else if (!selected && data.length > 0) {
+      } else if (!selected && (data || []).length > 0) {
         setSelected(data[0]);
       }
     } catch {
@@ -208,14 +195,23 @@ export default function Messages() {
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  const myEmail = (user?.email || "").toLowerCase();
-  const otherNickname = (c) => ((c?.buyer || "").toLowerCase() === myEmail ? c?.sellerNickname : c?.buyerNickname);
-  const otherEmail = (c) => ((c?.buyer || "").toLowerCase() === myEmail ? c?.seller : c?.buyer);
-  const unreadCount = (c) =>
-    c?.messages?.filter((m) => (m.sender || "").toLowerCase() !== myEmail && !(m.readBy || []).includes(myEmail)).length || 0;
+  // 실시간 미리보기(정렬/마지막 메시지) 반영
+  useEffect(() => {
+    const handlePreview = ({ conversationId, lastMessage, updatedAt }) => {
+      setConvos((prev) => {
+        const next = prev.map((c) => (c._id === conversationId ? { ...c, lastMessage, updatedAt } : c));
+        // 최신 업데이트를 위로 올리기
+        next.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+        return next;
+      });
+    };
+    on?.("chat:preview", handlePreview);
+    return () => off?.("chat:preview", handlePreview);
+  }, [on, off]);
 
   return (
     <div className="flex h-[calc(100vh-80px)]">
+      {/* 왼쪽 목록 */}
       <div className="w-80 border-r p-4">
         <h2 className="mb-4 text-lg font-bold">💬 Messages</h2>
         <div className="space-y-2">
@@ -226,7 +222,7 @@ export default function Messages() {
               onClick={() => setSelected(c)}
               className={`relative cursor-pointer rounded-lg p-3 ${selected?._id === c._id ? "bg-blue-100" : "hover:bg-gray-100"}`}
             >
-              <p className="font-medium">{otherNickname(c) || "Unknown"}</p>
+              <p className="font-medium">{otherNickname(c)}</p>
               <p className="truncate text-sm text-gray-500">{c.lastMessage || "(메시지 없음)"}</p>
               {unreadCount(c) > 0 && (
                 <span className="absolute right-2 top-2 rounded-full bg-red-500 px-1.5 py-0.5 text-xs text-white">
@@ -238,11 +234,12 @@ export default function Messages() {
         </div>
       </div>
 
+      {/* 우측 대화 */}
       <div className="flex-1 p-4">
         {selected ? (
           <ChatBox
             conversationId={selected._id}
-            userEmail={user.email}
+            userEmail={user?.email}
             otherEmail={otherEmail(selected)}
             otherNickname={otherNickname(selected)}
             fullSize
@@ -254,4 +251,5 @@ export default function Messages() {
     </div>
   );
 }
+
 

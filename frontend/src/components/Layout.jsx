@@ -271,9 +271,8 @@
 
 
 
-// frontend/src/components/Layout.jsx
-import React, { useState, useEffect } from "react";
-import { Link, Outlet, useNavigate } from "react-router-dom";
+import React, { useState, useEffect, useMemo } from "react";
+import { Link, Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useSchool } from "../contexts/SchoolContext";
 import useNotificationsPolling from "../hooks/useNotificationsPolling";
@@ -288,8 +287,15 @@ function Layout() {
   const socket = useSocket(); // { on, off, emit }
   const navigate = useNavigate();
   const schoolPath = useSchoolPath();
+  const location = useLocation();
 
-  // 🔔 알림(낙관) 훅
+  // /:school/messages 에서는 플로팅 Chatbox 숨김
+  const onMessagesPage = useMemo(
+    () => /\/messages(\/|$)/.test(location.pathname),
+    [location.pathname]
+  );
+
+  // 🔔 알림(낙관) 훅 — 네 기존 코드 그대로
   const {
     items: notifications,
     count: badgeCount,
@@ -304,20 +310,19 @@ function Layout() {
   const [showScheduleDropdown, setShowScheduleDropdown] = useState(false);
   const onBellClick = () => setShowModal((v) => !v);
 
-  // ✅ 어디서든 대화 생성/미리보기 이벤트 수신 → 하단 Chatbox 띄우기
+  // ✅ 어디서든 대화 생성/미리보기 이벤트 수신 → 하단 Chatbox 띄우기 (중복 오픈 방지)
   useEffect(() => {
     if (!user) return;
 
-    // 서버가 보낼 수 있는 두 이벤트 모두 지원
     const openFromNew = ({ targetEmail, conversationId }) => {
-      if (!conversationId) return;
-      // targetEmail 필드가 있으면 수신자 필터
+      if (!conversationId || onMessagesPage) return;
       if (targetEmail && targetEmail !== user.email) return;
-      setFloatingChat({ conversationId });
+      setFloatingChat((prev) => (prev?.conversationId === conversationId ? prev : { conversationId }));
     };
+
     const openFromPreview = ({ conversationId }) => {
-      if (!conversationId) return;
-      setFloatingChat({ conversationId });
+      if (!conversationId || onMessagesPage) return;
+      setFloatingChat((prev) => (prev?.conversationId === conversationId ? prev : { conversationId }));
     };
 
     socket.on?.("newConversation", openFromNew);
@@ -327,7 +332,12 @@ function Layout() {
       socket.off?.("newConversation", openFromNew);
       socket.off?.("chat:preview", openFromPreview);
     };
-  }, [user, socket]);
+  }, [user, socket, onMessagesPage]);
+
+  // /messages 진입 시 플로팅 창 자동 닫기
+  useEffect(() => {
+    if (onMessagesPage && floatingChat) setFloatingChat(null);
+  }, [onMessagesPage, floatingChat]);
 
   return (
     <div className="flex min-h-screen flex-col bg-cream font-body text-ink">
@@ -420,7 +430,7 @@ function Layout() {
         </div>
       </header>
 
-      {/* 🔔 Notifications dropdown */}
+      {/* 🔔 Notifications dropdown — 네 기존과 동일 */}
       {user && showModal && (
         <div className="fixed right-8 top-24 z-50 w-80 max-h-96 overflow-y-auto rounded-lg border border-sand bg-white shadow-xl">
           <div className="flex items-center justify-between border-b p-4 font-bold text-softGold">
@@ -445,22 +455,31 @@ function Layout() {
             {notifications.length === 0 ? (
               <li className="p-3 text-sm text-gray-500">No notifications</li>
             ) : (
-              notifications.map((n) => (
-                <li key={n._id}>
-                  <Link
-                    to={schoolPath(`/freeboard/${n.postId}?nid=${n._id}#comment-${n._id}`)}
-                    onClick={() => {
-                      optimisticRead(n._id);
-                      dismiss(n._id);
-                      markAsRead(n._id);
-                      setShowModal(false);
-                    }}
-                    className="block p-3 text-sm text-gray-700 transition hover:bg-cream"
-                  >
-                    💬 <b>Somebody</b> commented on your {n.parentId ? "comment" : "post"}
-                  </Link>
-                </li>
-              ))
+              notifications.map((n) => {
+                const read = !!n.readAt;
+                return (
+                  <li key={n._id}>
+                    <Link
+                      to={schoolPath(`/freeboard/${n.postId}?nid=${n._id}#comment-${n._id}`)}
+                      onClick={async () => {
+                        try {
+                          optimisticRead(n._id);
+                          dismiss(n._id);
+                          await markAsRead(n._id);
+                        } finally {
+                          setShowModal(false);
+                        }
+                      }}
+                      className={
+                        "block p-3 text-sm transition " +
+                        (read ? "text-gray-400 hover:bg-gray-100" : "text-gray-700 hover:bg-cream")
+                      }
+                    >
+                      💬 <b>Somebody</b> commented on your {n.parentId ? "comment" : "post"}
+                    </Link>
+                  </li>
+                );
+              })
             )}
           </ul>
         </div>
@@ -473,8 +492,8 @@ function Layout() {
 
       <Footer />
 
-      {/* ✅ Floating chat */}
-      {floatingChat && user && (
+      {/* ✅ 플로팅 Chatbox — /messages에선 숨김 */}
+      {!onMessagesPage && floatingChat && user && (
         <div className="fixed bottom-4 right-4 z-50 shadow-lg">
           <ChatBox
             conversationId={floatingChat.conversationId}
@@ -487,59 +506,7 @@ function Layout() {
   );
 }
 
-
-export default function Layout() {
-  const { user } = useAuth();
-  const { emit, on, off } = useSocket();
-  const location = useLocation();
-  const { school } = useParams();
-
-  const onMessagesPage = useMemo(
-    () => /\/messages(\/|$)/.test(location.pathname),
-    [location.pathname]
-  );
-
-  const [floatingChat, setFloatingChat] = useState(null); // {conversationId}
-
-  // 새 대화/미리보기 수신 시 하단 챗박스 오픈
-  useEffect(() => {
-    const open = ({ conversationId }) => {
-      if (!conversationId || onMessagesPage) return;
-      setFloatingChat({ conversationId });
-    };
-    on("newConversation", open);
-    on("chat:preview", open);
-    return () => {
-      off("newConversation", open);
-      off("chat:preview", open);
-    };
-  }, [on, off, onMessagesPage]);
-
-  // 메시지 페이지로 이동하면 자동 닫기
-  useEffect(() => {
-    if (onMessagesPage && floatingChat) setFloatingChat(null);
-  }, [onMessagesPage, floatingChat]);
-
-  return (
-    <div className="min-h-screen">
-      {/* 헤더 ... (기존 네비) */}
-
-      <Outlet />
-
-      {/* 🗨️ 하단 미니 챗박스 */}
-      {!onMessagesPage && user && floatingChat?.conversationId && (
-        <div className="fixed bottom-4 right-4 z-50 w-[360px]">
-          <ChatBox
-            conversationId={floatingChat.conversationId}
-            userEmail={user.email}
-            onClose={() => setFloatingChat(null)}
-          />
-        </div>
-      )}
-    </div>
-  );
-}
-
+export default Layout;
 
 
 

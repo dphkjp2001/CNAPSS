@@ -171,7 +171,8 @@
 
 
 
-// 인증 소켓 + 채팅/댓글 실시간 핸들링 (app.set('io') 주입 포함)
+
+// backend/server.js
 const app = require("./app");
 const http = require("http");
 const { Server } = require("socket.io");
@@ -192,6 +193,7 @@ const io = new Server(server, {
     origin: [
       "https://www.cnapss.com",
       "https://cnapss.com",
+      "https://api.cnapss.com",
       "https://cnapss-3da82.web.app",
       "http://localhost:3000",
       "http://localhost:5173",
@@ -206,6 +208,7 @@ mongoose
   .then(() => console.log("✅ MongoDB connected"))
   .catch((err) => console.error("❌ MongoDB connect failed", err));
 
+// 소켓 인증
 io.use((socket, next) => {
   try {
     const token =
@@ -282,7 +285,7 @@ io.on("connection", (socket) => {
     }
   });
 
-  // 댓글 실시간: 필요 시 freeboard 상세에서 post:join/leave 사용
+  // (옵션) 자유게시판 실시간 방 — 기존 기능 유지
   socket.on("post:join", async ({ postId }) => {
     if (!postId) return;
     const post = await Post.findById(postId).select("school").lean();
