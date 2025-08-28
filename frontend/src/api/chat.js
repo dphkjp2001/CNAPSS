@@ -1,6 +1,5 @@
-// frontend/src/api/chat.js
+// /:school/chat/* 엔드포인트 래퍼 (이미 올려준 형태 유지)
 import { getJson, postJson } from "./http";
-
 const API_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 
 export function getConversations({ school, token }) {
@@ -39,5 +38,6 @@ export function startConversation({ school, token, peerEmail, itemId }) {
     { headers: { Authorization: `Bearer ${token}` } }
   );
 }
+
 
 

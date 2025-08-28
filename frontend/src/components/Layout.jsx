@@ -271,7 +271,7 @@
 
 
 
-// 📁 src/components/Layout.jsx
+// frontend/src/components/Layout.jsx
 import React, { useState, useEffect } from "react";
 import { Link, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
@@ -285,16 +285,16 @@ import { useSchoolPath } from "../utils/schoolPath";
 function Layout() {
   const { user, logout } = useAuth();
   const { school } = useSchool();
-  const socket = useSocket();
+  const socket = useSocket(); // { on, off, emit }
   const navigate = useNavigate();
   const schoolPath = useSchoolPath();
 
-  // 🔔 폴링 + 낙관적 업데이트 훅 (C 단계: 클릭 즉시 제거 포함)
+  // 🔔 알림(낙관) 훅
   const {
     items: notifications,
     count: badgeCount,
     optimisticRead,
-    dismiss,          // ← 새로 추가된 즉시 제거
+    dismiss,
     markAsRead,
     markAllAsRead,
   } = useNotificationsPolling(user?.email, 5000, 60000, 5);
@@ -302,17 +302,31 @@ function Layout() {
   const [showModal, setShowModal] = useState(false);
   const [floatingChat, setFloatingChat] = useState(null);
   const [showScheduleDropdown, setShowScheduleDropdown] = useState(false);
-
   const onBellClick = () => setShowModal((v) => !v);
 
-  // 새 대화 → 플로팅 채팅
+  // ✅ 어디서든 대화 생성/미리보기 이벤트 수신 → 하단 Chatbox 띄우기
   useEffect(() => {
-    if (!user || !socket) return;
-    const handleNewConversation = ({ targetEmail, conversationId }) => {
-      if (targetEmail === user.email) setFloatingChat({ conversationId });
+    if (!user) return;
+
+    // 서버가 보낼 수 있는 두 이벤트 모두 지원
+    const openFromNew = ({ targetEmail, conversationId }) => {
+      if (!conversationId) return;
+      // targetEmail 필드가 있으면 수신자 필터
+      if (targetEmail && targetEmail !== user.email) return;
+      setFloatingChat({ conversationId });
     };
-    socket.on("newConversation", handleNewConversation);
-    return () => socket.off("newConversation", handleNewConversation);
+    const openFromPreview = ({ conversationId }) => {
+      if (!conversationId) return;
+      setFloatingChat({ conversationId });
+    };
+
+    socket.on?.("newConversation", openFromNew);
+    socket.on?.("chat:preview", openFromPreview);
+
+    return () => {
+      socket.off?.("newConversation", openFromNew);
+      socket.off?.("chat:preview", openFromPreview);
+    };
   }, [user, socket]);
 
   return (
@@ -436,10 +450,8 @@ function Layout() {
                   <Link
                     to={schoolPath(`/freeboard/${n.postId}?nid=${n._id}#comment-${n._id}`)}
                     onClick={() => {
-                      // ✅ 클릭 즉시: 배지 감소 + 목록에서 제거 (낙관적)
                       optimisticRead(n._id);
                       dismiss(n._id);
-                      // 서버에 읽음 반영(실패해도 다음 폴링으로 보정)
                       markAsRead(n._id);
                       setShowModal(false);
                     }}
@@ -461,7 +473,7 @@ function Layout() {
 
       <Footer />
 
-      {/* Floating chat */}
+      {/* ✅ Floating chat */}
       {floatingChat && user && (
         <div className="fixed bottom-4 right-4 z-50 shadow-lg">
           <ChatBox
@@ -475,7 +487,64 @@ function Layout() {
   );
 }
 
-export default Layout;
+
+export default function Layout() {
+  const { user } = useAuth();
+  const { emit, on, off } = useSocket();
+  const location = useLocation();
+  const { school } = useParams();
+
+  const onMessagesPage = useMemo(
+    () => /\/messages(\/|$)/.test(location.pathname),
+    [location.pathname]
+  );
+
+  const [floatingChat, setFloatingChat] = useState(null); // {conversationId}
+
+  // 새 대화/미리보기 수신 시 하단 챗박스 오픈
+  useEffect(() => {
+    const open = ({ conversationId }) => {
+      if (!conversationId || onMessagesPage) return;
+      setFloatingChat({ conversationId });
+    };
+    on("newConversation", open);
+    on("chat:preview", open);
+    return () => {
+      off("newConversation", open);
+      off("chat:preview", open);
+    };
+  }, [on, off, onMessagesPage]);
+
+  // 메시지 페이지로 이동하면 자동 닫기
+  useEffect(() => {
+    if (onMessagesPage && floatingChat) setFloatingChat(null);
+  }, [onMessagesPage, floatingChat]);
+
+  return (
+    <div className="min-h-screen">
+      {/* 헤더 ... (기존 네비) */}
+
+      <Outlet />
+
+      {/* 🗨️ 하단 미니 챗박스 */}
+      {!onMessagesPage && user && floatingChat?.conversationId && (
+        <div className="fixed bottom-4 right-4 z-50 w-[360px]">
+          <ChatBox
+            conversationId={floatingChat.conversationId}
+            userEmail={user.email}
+            onClose={() => setFloatingChat(null)}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+
+
+
+
 
 
 

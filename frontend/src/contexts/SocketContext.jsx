@@ -28,44 +28,43 @@
 // }
 
 
-// frontend/src/contexts/SocketContext.jsx
-import React, { createContext, useContext, useEffect, useMemo, useRef } from "react";
+
+
+// 전역 소켓 컨텍스트: emit/on/off가 호출 시점에 ref를 읽도록 래핑해서
+// '죽은 핸들러' 문제가 없도록 수정.
+import React, { createContext, useContext, useEffect, useRef } from "react";
 import { io } from "socket.io-client";
 import { useAuth } from "./AuthContext";
 
-const Ctx = createContext({ socket: null, emit: () => {}, on: () => {}, off: () => {} });
+const Ctx = createContext({ emit: () => {}, on: () => {}, off: () => {} });
 
 export function SocketProvider({ children }) {
   const { token } = useAuth() || {};
   const socketRef = useRef(null);
 
   useEffect(() => {
-    if (!token) return; // not logged in
+    if (!token) return;
     const s = io(import.meta.env.VITE_SOCKET_URL, {
       transports: ["websocket"],
       auth: { token }, // 🔐 서버에서 JWT 인증
     });
     socketRef.current = s;
-
     return () => {
-      try { s.disconnect(); } catch (_) {}
+      try { s.disconnect(); } catch {}
       socketRef.current = null;
     };
   }, [token]);
 
-  const api = useMemo(() => {
-    const s = socketRef.current;
-    return {
-      socket: s,
-      emit: (event, payload) => s && s.emit(event, payload),
-      on: (event, handler) => s && s.on(event, handler),
-      off: (event, handler) => s && s.off(event, handler),
-    };
-  }, [socketRef.current]);
+  const value = {
+    emit: (event, payload) => socketRef.current?.emit?.(event, payload),
+    on: (event, handler) => socketRef.current?.on?.(event, handler),
+    off: (event, handler) => socketRef.current?.off?.(event, handler),
+    socket: socketRef.current,
+  };
 
-  return <Ctx.Provider value={api}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
-export function useSocket() {
-  return useContext(Ctx);
-}
+export const useSocket = () => useContext(Ctx);
+
+

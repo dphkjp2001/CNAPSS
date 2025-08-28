@@ -173,7 +173,6 @@ function isValidId(id) {
   return mongoose.Types.ObjectId.isValid(id);
 }
 
-// helper: ensure user is participant and in same school
 async function authorizeConversation(conversationId, userEmail, userSchool) {
   if (!isValidId(conversationId)) return { ok: false, code: 400, msg: "Invalid conversation id" };
 
@@ -187,10 +186,7 @@ async function authorizeConversation(conversationId, userEmail, userSchool) {
   return { ok: true, convo };
 }
 
-/**
- * GET /conversations
- * - 내 학교 + 내가 참여중인 대화 목록
- */
+/** GET /conversations */
 router.get("/conversations", async (req, res) => {
   try {
     const email = req.user.email;
@@ -210,10 +206,7 @@ router.get("/conversations", async (req, res) => {
   }
 });
 
-/**
- * GET /conversations/:id
- * - 대화 상세
- */
+/** GET /conversations/:id */
 router.get("/conversations/:id", async (req, res) => {
   try {
     const auth = await authorizeConversation(req.params.id, req.user.email, req.user.school);
@@ -225,10 +218,7 @@ router.get("/conversations/:id", async (req, res) => {
   }
 });
 
-/**
- * GET /conversations/:id/messages?cursor=<ISO>&limit=50
- * - 메시지 목록 (최신순 페이징)
- */
+/** GET /conversations/:id/messages?cursor=&limit=50  (최신순) */
 router.get("/conversations/:id/messages", async (req, res) => {
   try {
     const auth = await authorizeConversation(req.params.id, req.user.email, req.user.school);
@@ -246,11 +236,7 @@ router.get("/conversations/:id/messages", async (req, res) => {
   }
 });
 
-/**
- * POST /conversations/:id/messages
- * - 메시지 전송 (참가자만)
- * body: { content }
- */
+/** POST /conversations/:id/messages  (메시지 전송) */
 router.post("/conversations/:id/messages", async (req, res) => {
   try {
     const auth = await authorizeConversation(req.params.id, req.user.email, req.user.school);
@@ -270,6 +256,32 @@ router.post("/conversations/:id/messages", async (req, res) => {
     auth.convo.updatedAt = new Date();
     await auth.convo.save();
 
+    // ✅ 실시간 브로드캐스트 (REST 경로에서도 즉시 반영)
+    try {
+      const io = req.app.get("io");
+      if (io) {
+        // 대화방에 있는 사람들에게 수신
+        io.to(`conv:${auth.convo._id}`).emit("chat:receive", {
+          _id: msg._id,
+          conversationId: String(auth.convo._id),
+          sender: req.user.email,
+          content,
+          createdAt: msg.createdAt,
+          readBy: msg.readBy || [],
+        });
+
+        // 상대방에게 리스트 미리보기 업데이트 + 하단 Chatbox 트리거
+        const peer = auth.convo.buyer === req.user.email ? auth.convo.seller : auth.convo.buyer;
+        io.to(`user:${peer}`).emit("chat:preview", {
+          conversationId: String(auth.convo._id),
+          lastMessage: content,
+          updatedAt: auth.convo.updatedAt,
+        });
+      }
+    } catch (e) {
+      console.warn("socket broadcast failed:", e.message);
+    }
+
     res.status(201).json(msg);
   } catch (err) {
     console.error("Send message error:", err);
@@ -277,11 +289,7 @@ router.post("/conversations/:id/messages", async (req, res) => {
   }
 });
 
-/**
- * POST /start
- * - 새 대화 시작
- * body: { peerEmail, itemId? }
- */
+/** POST /start  (새 대화 시작) */
 router.post("/start", async (req, res) => {
   try {
     const { peerEmail, itemId = null } = req.body;
@@ -311,6 +319,19 @@ router.post("/start", async (req, res) => {
       convo = await Conversation.create({ ...roles, itemId, school });
     }
 
+    // ✅ 대화가 없었거나 방금 생성된 경우, 상대에게 즉시 알림
+    try {
+      const io = req.app.get("io");
+      if (io) {
+        io.to(`user:${peerEmail}`).emit("newConversation", {
+          targetEmail: peerEmail,
+          conversationId: String(convo._id),
+        });
+      }
+    } catch (e) {
+      console.warn("emit newConversation failed:", e.message);
+    }
+
     res.status(201).json(convo);
   } catch (err) {
     console.error("Start conversation error:", err);
@@ -318,10 +339,7 @@ router.post("/start", async (req, res) => {
   }
 });
 
-/**
- * POST /conversations/:id/read
- * - 읽음 처리
- */
+/** POST /conversations/:id/read  (읽음 처리) */
 router.post("/conversations/:id/read", async (req, res) => {
   try {
     const auth = await authorizeConversation(req.params.id, req.user.email, req.user.school);
@@ -340,6 +358,7 @@ router.post("/conversations/:id/read", async (req, res) => {
 });
 
 module.exports = router;
+
 
 
 
