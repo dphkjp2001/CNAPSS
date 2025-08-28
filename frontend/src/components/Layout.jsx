@@ -272,7 +272,7 @@
 
 
 // 📁 src/components/Layout.jsx
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useSchool } from "../contexts/SchoolContext";
@@ -289,11 +289,12 @@ function Layout() {
   const navigate = useNavigate();
   const schoolPath = useSchoolPath();
 
-  // 🔔 폴링 + 낙관적 업데이트 훅
+  // 🔔 폴링 + 낙관적 업데이트 훅 (C 단계: 클릭 즉시 제거 포함)
   const {
     items: notifications,
     count: badgeCount,
     optimisticRead,
+    dismiss,          // ← 새로 추가된 즉시 제거
     markAsRead,
     markAllAsRead,
   } = useNotificationsPolling(user?.email, 5000, 60000, 5);
@@ -301,11 +302,6 @@ function Layout() {
   const [showModal, setShowModal] = useState(false);
   const [floatingChat, setFloatingChat] = useState(null);
   const [showScheduleDropdown, setShowScheduleDropdown] = useState(false);
-
-  const baseApi = useMemo(
-    () => (import.meta.env.VITE_API_URL || "").replace(/\/+$/, ""),
-    []
-  );
 
   const onBellClick = () => setShowModal((v) => !v);
 
@@ -440,9 +436,10 @@ function Layout() {
                   <Link
                     to={schoolPath(`/freeboard/${n.postId}?nid=${n._id}#comment-${n._id}`)}
                     onClick={() => {
-                      // ✅ 클릭 즉시 뱃지 감소 (낙관적)
+                      // ✅ 클릭 즉시: 배지 감소 + 목록에서 제거 (낙관적)
                       optimisticRead(n._id);
-                      // 서버에도 읽음 반영(실패해도 다음 폴링에서 보정)
+                      dismiss(n._id);
+                      // 서버에 읽음 반영(실패해도 다음 폴링으로 보정)
                       markAsRead(n._id);
                       setShowModal(false);
                     }}
@@ -479,6 +476,7 @@ function Layout() {
 }
 
 export default Layout;
+
 
 
 

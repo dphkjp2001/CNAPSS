@@ -227,6 +227,15 @@ router.post("/:postId", async (req, res) => {
       school: req.user.school,
     });
 
+    // 🔔 실시간 전파
+    try {
+      const io = req.app.get("io");
+      if (io) {
+        const out = doc.toObject();
+        io.to(`post:${postId}`).emit("comment:new", out);
+      }
+    } catch (_) {}
+
     res.status(201).json(doc);
   } catch (e) {
     console.error("comments:create", e);
@@ -246,7 +255,7 @@ router.put("/:id", async (req, res) => {
   if (!content) return res.status(400).json({ message: "Content required" });
 
   try {
-    const owned = await Comment.findOne({ _id: id, school: req.user.school }).select("email");
+    const owned = await Comment.findOne({ _id: id, school: req.user.school }).select("email postId");
     if (!owned) return res.status(404).json({ message: "Comment not found." });
     if (owned.email !== req.user.email && req.user.role !== "superadmin") {
       return res.status(403).json({ message: "You can only edit your own comments." });
@@ -257,7 +266,14 @@ router.put("/:id", async (req, res) => {
       { $set: { content } },
       { new: true, lean: true }
     );
-    res.json(updated); // ✅ 프론트가 그대로 쓰기 쉬움
+
+    // 🔔 실시간 전파
+    try {
+      const io = req.app.get("io");
+      if (io) io.to(`post:${owned.postId}`).emit("comment:update", updated);
+    } catch (_) {}
+
+    res.json(updated);
   } catch (e) {
     console.error("comments:update", e);
     res.status(500).json({ message: "Failed to update comment." });
@@ -271,12 +287,19 @@ router.delete("/:id", async (req, res) => {
     return res.status(400).json({ message: "Invalid comment id" });
   }
   try {
-    const owned = await Comment.findOne({ _id: id, school: req.user.school }).select("email");
+    const owned = await Comment.findOne({ _id: id, school: req.user.school }).select("email postId");
     if (!owned) return res.status(404).json({ message: "Comment not found." });
     if (owned.email !== req.user.email && req.user.role !== "superadmin") {
       return res.status(403).json({ message: "You can only delete your own comments." });
     }
     await Comment.deleteOne({ _id: id, school: req.user.school });
+
+    // 🔔 실시간 전파
+    try {
+      const io = req.app.get("io");
+      if (io) io.to(`post:${owned.postId}`).emit("comment:delete", { _id: id });
+    } catch (_) {}
+
     res.json({ ok: true });
   } catch (e) {
     console.error("comments:delete", e);
@@ -291,7 +314,7 @@ router.post("/:commentId/thumbs", async (req, res) => {
     const email = (req.user.email || "").toLowerCase();
 
     const cur = await Comment.findOne({ _id: commentId, school: req.user.school })
-      .select("thumbsUpUsers")
+      .select("thumbsUpUsers postId")
       .lean();
     if (!cur) return res.status(404).json({ message: "Not found" });
 
@@ -306,6 +329,12 @@ router.post("/:commentId/thumbs", async (req, res) => {
       { new: true, lean: true }
     );
 
+    // 🔔 실시간 좋아요 반영
+    try {
+      const io = req.app.get("io");
+      if (io) io.to(`post:${cur.postId}`).emit("comment:thumbs", { _id: commentId, thumbs: next.thumbsUpUsers || [] });
+    } catch (_) {}
+
     const arr = next.thumbsUpUsers || [];
     res.json({ thumbs: arr, count: arr.length });
   } catch (e) {
@@ -315,6 +344,7 @@ router.post("/:commentId/thumbs", async (req, res) => {
 });
 
 module.exports = router;
+
 
 
 

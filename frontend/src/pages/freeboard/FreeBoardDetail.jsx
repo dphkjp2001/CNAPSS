@@ -41,7 +41,7 @@ export default function FreeBoardDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, school]);
 
-  // ✅ 딥링크 (?nid=...) 로 진입 시에도 읽음 처리
+  // ✅ 알림 딥링크로 진입 시 서버에 읽음 반영
   useEffect(() => {
     const sp = new URLSearchParams(location.search);
     const nid = sp.get("nid");
@@ -60,6 +60,14 @@ export default function FreeBoardDetail() {
     }
     markRead();
   }, [location.search, user?.email, school]);
+
+  // 🔎 스크롤/하이라이트 대상 comment id 추출 (#comment-.. or ?nid=..)
+  const highlightId = useMemo(() => {
+    const hash = (location.hash || "");
+    const fromHash = hash.startsWith("#comment-") ? hash.slice("#comment-".length) : null;
+    const nid = new URLSearchParams(location.search).get("nid");
+    return fromHash || nid || null;
+  }, [location.hash, location.search]);
 
   const isAuthor = useMemo(() => user?.email === post?.email, [user, post]);
 
@@ -172,12 +180,14 @@ export default function FreeBoardDetail() {
 
         {post?._id && (
           <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
-            <CommentSection postId={post._id} authorEmail={post.email} />
+            {/* 🎯 페이지 진입 시 해당 댓글로 스크롤 + 하이라이트 */}
+            <CommentSection postId={post._id} authorEmail={post.email} highlightId={highlightId} />
           </div>
         )}
       </div>
     </div>
   );
 }
+
 
 

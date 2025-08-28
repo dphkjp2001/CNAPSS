@@ -12,16 +12,17 @@ import { apiFetch } from "../api/http";
  *
  * Return:
  *  {
- *    items,            // list of notifications (usually unread from server)
- *    count,            // unread count with optimistic deduction
+ *    items,            // list of notifications (FILTERED: dismissed 제외)
+ *    count,            // unread count (optimistic/dismissed 반영)
  *    refetch,          // force refresh
- *    optimisticRead,   // mark one as read in UI immediately
- *    markAsRead,       // call server to persist one as read
- *    markAllAsRead,    // mark all as read (optimistic + server)
+ *    optimisticRead,   // 클릭 즉시 읽음으로 간주(배지 감소)
+ *    dismiss,          // 목록에서 즉시 제거
+ *    markAsRead,       // 서버에 단건 읽음 반영
+ *    markAllAsRead,    // 모두 읽음(낙관 + 서버)
  *  }
  */
 export default function useNotificationsPolling(
-  _email /* kept for backward-compat */,
+  _email /* backward-compat */,
   activeInterval = 5000,
   inactiveInterval = 60000,
   minutes = 5
@@ -29,8 +30,9 @@ export default function useNotificationsPolling(
   const { user, token } = useAuth();
   const { school } = useSchool();
 
-  const [items, setItems] = useState([]);
-  const [optimistic, setOptimistic] = useState(() => new Set()); // clicked/read locally
+  const [itemsRaw, setItemsRaw] = useState([]);            // 서버 원본 목록
+  const [optimistic, setOptimistic] = useState(() => new Set()); // 미리 읽음 처리한 id
+  const [dismissed, setDismissed] = useState(() => new Set());   // UI에서 숨긴 id
   const timerRef = useRef(null);
 
   const base = useMemo(
@@ -45,8 +47,17 @@ export default function useNotificationsPolling(
       const res = await apiFetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      setItems(Array.isArray(data) ? data : []);
-      // 서버에서 이미 읽음 제외 목록만 내려준다면 optimistic 세트와의 교집합은 자연스레 사라짐
+      const list = Array.isArray(data) ? data : [];
+      setItemsRaw(list);
+
+      // 서버가 이미 읽은 항목을 빼서 내려준다면 optimistic/dismissed는 자연 보정됨.
+      // 혹시 서버에서 잠깐 유지되어도 dismissed에 있으면 보이지 않음.
+      setDismissed((prev) => {
+        const serverIds = new Set(list.map((n) => n._id));
+        // 서버에 없는 id는 굳이 유지할 필요 없음 (메모리 정리)
+        const next = new Set([...prev].filter((id) => serverIds.has(id)));
+        return next;
+      });
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error("🔔 Failed to fetch notifications:", err);
@@ -87,6 +98,16 @@ export default function useNotificationsPolling(
     });
   }, []);
 
+  // ✅ 클릭 즉시 목록에서 제거
+  const dismiss = useCallback((id) => {
+    if (!id) return;
+    setDismissed((prev) => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+  }, []);
+
   const markAsRead = useCallback(
     async (id) => {
       if (!id || !user?.email || !school) return;
@@ -105,10 +126,15 @@ export default function useNotificationsPolling(
 
   const markAllAsRead = useCallback(async () => {
     if (!user?.email || !school) return;
-    // 낙관적: 클라이언트 모두 읽음 처리
+    // 낙관적: 전부 읽음 + 전부 숨김
     setOptimistic((prev) => {
       const next = new Set(prev);
-      items.forEach((n) => next.add(n._id));
+      itemsRaw.forEach((n) => next.add(n._id));
+      return next;
+    });
+    setDismissed((prev) => {
+      const next = new Set(prev);
+      itemsRaw.forEach((n) => next.add(n._id));
       return next;
     });
     try {
@@ -120,18 +146,25 @@ export default function useNotificationsPolling(
     } catch {
       // ignore
     }
-  }, [base, school, user?.email, items, minutes]);
+  }, [base, school, user?.email, itemsRaw, minutes]);
 
   const refetch = fetchNotifications;
 
-  // 뱃지 카운트 = 서버 목록 - 낙관적으로 읽은 아이템
+  // 화면에 보여줄 항목 = 서버 원본 - dismissed
+  const items = useMemo(
+    () => itemsRaw.filter((n) => !dismissed.has(n._id)),
+    [itemsRaw, dismissed]
+  );
+
+  // 배지 카운트 = 보여줄 항목 중 아직 optimistic 읽음 아닌 것
   const count = useMemo(
     () => items.reduce((acc, n) => acc + (optimistic.has(n._id) ? 0 : 1), 0),
     [items, optimistic]
   );
 
-  return { items, count, refetch, optimisticRead, markAsRead, markAllAsRead };
+  return { items, count, refetch, optimisticRead, dismiss, markAsRead, markAllAsRead };
 }
+
 
 
 

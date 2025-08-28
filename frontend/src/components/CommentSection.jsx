@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { useSchool } from "../contexts/SchoolContext";
+import { useSocket } from "../contexts/SocketContext"; // ✅ 소켓
 import AsyncButton from "./AsyncButton";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
@@ -24,11 +25,13 @@ const normEmail = (e) => String(e || "").toLowerCase().trim();
 /**
  * Props:
  * - postId (required)
- * - authorEmail (optional)  // post author email for "anonymous (게시자)" label
+ * - authorEmail (optional)
+ * - highlightId (optional)
  */
-export default function CommentSection({ postId, authorEmail = "" }) {
+export default function CommentSection({ postId, authorEmail = "", highlightId = null }) {
   const { user, token } = useAuth();
   const { school } = useSchool();
+  const socket = useSocket(); // {socket, on, off, emit}
 
   const me = normEmail(user?.email);
   const author = normEmail(authorEmail);
@@ -54,6 +57,9 @@ export default function CommentSection({ postId, authorEmail = "" }) {
   const [deletingId, setDeletingId] = useState(null);
   const [likingId, setLikingId] = useState(null);
 
+  // 🎯 highlight (scroll + flash)
+  const [flashId, setFlashId] = useState(null);
+
   const load = useCallback(async () => {
     if (!postId || !school || !token) return;
     setListLoading(true);
@@ -72,10 +78,56 @@ export default function CommentSection({ postId, authorEmail = "" }) {
 
   useEffect(() => { load(); }, [load]);
 
-  /* ---------- build stable anonymous labels per post ---------- */
+  /* ====== 🔌 실시간 구독: post 룸 join/leave & 이벤트 핸들 ====== */
+  useEffect(() => {
+    if (!socket?.emit || !socket?.on || !postId) return;
+
+    // join
+    socket.emit("post:join", { postId });
+
+    const onNew = (c) => {
+      if (!c || String(c.postId) !== String(postId)) return;
+      setComments((prev) => (prev.some((x) => toId(x._id) === toId(c._id)) ? prev : [...prev, c]));
+    };
+
+    const onUpdate = (c) => {
+      if (!c || String(c.postId) !== String(postId)) return;
+      setComments((prev) => prev.map((x) => (toId(x._id) === toId(c._id) ? c : x)));
+    };
+
+    const onDelete = ({ _id }) => {
+      if (!_id) return;
+      setComments((prev) => prev.filter((x) => toId(x._id) !== toId(_id)));
+    };
+
+    const onThumbs = ({ _id, thumbs }) => {
+      if (!_id) return;
+      setComments((prev) =>
+        prev.map((x) =>
+          toId(x._id) === toId(_id)
+            ? { ...x, thumbsUpUsers: thumbs || [], thumbsCount: (thumbs || []).length }
+            : x
+        )
+      );
+    };
+
+    socket.on("comment:new", onNew);
+    socket.on("comment:update", onUpdate);
+    socket.on("comment:delete", onDelete);
+    socket.on("comment:thumbs", onThumbs);
+
+    return () => {
+      try { socket.emit("post:leave", { postId }); } catch (_) {}
+      socket.off("comment:new", onNew);
+      socket.off("comment:update", onUpdate);
+      socket.off("comment:delete", onDelete);
+      socket.off("comment:thumbs", onThumbs);
+    };
+  }, [socket, postId]);
+
+  /* ---------- stable anonymous labels per post ---------- */
   const anonLabelByEmail = useMemo(() => {
-    // 최초 작성 시각 기록
-    const firstSeen = new Map(); // email -> timestamp
+    const firstSeen = new Map();
     for (const c of comments) {
       const em = normEmail(c.email);
       if (!em) continue;
@@ -83,12 +135,9 @@ export default function CommentSection({ postId, authorEmail = "" }) {
       if (!firstSeen.has(em)) firstSeen.set(em, ts);
       else firstSeen.set(em, Math.min(firstSeen.get(em), ts));
     }
-
-    // 비작성자 이메일만 시간순 정렬
     const others = Array.from(firstSeen.keys()).filter((e) => e && e !== author);
     others.sort((a, b) => (firstSeen.get(a) || 0) - (firstSeen.get(b) || 0));
 
-    // 라벨 할당
     const map = new Map();
     if (author) map.set(author, "anonymous (게시자)");
     others.forEach((e, i) => map.set(e, `anonymous ${i + 1}`));
@@ -100,7 +149,7 @@ export default function CommentSection({ postId, authorEmail = "" }) {
     [anonLabelByEmail]
   );
 
-  /* ---------- tree build (string IDs) ---------- */
+  /* ---------- tree build ---------- */
   const tree = useMemo(() => {
     const nodes = (comments || []).map((c) => ({
       ...c,
@@ -119,13 +168,33 @@ export default function CommentSection({ postId, authorEmail = "" }) {
       else roots.push(n);
     });
 
-    // sort by time within each level
     const byTime = (a, b) => new Date(a.createdAt) - new Date(b.createdAt);
     const walk = (arr) => { arr.sort(byTime); arr.forEach((n) => walk(n.children)); };
     walk(roots);
 
     return roots;
   }, [comments]);
+
+  /* ---------- highlight after list ready ---------- */
+  useEffect(() => {
+    if (!highlightId || listLoading) return;
+    const id = String(highlightId);
+    const run = () => {
+      const el = document.getElementById(`comment-${id}`);
+      if (el) {
+        try {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+        } catch {
+          el.scrollIntoView();
+        }
+        setFlashId(id);
+        const t = setTimeout(() => setFlashId(null), 1800);
+        return () => clearTimeout(t);
+      }
+    };
+    const r = requestAnimationFrame(run);
+    return () => cancelAnimationFrame(r);
+  }, [highlightId, listLoading, comments]);
 
   /* ---------- helpers ---------- */
   const replaceById = (id, next) =>
@@ -156,7 +225,7 @@ export default function CommentSection({ postId, authorEmail = "" }) {
     setPostingRoot(true);
     try {
       const doc = await addComment({ school, token, postId, content });
-      setComments((prev) => [...prev, doc]);
+      setComments((prev) => [...prev, doc]); // 서버 소켓도 오지만 중복 방지 로직이 있으니 OK
       setRootText("");
     } catch (e) {
       console.error("comments:add root failed", e);
@@ -205,7 +274,11 @@ export default function CommentSection({ postId, authorEmail = "" }) {
     setSavingId(editingId);
     try {
       const updated = await apiUpdateComment({ school, token, commentId: editingId, content });
-      replaceById(editingId, { ...updated, _id: toId(updated._id), parentId: updated.parentId ? toId(updated.parentId) : null });
+      replaceById(editingId, {
+        ...updated,
+        _id: toId(updated._id),
+        parentId: updated.parentId ? toId(updated.parentId) : null,
+      });
       cancelEdit();
     } catch (e) {
       console.error("comments:update failed", e);
@@ -240,7 +313,7 @@ export default function CommentSection({ postId, authorEmail = "" }) {
           toId(c._id) === target
             ? {
                 ...c,
-                thumbs: res.thumbs ?? [],
+                thumbsUpUsers: res.thumbs ?? [],
                 thumbsCount: res.count ?? (res.thumbs?.length || 0),
               }
             : c
@@ -326,6 +399,7 @@ export default function CommentSection({ postId, authorEmail = "" }) {
                 onSaveEdit={saveEdit}
                 onDelete={deleteOne}
                 onToggleLike={toggleLike}
+                flashId={flashId}
               />
             ))}
           </ul>
@@ -358,21 +432,23 @@ function CommentNode(props) {
     onSaveEdit,
     onDelete,
     onToggleLike,
+    flashId,
   } = props;
 
   const thumbsArr = node.thumbs ?? node.thumbsUpUsers ?? [];
   const liked = thumbsArr.map((e) => String(e || "").toLowerCase()).includes(me);
   const likeCount = node.thumbsCount ?? thumbsArr.length;
 
+  const highlight = String(flashId || "") === String(node._id);
+  const highlightCls = highlight ? "bg-yellow-50 ring-2 ring-yellow-300 rounded-lg p-2 transition-colors" : "";
+
   return (
     <li>
-      <div className="flex items-start gap-3">
+      <div id={`comment-${node._id}`} className={`flex items-start gap-3 ${highlightCls}`}>
         <div className="h-8 w-8 shrink-0 rounded-full bg-gray-200" />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-gray-900">
-              {getLabel(node.email)}
-            </span>
+            <span className="text-sm font-medium text-gray-900">{getLabel(node.email)}</span>
             <span className="text-xs text-gray-500">• {dayjs(node.createdAt).fromNow()}</span>
           </div>
 
@@ -432,7 +508,6 @@ function CommentNode(props) {
             )}
           </div>
 
-          {/* children */}
           {node.children?.length > 0 && (
             <ul className="mt-3 space-y-3 border-l-2 border-gray-200 pl-6">
               {node.children.map((child) => (
@@ -459,6 +534,7 @@ function CommentNode(props) {
                   onSaveEdit={onSaveEdit}
                   onDelete={onDelete}
                   onToggleLike={onToggleLike}
+                  flashId={flashId}
                 />
               ))}
             </ul>
@@ -492,6 +568,8 @@ function CommentNode(props) {
     </li>
   );
 }
+
+
 
 
 

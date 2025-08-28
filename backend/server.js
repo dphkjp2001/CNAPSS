@@ -97,6 +97,7 @@ const mongoose = require("mongoose");
 
 const Conversation = require("./models/Conversation");
 const Message = require("./models/Message");
+const Post = require("./models/Post"); // ✅ 댓글 룸 join 체크에 사용
 
 if (process.env.NODE_ENV !== "production") {
   require("dotenv").config();
@@ -104,7 +105,7 @@ if (process.env.NODE_ENV !== "production") {
 
 const server = http.createServer(app);
 
-// 🔧 소켓 CORS (필요 시 도메인 화이트리스트로 좁혀도 됨)
+// 🔧 소켓 CORS
 const io = new Server(server, {
   cors: {
     origin: [
@@ -118,7 +119,10 @@ const io = new Server(server, {
   },
 });
 
-// 🧩 Mongo 연결
+// 👉 라우터에서 io 접근할 수 있게 주입
+app.set("io", io);
+
+// 🧩 Mongo
 mongoose
   .connect(process.env.MONGODB_URI)
   .then(() => console.log("✅ MongoDB connected"))
@@ -146,7 +150,7 @@ io.use((socket, next) => {
   }
 });
 
-// 🔎 권한 체크 helper
+// 🔎 대화방 권한 체크
 async function authorizeConversation(conversationId, email, school) {
   if (!conversationId) return { ok: false };
   const convo = await Conversation.findById(conversationId);
@@ -165,14 +169,15 @@ io.on("connection", (socket) => {
   socket.join(`school:${school}`);
   socket.join(`user:${email}`);
 
-  // 대화방 입장
+  /* ============================
+   *   💬 채팅 이벤트 (기존)
+   * ============================ */
   socket.on("chat:join", async ({ conversationId }) => {
     const auth = await authorizeConversation(conversationId, email, school);
     if (!auth.ok) return;
     socket.join(`conv:${conversationId}`);
   });
 
-  // 메시지 발신
   socket.on("chat:send", async ({ conversationId, content }) => {
     try {
       const auth = await authorizeConversation(conversationId, email, school);
@@ -208,7 +213,6 @@ io.on("connection", (socket) => {
     }
   });
 
-  // 읽음 처리
   socket.on("chat:read", async ({ conversationId }) => {
     try {
       const auth = await authorizeConversation(conversationId, email, school);
@@ -224,6 +228,27 @@ io.on("connection", (socket) => {
     }
   });
 
+  /* ============================
+   *   📝 댓글 실시간 (신규)
+   * ============================ */
+  socket.on("post:join", async ({ postId }) => {
+    try {
+      if (!postId) return;
+      const post = await Post.findById(postId).select("school").lean();
+      if (!post || post.school !== school) return;
+      socket.join(`post:${postId}`);
+    } catch (e) {
+      console.error("post:join error", e);
+    }
+  });
+
+  socket.on("post:leave", ({ postId }) => {
+    try {
+      if (!postId) return;
+      socket.leave(`post:${postId}`);
+    } catch (_) {}
+  });
+
   socket.on("disconnect", () => {
     console.log("🔌 socket disconnected:", email);
   });
@@ -233,3 +258,4 @@ const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`🚀 Server listening on http://localhost:${PORT}`);
 });
+
