@@ -92,74 +92,64 @@ router.get("/:id", async (req, res) => {
 // POST /api/:school/materials
 // body: { courseCode, semester, kind, title, tags?, url?, fileUrl?, filePublicId?, fileMime?, fileSize?, hash?, courseTitle? }
 router.post("/", async (req, res) => {
-  const school = low(req.params.school);
-  const user = req.user; // from requireAuth
-  const body = req.body || {};
-
-  const courseCode = up(body.courseCode || "");
-  const courseTitle = n(body.courseTitle || "");
-  const semester = n(body.semester || "");
-  const kind = n(body.kind || "note").toLowerCase();
-  const title = n(body.title || "");
-  const tags = Array.isArray(body.tags) ? body.tags.map(n).filter(Boolean).slice(0, 12) : [];
-  const url = n(body.url || "");
-  const fileUrl = n(body.fileUrl || "");
-  const filePublicId = n(body.filePublicId || "");
-  const fileMime = n(body.fileMime || "");
-  const fileSize = Number.isFinite(body.fileSize) ? body.fileSize : 0;
-  const hash = n(body.hash || "");
-
-  if (!courseCode) return res.status(400).json({ message: "courseCode is required" });
-  if (!semester || !SEM.test(semester)) {
-    return res.status(400).json({ message: "Invalid semester (e.g., 2025-fall)" });
-  }
-  if (!title) return res.status(400).json({ message: "title is required" });
-  if (!["note", "syllabus", "exam", "slide", "link", "other"].includes(kind)) {
-    return res.status(400).json({ message: "invalid kind" });
-  }
-
-  // At least one of (fileUrl|url) must be provided
-  if (!fileUrl && !url) {
-    return res.status(400).json({ message: "Provide fileUrl (Cloudinary) or external url" });
-  }
-
-  // Validate file metadata if present
-  if (fileUrl) {
-    if (fileSize > MAX_SIZE) return res.status(400).json({ message: "File too large" });
-    if (fileMime && !ALLOWED_MIME.has(fileMime)) {
-      return res.status(400).json({ message: "File type not allowed" });
+    const school = low(req.params.school);
+    const user = req.user;
+    const body = req.body || {};
+  
+    const courseCode = up(body.courseCode || "");
+    const courseTitle = n(body.courseTitle || "");
+    const semester = n(body.semester || "");
+    let kind = n(body.kind || "note").toLowerCase();
+    const url = n(body.url || "");
+    const fileUrl = n(body.fileUrl || "");
+    const filePublicId = n(body.filePublicId || "");
+    const fileMime = n(body.fileMime || "");
+    const fileSize = Number.isFinite(body.fileSize) ? body.fileSize : 0;
+    const hash = n(body.hash || "");
+  
+    if (!courseCode) return res.status(400).json({ message: "courseCode is required" });
+    if (!semester || !SEM.test(semester)) return res.status(400).json({ message: "Invalid semester" });
+    // normalize kind (quiz -> exam)
+    if (kind === "quiz") kind = "exam";
+    if (!["note", "syllabus", "exam", "slide", "link", "other"].includes(kind)) {
+      return res.status(400).json({ message: "invalid kind" });
     }
-  }
-
-  // Ensure course exists minimally in catalog (best-effort)
-  if (courseTitle) {
-    await CourseCatalog.findOneAndUpdate(
-      { school, code: courseCode },
-      { $setOnInsert: { title: courseTitle } },
-      { upsert: true, new: false }
-    );
-  }
-
-  const doc = await Material.create({
-    school,
-    courseCode,
-    semester,
-    kind,
-    title,
-    tags,
-    url,
-    fileUrl,
-    filePublicId,
-    fileMime,
-    fileSize,
-    hash,
-    uploaderId: user?._id,
-    uploaderEmail: (user?.email || "").toLowerCase(),
-    authorName: user?.nickname || user?.name || "",
+    if (!fileUrl && !url) return res.status(400).json({ message: "Provide fileUrl or url" });
+    if (fileUrl) {
+      if (fileSize > MAX_SIZE) return res.status(400).json({ message: "File too large" });
+      if (fileMime && !ALLOWED_MIME.has(fileMime)) return res.status(400).json({ message: "File type not allowed" });
+    }
+  
+    // upsert minimal course
+    if (courseTitle) {
+      await CourseCatalog.findOneAndUpdate(
+        { school, code: courseCode },
+        { $setOnInsert: { title: courseTitle } },
+        { upsert: true, new: false }
+      );
+    }
+  
+    // ✅ title is forced to courseCode
+    const doc = await Material.create({
+      school,
+      courseCode,
+      semester,
+      kind,
+      title: courseCode,
+      tags: Array.isArray(body.tags) ? body.tags.map(n).filter(Boolean).slice(0, 12) : [],
+      url,
+      fileUrl,
+      filePublicId,
+      fileMime,
+      fileSize,
+      hash,
+      uploaderId: user?._id,
+      uploaderEmail: (user?.email || "").toLowerCase(),
+      authorName: user?.nickname || user?.name || "",
+    });
+  
+    res.status(201).json({ ok: true, id: doc._id });
   });
-
-  res.status(201).json({ ok: true, id: doc._id });
-});
 
 // (optional) DELETE /api/:school/materials/:id  (owner/admin only)
 router.delete("/:id", async (req, res) => {

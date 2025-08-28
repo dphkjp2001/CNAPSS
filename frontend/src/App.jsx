@@ -19,6 +19,8 @@ import AuthRequired from "./pages/auth/AuthRequired"; // kept for compatibility
 import CourseBrowser from "./pages/courses/CourseBrowser";
 import CourseMaterials from "./pages/courses/CourseMaterials";
 import UploadMaterial from "./pages/courses/UploadMaterial";
+import CourseWrite from "./pages/courses/CourseWrite";
+
 
 
 // Lazy pages
@@ -233,6 +235,24 @@ function App() {
             element={
               <RequireAuth>
                 <UploadMaterial />
+              </RequireAuth>
+            }
+          />
+
+          <Route
+            path="/:school/courses/write"
+            element={
+              <RequireAuth>
+                <CourseWrite />
+              </RequireAuth>
+            }
+          />
+          
+          <Route
+            path="/:school/courses/:courseId/upload"
+            element={
+              <RequireAuth>
+                <CourseWrite />
               </RequireAuth>
             }
           />
