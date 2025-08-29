@@ -1,31 +1,40 @@
+// frontend/src/pages/freeboard/PostForm.jsx
 import React, { useState } from "react";
 import { useAuth } from "../../contexts/AuthContext";
+import { useSchool } from "../../contexts/SchoolContext";
 import AsyncButton from "../../components/AsyncButton";
+import { createPost } from "../../api/posts";
 
 function PostForm({ onPostSubmit }) {
   const { user } = useAuth();
+  const { school } = useSchool();
+
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
-
-  const baseURL = import.meta.env.VITE_API_URL;
+  const [posting, setPosting] = useState(false);
 
   const handleSubmit = async () => {
-    const res = await fetch(`${baseURL}/posts`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: user.email,
-        title,
-        content,
-      }),
-    });
-
-    const newPost = await res.json();
-    if (!res.ok) throw new Error(newPost.message || "Failed to post");
-
-    onPostSubmit(newPost);
-    setTitle("");
-    setContent("");
+    if (!title.trim() || !content.trim()) return;
+    if (!school) {
+      alert("Please select a school first.");
+      return;
+    }
+    setPosting(true);
+    try {
+      // ✅ API wrapper ensures URL = /api/:school/posts
+      const newPost = await createPost({
+        school,
+        title: title.trim(),
+        content: content.trim(),
+      });
+      onPostSubmit?.(newPost);
+      setTitle("");
+      setContent("");
+    } catch (err) {
+      alert(err?.message || "Failed to post");
+    } finally {
+      setPosting(false);
+    }
   };
 
   return (
@@ -35,19 +44,19 @@ function PostForm({ onPostSubmit }) {
         placeholder="Enter a title"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
-        className="w-full border p-2"
+        className="w-full border p-2 rounded"
         required
       />
       <textarea
         placeholder="Write your post here..."
         value={content}
         onChange={(e) => setContent(e.target.value)}
-        className="w-full border p-2"
-        rows={4}
+        className="w-full border p-2 rounded h-40 resize-y"
         required
       />
       <AsyncButton
         onClick={handleSubmit}
+        loading={posting}
         loadingText="Posting..."
         className="bg-blue-500 text-white px-4 py-2 rounded"
       >
@@ -58,5 +67,6 @@ function PostForm({ onPostSubmit }) {
 }
 
 export default PostForm;
+
 
 

@@ -20,15 +20,16 @@ export default function FreeBoardEdit() {
   useEffect(() => {
     const loadPost = async () => {
       try {
-        const data = await fetchPostById(id, school); // ✅ guard
+        // ✅ 어댑터 시그니처 유지: fetchPostById(id, school)
+        const data = await fetchPostById(id, school);
         setForm({ title: data.title, content: data.content });
       } catch (err) {
-        setError(err.message);
+        setError(err.message || "Failed to load the post.");
       } finally {
         setLoading(false);
       }
     };
-    loadPost();
+    if (id && school) loadPost();
   }, [id, school]);
 
   const handleChange = (e) => {
@@ -38,16 +39,17 @@ export default function FreeBoardEdit() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await updatePost(id, {
+      // ✅ 올바른 시그니처로 수정 (객체 형태)
+      await updatePost({
+        school,
+        id,
         title: form.title,
         content: form.content,
-        email: user.email,
-        school, // ✅ scope
       });
       alert("Post updated!");
       navigate(schoolPath(`/freeboard/${id}`));
     } catch (err) {
-      alert("Update failed: " + err.message);
+      alert("Update failed: " + (err.message || "Unknown error"));
     }
   };
 
@@ -90,6 +92,7 @@ export default function FreeBoardEdit() {
     </div>
   );
 }
+
 
 
 

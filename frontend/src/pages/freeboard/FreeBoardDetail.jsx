@@ -29,7 +29,8 @@ export default function FreeBoardDetail() {
 
   const loadPost = async () => {
     try {
-      const data = await getPost({ school, token, id });
+      // posts API 래퍼 시그니처: getPost({ school, id })
+      const data = await getPost({ school, id });
       setPost(data);
     } catch (err) {
       setError(err.message || "Failed to load the post.");
@@ -63,18 +64,22 @@ export default function FreeBoardDetail() {
 
   // 🔎 스크롤/하이라이트 대상 comment id 추출 (#comment-.. or ?nid=..)
   const highlightId = useMemo(() => {
-    const hash = (location.hash || "");
+    const hash = location.hash || "";
     const fromHash = hash.startsWith("#comment-") ? hash.slice("#comment-".length) : null;
     const nid = new URLSearchParams(location.search).get("nid");
     return fromHash || nid || null;
   }, [location.hash, location.search]);
 
-  const isAuthor = useMemo(() => user?.email === post?.email, [user, post]);
+  const isAuthor = useMemo(
+    () => (user?.email || "").toLowerCase() === (post?.email || "").toLowerCase(),
+    [user, post]
+  );
 
   const handleDelete = async () => {
     if (!window.confirm("Delete this post?")) return;
     try {
-      await deletePost(id, user.email, school);
+      // ✅ 올바른 시그니처로 호출 (객체 형태)
+      await deletePost({ school, id: post._id });
       alert("Post deleted.");
       navigate(schoolPath("/freeboard"));
     } catch (err) {
@@ -84,14 +89,16 @@ export default function FreeBoardDetail() {
 
   const handleThumb = async () => {
     try {
-      await toggleThumbs({ school, token, id: post._id });
+      await toggleThumbs({ school, id: post._id });
       setPost((p) =>
         !p
           ? p
           : {
               ...p,
               thumbsUpUsers: (p.thumbsUpUsers || []).includes((user?.email || "").toLowerCase())
-                ? p.thumbsUpUsers.filter((e) => e.toLowerCase() !== (user?.email || "").toLowerCase())
+                ? p.thumbsUpUsers.filter(
+                    (e) => e.toLowerCase() !== (user?.email || "").toLowerCase()
+                  )
                 : [...(p.thumbsUpUsers || []), (user?.email || "").toLowerCase()],
             }
       );
@@ -132,7 +139,8 @@ export default function FreeBoardDetail() {
           <div className="border-b border-gray-100 p-5 sm:p-6">
             <h1 className="text-2xl font-bold text-gray-900">{post.title}</h1>
             <p className="mt-1 text-sm text-gray-500">
-              Posted by <span className="font-medium">anonymous</span> • {dayjs(post.createdAt).fromNow()}
+              Posted by <span className="font-medium">anonymous</span> •{" "}
+              {dayjs(post.createdAt).fromNow()}
             </p>
           </div>
 
@@ -181,13 +189,18 @@ export default function FreeBoardDetail() {
         {post?._id && (
           <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
             {/* 🎯 페이지 진입 시 해당 댓글로 스크롤 + 하이라이트 */}
-            <CommentSection postId={post._id} authorEmail={post.email} highlightId={highlightId} />
+            <CommentSection
+              postId={post._id}
+              authorEmail={post.email}
+              highlightId={highlightId}
+            />
           </div>
         )}
       </div>
     </div>
   );
 }
+
 
 
 

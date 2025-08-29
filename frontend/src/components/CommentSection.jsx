@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { useSchool } from "../contexts/SchoolContext";
-import { useSocket } from "../contexts/SocketContext"; // ✅ 소켓
+import { useSocket } from "../contexts/SocketContext";
 import AsyncButton from "./AsyncButton";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
@@ -22,16 +22,10 @@ dayjs.locale("en");
 const toId = (v) => (v == null ? "" : String(v));
 const normEmail = (e) => String(e || "").toLowerCase().trim();
 
-/**
- * Props:
- * - postId (required)
- * - authorEmail (optional)
- * - highlightId (optional)
- */
 export default function CommentSection({ postId, authorEmail = "", highlightId = null }) {
   const { user, token } = useAuth();
   const { school } = useSchool();
-  const socket = useSocket(); // {socket, on, off, emit}
+  const socket = useSocket();
 
   const me = normEmail(user?.email);
   const author = normEmail(authorEmail);
@@ -40,12 +34,10 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
   const [listLoading, setListLoading] = useState(true);
   const [err, setErr] = useState("");
 
-  // root input
   const [rootText, setRootText] = useState("");
   const [postingRoot, setPostingRoot] = useState(false);
   const [composingRoot, setComposingRoot] = useState(false);
 
-  // per-item ui states
   const [replyingId, setReplyingId] = useState(null);
   const [replyText, setReplyText] = useState("");
   const [postingReplyId, setPostingReplyId] = useState(null);
@@ -57,7 +49,6 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
   const [deletingId, setDeletingId] = useState(null);
   const [likingId, setLikingId] = useState(null);
 
-  // 🎯 highlight (scroll + flash)
   const [flashId, setFlashId] = useState(null);
 
   const load = useCallback(async () => {
@@ -78,11 +69,10 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
 
   useEffect(() => { load(); }, [load]);
 
-  /* ====== 🔌 실시간 구독: post 룸 join/leave & 이벤트 핸들 ====== */
+  // 🔌 소켓 join/leave & 이벤트 핸들
   useEffect(() => {
     if (!socket?.emit || !socket?.on || !postId) return;
 
-    // join
     socket.emit("post:join", { postId });
 
     const onNew = (c) => {
@@ -125,7 +115,7 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
     };
   }, [socket, postId]);
 
-  /* ---------- stable anonymous labels per post ---------- */
+  // 익명 라벨
   const anonLabelByEmail = useMemo(() => {
     const firstSeen = new Map();
     for (const c of comments) {
@@ -149,7 +139,7 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
     [anonLabelByEmail]
   );
 
-  /* ---------- tree build ---------- */
+  // 트리 구조
   const tree = useMemo(() => {
     const nodes = (comments || []).map((c) => ({
       ...c,
@@ -157,75 +147,28 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
       parentId: c.parentId ? toId(c.parentId) : null,
       children: [],
     }));
-
     const map = new Map();
     nodes.forEach((n) => map.set(n._id, n));
-
     const roots = [];
     nodes.forEach((n) => {
       const pid = n.parentId ? toId(n.parentId) : "";
       if (pid && map.has(pid)) map.get(pid).children.push(n);
       else roots.push(n);
     });
-
     const byTime = (a, b) => new Date(a.createdAt) - new Date(b.createdAt);
     const walk = (arr) => { arr.sort(byTime); arr.forEach((n) => walk(n.children)); };
     walk(roots);
-
     return roots;
   }, [comments]);
 
-  /* ---------- highlight after list ready ---------- */
-  useEffect(() => {
-    if (!highlightId || listLoading) return;
-    const id = String(highlightId);
-    const run = () => {
-      const el = document.getElementById(`comment-${id}`);
-      if (el) {
-        try {
-          el.scrollIntoView({ behavior: "smooth", block: "center" });
-        } catch {
-          el.scrollIntoView();
-        }
-        setFlashId(id);
-        const t = setTimeout(() => setFlashId(null), 1800);
-        return () => clearTimeout(t);
-      }
-    };
-    const r = requestAnimationFrame(run);
-    return () => cancelAnimationFrame(r);
-  }, [highlightId, listLoading, comments]);
-
-  /* ---------- helpers ---------- */
-  const replaceById = (id, next) =>
-    setComments((prev) => prev.map((c) => (toId(c._id) === toId(id) ? next : c)));
-
-  const removeByIdWithChildren = (id) =>
-    setComments((prev) => {
-      const target = toId(id);
-      const set = new Set([target]);
-      let changed = true;
-      while (changed) {
-        changed = false;
-        prev.forEach((c) => {
-          const pid = c.parentId ? toId(c.parentId) : "";
-          if (pid && set.has(pid) && !set.has(toId(c._id))) {
-            set.add(toId(c._id));
-            changed = true;
-          }
-        });
-      }
-      return prev.filter((c) => !set.has(toId(c._id)));
-    });
-
-  /* ---------- actions ---------- */
+  // 액션들
   const submitRoot = async () => {
     const content = rootText.trim();
     if (!content) return;
     setPostingRoot(true);
     try {
-      const doc = await addComment({ school, token, postId, content });
-      setComments((prev) => [...prev, doc]); // 서버 소켓도 오지만 중복 방지 로직이 있으니 OK
+      await addComment({ school, token, postId, content });
+      // ❌ setComments 바로 추가 제거 → 소켓으로만 반영
       setRootText("");
     } catch (e) {
       console.error("comments:add root failed", e);
@@ -235,23 +178,16 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
     }
   };
 
-  const startReply = (commentId) => {
-    setReplyingId(toId(commentId));
-    setReplyText("");
-  };
-  const cancelReply = () => {
-    setReplyingId(null);
-    setReplyText("");
-  };
   const submitReply = async (parentId) => {
     const content = replyText.trim();
     if (!content) return;
     const pid = toId(parentId);
     setPostingReplyId(pid);
     try {
-      const doc = await addComment({ school, token, postId, content, parentId: pid });
-      setComments((prev) => [...prev, doc]);
-      cancelReply();
+      await addComment({ school, token, postId, content, parentId: pid });
+      // ❌ setComments 제거
+      setReplyingId(null);
+      setReplyText("");
     } catch (e) {
       console.error("comments:add reply failed", e);
       alert("Failed to add reply.");
@@ -260,26 +196,15 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
     }
   };
 
-  const startEdit = (c) => {
-    setEditingId(toId(c._id));
-    setEditText(c.content || "");
-  };
-  const cancelEdit = () => {
-    setEditingId(null);
-    setEditText("");
-  };
   const saveEdit = async () => {
     const content = editText.trim();
     if (!content || !editingId) return;
     setSavingId(editingId);
     try {
       const updated = await apiUpdateComment({ school, token, commentId: editingId, content });
-      replaceById(editingId, {
-        ...updated,
-        _id: toId(updated._id),
-        parentId: updated.parentId ? toId(updated.parentId) : null,
-      });
-      cancelEdit();
+      // 서버에서 socket "comment:update" 보내므로 여기선 로컬 업데이트 불필요
+      setEditingId(null);
+      setEditText("");
     } catch (e) {
       console.error("comments:update failed", e);
       alert("Failed to update comment.");
@@ -289,12 +214,12 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
   };
 
   const deleteOne = async (id) => {
-    if (!window.confirm("Delete this comment? Replies will also be removed in the list view.")) return;
+    if (!window.confirm("Delete this comment?")) return;
     const target = toId(id);
     setDeletingId(target);
     try {
       await apiDeleteComment({ school, token, commentId: target });
-      removeByIdWithChildren(target);
+      // socket "comment:delete"가 반영해줄 것
     } catch (e) {
       console.error("comments:delete failed", e);
       alert("Failed to delete comment.");
@@ -307,18 +232,8 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
     const target = toId(id);
     setLikingId(target);
     try {
-      const res = await toggleCommentThumbs({ school, token, commentId: target });
-      setComments((prev) =>
-        prev.map((c) =>
-          toId(c._id) === target
-            ? {
-                ...c,
-                thumbsUpUsers: res.thumbs ?? [],
-                thumbsCount: res.count ?? (res.thumbs?.length || 0),
-              }
-            : c
-        )
-      );
+      await toggleCommentThumbs({ school, token, commentId: target });
+      // socket "comment:thumbs" 반영
     } catch (e) {
       console.error("comments:thumb toggle failed", e);
     } finally {
@@ -327,11 +242,7 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
   };
 
   if (!user || !token) {
-    return (
-      <div className="mt-6 rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-600">
-        Please log in to view and write comments.
-      </div>
-    );
+    return <div className="mt-6 rounded-xl border bg-white p-4 text-sm text-gray-600">Please log in to view and write comments.</div>;
   }
 
   return (
@@ -339,34 +250,25 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
       <h3 className="mb-3 text-lg font-semibold text-gray-900">Comments</h3>
 
       {/* root composer */}
-      <div className="mb-4 rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
+      <div className="mb-4 rounded-xl border bg-white p-3 shadow-sm">
         <textarea
           value={rootText}
           onChange={(e) => setRootText(e.target.value)}
           onCompositionStart={() => setComposingRoot(true)}
           onCompositionEnd={() => setComposingRoot(false)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey && !composingRoot) {
-              e.preventDefault();
-              submitRoot();
-            }
-          }}
+          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !composingRoot) { e.preventDefault(); submitRoot(); } }}
           placeholder="Write a comment…"
-          className="h-20 w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10"
+          className="h-20 w-full resize-none rounded-lg border px-3 py-2 text-sm"
         />
         <div className="mt-2 text-right">
-          <AsyncButton
-            disabled={postingRoot}
-            onClick={submitRoot}
-            className="rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-black disabled:opacity-60"
-          >
+          <AsyncButton disabled={postingRoot} onClick={submitRoot} className="rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-black disabled:opacity-60">
             {postingRoot ? "Posting…" : "Post"}
           </AsyncButton>
         </div>
       </div>
 
       {/* list */}
-      <div className="rounded-xl border border-gray-200 bg-white p-2 sm:p-3">
+      <div className="rounded-xl border bg-white p-2 sm:p-3">
         {listLoading ? (
           <div className="p-3 text-sm text-gray-600">Loading…</div>
         ) : err ? (
@@ -376,31 +278,7 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
         ) : (
           <ul className="space-y-3">
             {tree.map((n) => (
-              <CommentNode
-                key={n._id}
-                node={n}
-                me={me}
-                getLabel={labelOf}
-                replyingId={replyingId}
-                replyText={replyText}
-                postingReplyId={postingReplyId}
-                editingId={editingId}
-                editText={editText}
-                savingId={savingId}
-                deletingId={deletingId}
-                likingId={likingId}
-                onStartReply={(id) => setReplyingId(toId(id))}
-                onCancelReply={() => { setReplyingId(null); setReplyText(""); }}
-                onChangeReply={setReplyText}
-                onSubmitReply={submitReply}
-                onStartEdit={startEdit}
-                onCancelEdit={cancelEdit}
-                onChangeEdit={setEditText}
-                onSaveEdit={saveEdit}
-                onDelete={deleteOne}
-                onToggleLike={toggleLike}
-                flashId={flashId}
-              />
+              <CommentNode key={n._id} node={n} me={me} getLabel={(e) => anonLabelByEmail.get(normEmail(e)) || "anonymous"} replyingId={replyingId} replyText={replyText} postingReplyId={postingReplyId} editingId={editingId} editText={editText} savingId={savingId} deletingId={deletingId} likingId={likingId} onStartReply={setReplyingId} onCancelReply={() => { setReplyingId(null); setReplyText(""); }} onChangeReply={setReplyText} onSubmitReply={submitReply} onStartEdit={(c) => { setEditingId(toId(c._id)); setEditText(c.content || ""); }} onCancelEdit={() => { setEditingId(null); setEditText(""); }} onChangeEdit={setEditText} onSaveEdit={saveEdit} onDelete={deleteOne} onToggleLike={toggleLike} flashId={flashId} />
             ))}
           </ul>
         )}

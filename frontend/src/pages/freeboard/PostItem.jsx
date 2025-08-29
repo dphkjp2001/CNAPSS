@@ -1,63 +1,65 @@
-//  src/pages/freeboard/PostItem.jsx
+//  frontend/src/pages/freeboard/PostItem.jsx
 import React, { useState } from "react";
 import { useAuth } from "../../contexts/AuthContext";
+import { useSchool } from "../../contexts/SchoolContext";
+import { updatePost, deletePost } from "../../api/posts";
 
 function PostItem({ post, onDelete, onUpdate }) {
   const { user } = useAuth();
+  const { school } = useSchool();
+
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState(post.content);
+  const [loading, setLoading] = useState(false);
 
-  const baseURL = import.meta.env.VITE_API_URL;
+  const isAuthor =
+    String(user?.email || "").toLowerCase() === String(post?.email || "").toLowerCase();
 
   const handleDelete = async () => {
     if (!window.confirm("Are you sure you want to delete this post?")) return;
+    if (!school || !post?._id) return;
 
     try {
-      const res = await fetch(`${baseURL}/posts/${post._id}`, {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: user.email }),
-      });
-
-      const data = await res.json();
-      if (res.ok) {
-        onDelete(post._id);
-      } else {
-        alert(data.message || "Failed to delete post.");
-      }
+      setLoading(true);
+      await deletePost({ school, id: post._id }); // ✅ /:school/posts/:id
+      onDelete?.(post._id);
     } catch (err) {
-      alert("Failed to delete post: " + err.message);
+      alert("Failed to delete post: " + (err?.message || "Unknown error"));
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleSave = async () => {
-    try {
-      const res = await fetch(`${baseURL}/posts/${post._id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: editedContent }),
-      });
+    if (!school || !post?._id) return;
 
-      const updated = await res.json();
-      if (res.ok) {
-        onUpdate(updated);
-        setIsEditing(false);
-      } else {
-        alert(updated.message || "Failed to save changes.");
-      }
+    try {
+      setLoading(true);
+      const updated = await updatePost({
+        school,
+        id: post._id,
+        title: post.title,          // 인라인 편집은 content만 바꾸고 title은 유지
+        content: editedContent,
+      });
+      onUpdate?.(updated?.post || updated); // 래퍼가 반환하는 형태 대응
+      setIsEditing(false);
     } catch (err) {
-      alert("Failed to update post: " + err.message);
+      alert("Failed to update post: " + (err?.message || "Unknown error"));
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="border p-4 rounded shadow-sm">
-      <h3 className="text-lg font-semibold mb-1">{post.title}</h3>
-      <p className="text-sm text-gray-500 mb-2">Posted by: {post.author}</p>
+    <div className="rounded border p-4 shadow-sm">
+      <h3 className="mb-1 text-lg font-semibold">{post.title}</h3>
+      <p className="mb-2 text-sm text-gray-500">
+        Posted by: {post.nickname ? "anonymous" : "anonymous"}
+      </p>
 
       {isEditing ? (
         <textarea
-          className="w-full border p-2 mb-2"
+          className="mb-2 w-full resize-y rounded border p-2"
           rows={3}
           value={editedContent}
           onChange={(e) => setEditedContent(e.target.value)}
@@ -66,19 +68,23 @@ function PostItem({ post, onDelete, onUpdate }) {
         <p className="mb-2 whitespace-pre-wrap">{post.content}</p>
       )}
 
-      {user?.nickname === post.author && (
+      {isAuthor && (
         <div className="flex gap-2">
           {isEditing ? (
             <>
               <button
                 onClick={handleSave}
-                className="bg-green-500 text-white px-3 py-1 rounded"
+                disabled={loading}
+                className="rounded bg-green-500 px-3 py-1 text-white disabled:opacity-60"
               >
-                Save
+                {loading ? "Saving..." : "Save"}
               </button>
               <button
-                onClick={() => setIsEditing(false)}
-                className="bg-gray-400 text-white px-3 py-1 rounded"
+                onClick={() => {
+                  setIsEditing(false);
+                  setEditedContent(post.content);
+                }}
+                className="rounded bg-gray-400 px-3 py-1 text-white"
               >
                 Cancel
               </button>
@@ -87,15 +93,16 @@ function PostItem({ post, onDelete, onUpdate }) {
             <>
               <button
                 onClick={() => setIsEditing(true)}
-                className="bg-yellow-400 text-white px-3 py-1 rounded"
+                className="rounded bg-yellow-500 px-3 py-1 text-white"
               >
                 Edit
               </button>
               <button
                 onClick={handleDelete}
-                className="bg-red-500 text-white px-3 py-1 rounded"
+                disabled={loading}
+                className="rounded bg-red-500 px-3 py-1 text-white disabled:opacity-60"
               >
-                Delete
+                {loading ? "Deleting..." : "Delete"}
               </button>
             </>
           )}
@@ -106,5 +113,6 @@ function PostItem({ post, onDelete, onUpdate }) {
 }
 
 export default PostItem;
+
 
 

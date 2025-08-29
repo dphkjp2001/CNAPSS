@@ -266,7 +266,7 @@ export default function ChatBox({
         setLoading(true);
         const data = await chatApi.getMessages({ school, token, conversationId });
         if (!alive) return;
-        // API는 최신순 → UI는 오래된→최신 순으로 보여주기 위해 reverse
+        // API는 최신순 → UI는 오래된→최신 순서로 보여주기 위해 reverse
         setMessages((Array.isArray(data) ? data : []).reverse());
         emit?.("chat:read", { conversationId });
         try { await chatApi.markRead({ school, token, conversationId }); } catch {}
@@ -277,7 +277,7 @@ export default function ChatBox({
     return () => { alive = false; };
   }, [conversationId, token, school, emit]);
 
-  // 2) 룸 조인 + 실시간 수신/읽음 갱신
+  // 2) 룸 조인 + 실시간 수신/읽음 갱신 (중복 방지: _id de-dupe)
   useEffect(() => {
     if (!conversationId || !socket) return;
 
@@ -285,7 +285,13 @@ export default function ChatBox({
 
     const handleReceive = (msg) => {
       if (msg.conversationId !== conversationId) return;
-      setMessages((prev) => [...prev, msg]);
+      setMessages((prev) => {
+        // 이미 같은 _id가 있으면 무시 (리로드 전/후, 낙관추가 vs 서버수신 중복 방지)
+        const exists = prev.some((m) => m._id && msg._id && String(m._id) === String(msg._id));
+        if (exists) return prev;
+        const next = [...prev, msg];
+        return next;
+      });
       emit?.("chat:read", { conversationId });
     };
 
@@ -304,14 +310,15 @@ export default function ChatBox({
     };
   }, [socket, emit, on, off, conversationId]);
 
-  // 3) 전송
+  // 3) 전송 — REST만 사용 (소켓 chat:send emit 제거)
   const handleSend = async () => {
     const content = input.trim();
     if (!content || !conversationId) return;
     try {
+      // 서버 REST가 저장 + 서버가 chat:receive를 브로드캐스트함(백엔드 라우트 참고)
       const saved = await chatApi.sendMessage({ school, token, conversationId, content });
-      setMessages((prev) => [...prev, saved]);           // 낙관적 갱신
-      emit?.("chat:send", { conversationId, content });  // 상대 미리보기/수신 갱신
+      // 낙관적 추가: 서버가 다시 보내줄 때 _id가 같으므로 handleReceive에서 de-dupe됨
+      setMessages((prev) => [...prev, saved]);
     } catch (e) {
       console.error("send failed", e);
       alert("메시지 전송 실패");
@@ -392,6 +399,7 @@ export default function ChatBox({
     </div>
   );
 }
+
 
 
 
