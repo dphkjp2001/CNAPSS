@@ -1,4 +1,4 @@
-// src/pages/courses/CourseWrite.jsx
+// frontend/src/pages/courses/CourseWrite.jsx
 import React, { useMemo, useState } from "react";
 import { useNavigate, useSearchParams, useParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
@@ -6,7 +6,6 @@ import { useSchool } from "../../contexts/SchoolContext";
 import { useSchoolPath } from "../../utils/schoolPath";
 import CourseCodePicker from "../../components/CourseCodePicker";
 import { createMaterial } from "../../api/materials";
-import { uploadToCloudinary } from "../../utils/uploadToCloudinary"; // <-- fixed
 
 const termOfMonth = (m) => (m >= 8 ? "fall" : m >= 5 ? "summer" : "spring");
 const currentSemester = () => {
@@ -22,11 +21,19 @@ export default function CourseWrite() {
   const params = useParams();
   const [sp] = useSearchParams();
 
+  // Preselect from URL when available
   const [courseCode, setCourseCode] = useState(decodeURIComponent(params.courseId || ""));
   const [semester, setSemester] = useState(sp.get("sem") || currentSemester());
+
+  // Frame 9 fields (no file upload)
+  const [materialType, setMaterialType] = useState("personalMaterial"); // personalMaterial | personalNote
+  const [isFree, setIsFree] = useState(true);
+  const [price, setPrice] = useState(0);
+  const [sharePreference, setSharePreference] = useState("either"); // in_person | online | either
+
+  // Legacy kind (for compatibility with listing)
   const [kind, setKind] = useState("note"); // note | syllabus | exam | slide | link | other
-  const [file, setFile] = useState(null);
-  const [link, setLink] = useState("");
+
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
@@ -34,7 +41,6 @@ export default function CourseWrite() {
     () => [
       { ui: "class notes", value: "note" },
       { ui: "syllabus", value: "syllabus" },
-      { ui: "quiz", value: "exam" }, // quiz → exam
       { ui: "exam", value: "exam" },
       { ui: "slide", value: "slide" },
       { ui: "link", value: "link" },
@@ -52,34 +58,36 @@ export default function CourseWrite() {
     e.preventDefault();
     setErr("");
     if (!token) return;
+
     if (!courseCode?.trim()) return setErr("Please select a course code.");
     if (!semester) return setErr("Please select a semester.");
-    if (!file && !link) return setErr("Attach a file or provide a link.");
+
+    if (!isFree && (Number.isNaN(price) || Number(price) < 1)) {
+      return setErr("Please enter a valid price (≥ 1).");
+    }
 
     try {
       setBusy(true);
 
-      let fileMeta = {};
-      if (file) {
-        const uploaded = await uploadToCloudinary(file, { folder: "materials" });
-        const secureUrl = typeof uploaded === "string" ? uploaded : uploaded?.secure_url;
-        fileMeta = {
-        fileUrl: secureUrl || "",
-        filePublicId: typeof uploaded === "object" ? (uploaded?.public_id || "") : "",
-        fileMime: file?.type || "",
-        fileSize: file?.size || 0,
-        };
-      }
-
       const payload = {
-        courseCode: courseCode.toUpperCase(), // 제목=코드 (서버에서 강제)
-        courseTitle: "",
+        courseCode: courseCode.toUpperCase(),
+        courseTitle: "",           // (optional)
         semester,
+        // legacy kind for compatibility with list filter
         kind,
-        title: courseCode.toUpperCase(),       // 호환용
+        // Frame 9 fields
+        materialType,
+        isFree,
+        price: Number(isFree ? 0 : price),
+        sharePreference,
+        // no file/url — purely a listing
+        url: "",
+        fileUrl: "",
+        filePublicId: "",
+        fileMime: "",
+        fileSize: 0,
+        title: courseCode.toUpperCase(), // backend also sets this, but keep explicit
         tags: [],
-        url: link || "",
-        ...fileMeta,
       };
 
       await createMaterial({ school, token, payload });
@@ -88,7 +96,7 @@ export default function CourseWrite() {
         schoolPath(`/courses/${encodeURIComponent(courseCode.toUpperCase())}/materials?sem=${encodeURIComponent(semester)}`)
       );
     } catch (e) {
-      setErr("Upload failed. Please try again.");
+      setErr("Failed to create your posting. Please try again.");
     } finally {
       setBusy(false);
     }
@@ -96,12 +104,13 @@ export default function CourseWrite() {
 
   return (
     <div className="max-w-2xl p-6">
-      <h1 className="mb-2 text-xl font-semibold">Share a course material</h1>
+      <h1 className="mb-2 text-xl font-semibold">Create a posting</h1>
       <p className="mb-4 text-sm text-gray-600">
-        Title will be set to the selected <b>course code</b>.
+        This posting does not require a file. You can share details later through messages.
       </p>
 
       <form onSubmit={onSubmit} className="space-y-5">
+        {/* Course + Semester */}
         <div>
           <label className="mb-1 block text-sm font-medium">Course code (required)</label>
           <CourseCodePicker school={school} value={courseCode} onChange={setCourseCode} />
@@ -122,7 +131,7 @@ export default function CourseWrite() {
           </div>
 
           <div className="sm:w-1/2">
-            <label className="mb-1 block text-sm font-medium">Type</label>
+            <label className="mb-1 block text-sm font-medium">Legacy type</label>
             <select
               value={kind}
               onChange={(e) => setKind(e.target.value)}
@@ -135,27 +144,106 @@ export default function CourseWrite() {
           </div>
         </div>
 
-        <div className="rounded-lg border p-3">
-          <div className="mb-2 text-sm font-medium">Attach a file (optional)</div>
-          <input
-            type="file"
-            accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.md,.png,.jpg,.jpeg,.webp"
-            onChange={(e) => setFile(e.target.files?.[0] || null)}
-          />
-          <p className="mt-1 text-xs text-gray-500">
-            Allowed: pdf, doc(x), ppt(x), xls(x), txt, md, png, jpg, webp. Max 25MB.
-          </p>
+        {/* Material type */}
+        <div>
+          <label className="mb-1 block text-sm font-medium">What are you posting?</label>
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="radio"
+                name="materialType"
+                value="personalMaterial"
+                checked={materialType === "personalMaterial"}
+                onChange={(e) => setMaterialType(e.target.value)}
+              />
+              Personal Class Material
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="radio"
+                name="materialType"
+                value="personalNote"
+                checked={materialType === "personalNote"}
+                onChange={(e) => setMaterialType(e.target.value)}
+              />
+              Personal Class Note
+            </label>
+          </div>
         </div>
 
+        {/* Price */}
+        <div className="flex flex-col gap-2">
+          <label className="mb-1 block text-sm font-medium">Price</label>
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="radio"
+                name="free"
+                value="free"
+                checked={isFree === true}
+                onChange={() => setIsFree(true)}
+              />
+              Free
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="radio"
+                name="free"
+                value="paid"
+                checked={isFree === false}
+                onChange={() => setIsFree(false)}
+              />
+              Paid
+            </label>
+
+            <input
+              type="number"
+              min={1}
+              step="1"
+              disabled={isFree}
+              value={isFree ? "" : price}
+              onChange={(e) => setPrice(parseInt(e.target.value, 10) || 0)}
+              placeholder="Amount"
+              className="w-32 rounded-lg border px-3 py-2 text-sm disabled:bg-gray-100"
+            />
+          </div>
+        </div>
+
+        {/* Share preference */}
         <div>
-          <label className="mb-1 block text-sm font-medium">…or a link (URL)</label>
-          <input
-            type="url"
-            value={link}
-            onChange={(e) => setLink(e.target.value)}
-            className="w-full rounded-lg border px-3 py-2 text-sm"
-            placeholder="https://..."
-          />
+          <label className="mb-1 block text-sm font-medium">How would you like to share?</label>
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="radio"
+                name="sharePreference"
+                value="in_person"
+                checked={sharePreference === "in_person"}
+                onChange={(e) => setSharePreference(e.target.value)}
+              />
+              In person
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="radio"
+                name="sharePreference"
+                value="online"
+                checked={sharePreference === "online"}
+                onChange={(e) => setSharePreference(e.target.value)}
+              />
+              Online
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="radio"
+                name="sharePreference"
+                value="either"
+                checked={sharePreference === "either"}
+                onChange={(e) => setSharePreference(e.target.value)}
+              />
+              Doesn't matter
+            </label>
+          </div>
         </div>
 
         {err ? <p className="text-sm text-red-600">{err}</p> : null}
@@ -173,11 +261,12 @@ export default function CourseWrite() {
             disabled={busy}
             className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
           >
-            {busy ? "Uploading..." : "Share"}
+            {busy ? "Saving..." : "Create"}
           </button>
         </div>
       </form>
     </div>
   );
 }
+
 

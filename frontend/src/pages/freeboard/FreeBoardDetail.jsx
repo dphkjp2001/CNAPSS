@@ -7,7 +7,7 @@ import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import "dayjs/locale/en";
 
-import { getPost, deletePost, toggleThumbs } from "../../api/posts";
+import { getPost, deletePost, toggleThumbs, updatePost } from "../../api/posts";
 import { useAuth } from "../../contexts/AuthContext";
 import { useSchool } from "../../contexts/SchoolContext";
 import { apiFetch } from "../../api/http";
@@ -22,16 +22,23 @@ export default function FreeBoardDetail() {
   const { user } = useAuth();
   const { school, schoolTheme } = useSchool();
   const schoolPath = useSchoolPath();
-  const { token } = useAuth();
 
   const [post, setPost] = useState(null);
   const [error, setError] = useState("");
 
+  // ✏️ 인라인 편집 상태
+  const [isEditing, setIsEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState("");
+  const [editContent, setEditContent] = useState("");
+  const [saving, setSaving] = useState(false);
+
   const loadPost = async () => {
     try {
-      // posts API 래퍼 시그니처: getPost({ school, id })
       const data = await getPost({ school, id });
       setPost(data);
+      // 편집 폼 값 동기화
+      setEditTitle(data?.title || "");
+      setEditContent(data?.content || "");
     } catch (err) {
       setError(err.message || "Failed to load the post.");
     }
@@ -78,7 +85,6 @@ export default function FreeBoardDetail() {
   const handleDelete = async () => {
     if (!window.confirm("Delete this post?")) return;
     try {
-      // ✅ 올바른 시그니처로 호출 (객체 형태)
       await deletePost({ school, id: post._id });
       alert("Post deleted.");
       navigate(schoolPath("/freeboard"));
@@ -102,10 +108,37 @@ export default function FreeBoardDetail() {
                 : [...(p.thumbsUpUsers || []), (user?.email || "").toLowerCase()],
             }
       );
+      // 서버 기준으로 다시 동기화
       await loadPost();
     } catch (err) {
       alert("Failed to like: " + (err.message || "Unknown error"));
     }
+  };
+
+  // ✏️ 인라인 저장
+  const handleSaveEdit = async () => {
+    const title = editTitle.trim();
+    const content = editContent.trim();
+    if (!title || !content) return;
+    setSaving(true);
+    try {
+      const updated = await updatePost({ school, id: post._id, title, content });
+      // API가 { message, post } or post 중 하나를 반환할 수 있으므로 양쪽 대응
+      const next = updated?.post || updated;
+      setPost(next);
+      setIsEditing(false);
+    } catch (err) {
+      alert("Update failed: " + (err.message || "Unknown error"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    // 원본으로 되돌리고 편집 종료
+    setEditTitle(post?.title || "");
+    setEditContent(post?.content || "");
+    setIsEditing(false);
   };
 
   if (error) {
@@ -137,7 +170,16 @@ export default function FreeBoardDetail() {
       <div className="mx-auto max-w-3xl">
         <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
           <div className="border-b border-gray-100 p-5 sm:p-6">
-            <h1 className="text-2xl font-bold text-gray-900">{post.title}</h1>
+            {isEditing ? (
+              <input
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                placeholder="Title"
+                className="w-full rounded-xl border border-gray-300 px-3 py-2 text-lg font-semibold text-gray-900 focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10"
+              />
+            ) : (
+              <h1 className="text-2xl font-bold text-gray-900">{post.title}</h1>
+            )}
             <p className="mt-1 text-sm text-gray-500">
               Posted by <span className="font-medium">anonymous</span> •{" "}
               {dayjs(post.createdAt).fromNow()}
@@ -145,9 +187,18 @@ export default function FreeBoardDetail() {
           </div>
 
           <div className="p-5 sm:p-6">
-            <div className="prose prose-sm max-w-none text-gray-800">
-              <p className="whitespace-pre-wrap leading-relaxed">{post.content}</p>
-            </div>
+            {isEditing ? (
+              <textarea
+                value={editContent}
+                onChange={(e) => setEditContent(e.target.value)}
+                placeholder="Content"
+                className="h-56 w-full resize-y rounded-xl border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10"
+              />
+            ) : (
+              <div className="prose prose-sm max-w-none text-gray-800">
+                <p className="whitespace-pre-wrap leading-relaxed">{post.content}</p>
+              </div>
+            )}
 
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <button
@@ -158,10 +209,10 @@ export default function FreeBoardDetail() {
                 👍 {post.thumbsUpUsers?.length || 0}
               </button>
 
-              {isAuthor && (
+              {isAuthor && !isEditing && (
                 <>
                   <button
-                    onClick={() => navigate(schoolPath(`/freeboard/edit/${post._id}`))}
+                    onClick={() => setIsEditing(true)}
                     className="rounded-xl px-4 py-2 text-sm font-semibold text-white shadow"
                     style={{ backgroundColor: schoolTheme?.primary || "#6b46c1" }}
                   >
@@ -172,6 +223,24 @@ export default function FreeBoardDetail() {
                     className="rounded-xl bg-red-500 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-red-600"
                   >
                     Delete
+                  </button>
+                </>
+              )}
+
+              {isAuthor && isEditing && (
+                <>
+                  <button
+                    onClick={handleSaveEdit}
+                    disabled={saving}
+                    className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-black disabled:opacity-60"
+                  >
+                    {saving ? "Saving…" : "Save"}
+                  </button>
+                  <button
+                    onClick={handleCancelEdit}
+                    className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-800 shadow-sm hover:bg-gray-50"
+                  >
+                    Cancel
                   </button>
                 </>
               )}
@@ -200,6 +269,7 @@ export default function FreeBoardDetail() {
     </div>
   );
 }
+
 
 
 

@@ -1,60 +1,58 @@
-// src/pages/dashboard/Dashboard.jsx
+// frontend/src/pages/dashboard/Dashboard.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import { Navigate, Link, useNavigate } from "react-router-dom";
-import { useAuth } from "../../contexts/AuthContext";
-import { useSchool } from "../../contexts/SchoolContext";
-import { useSchoolPath } from "../../utils/schoolPath";
-import { listPosts, getPublicPosts } from "../../api/posts";
-import { useLoginGate } from "../../hooks/useLoginGate";
-import CourseHubPreview from "./CourseHubPreview";
-
-// Mini map preview (Leaflet)
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
-import "leaflet/dist/leaflet.css";
-
+import { useNavigate } from "react-router-dom";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import "dayjs/locale/en";
+
+import { useAuth } from "../../contexts/AuthContext";
+import { useSchool } from "../../contexts/SchoolContext";
+import { useSchoolPath } from "../../utils/schoolPath";
+import { useLoginGate } from "../../hooks/useLoginGate";
+
+import { listPosts, getPublicPosts } from "../../api/posts";
+import CourseHubPreview from "./CourseHubPreview";
+
 dayjs.extend(relativeTime);
 dayjs.locale("en");
 
-const PREVIEW_COUNT = 5;
+const avatarBg = (hex) => ({
+  background:
+    hex ||
+    "linear-gradient(135deg, rgba(124,58,237,0.12), rgba(99,102,241,0.12))",
+});
 
 export default function Dashboard() {
-  const navigate = useNavigate();
   const { user, token } = useAuth();
-  const { school, schoolTheme, loading } = useSchool();
-  const schoolPath = useSchoolPath();
+  const { school, schoolTheme } = useSchool();
   const { ensureAuth } = useLoginGate();
+  const nav = useNavigate();
+  const schoolPath = useSchoolPath();
 
-  const [latestPosts, setLatestPosts] = useState([]);
+  const [posts, setPosts] = useState([]);
   const [loadingPosts, setLoadingPosts] = useState(true);
+  const [errorPosts, setErrorPosts] = useState("");
 
-  // Center for mini map (NYU fallback)
-  const SCHOOL_CENTER = useMemo(() => ({ lat: 40.7291, lon: -73.9965 }), []);
-
-  if (loading) return null;
-  if (!school) return <Navigate to="/select-school" replace />;
-
-  // Load Free Board preview
   useEffect(() => {
     let alive = true;
     if (!school) return;
 
     (async () => {
       setLoadingPosts(true);
+      setErrorPosts("");
       try {
-        let rows = [];
-        if (token) {
-          const data = await listPosts({ school, token, page: 1, limit: PREVIEW_COUNT });
-          rows = Array.isArray(data) ? data.slice(0, PREVIEW_COUNT) : [];
-        } else {
-          const pub = await getPublicPosts({ school, page: 1, limit: PREVIEW_COUNT, sort: "new" });
-          rows = Array.isArray(pub?.items) ? pub.items.slice(0, PREVIEW_COUNT) : [];
-        }
-        if (alive) setLatestPosts(rows);
+        let data;
+        if (token) data = await listPosts({ school, token });
+        else data = await getPublicPosts({ school, page: 1, limit: 10 });
+
+        const rows = Array.isArray(data)
+          ? data
+          : Array.isArray(data?.items)
+          ? data.items
+          : [];
+        if (alive) setPosts(rows.slice(0, 5));
       } catch {
-        if (alive) setLatestPosts([]);
+        if (alive) setErrorPosts("Failed to load posts.");
       } finally {
         if (alive) setLoadingPosts(false);
       }
@@ -65,170 +63,188 @@ export default function Dashboard() {
     };
   }, [school, token]);
 
-  const bg = schoolTheme?.bg || "#f6f3ff";
-  const primary = schoolTheme?.primary || "#6b46c1";
-  const textColor = schoolTheme?.text || "#111827";
+  const initials = useMemo(() => {
+    const nm = user?.nickname || (user?.email ? user.email.split("@")[0] : "Guest");
+    return nm.slice(0, 2).toUpperCase();
+  }, [user]);
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: bg }}>
-      <div className="mx-auto flex w-full max-w-screen-xl flex-col gap-8 px-6 py-12 lg:flex-row">
-        {/* Sidebar */}
-        <aside className="w-full shrink-0 rounded-2xl border border-sand bg-white/80 p-6 shadow-md backdrop-blur-md lg:w-72">
-          <div className="text-center">
-            <div className="mx-auto h-20 w-20 rounded-full" style={{ backgroundColor: primary }} />
-            <p className="mt-4 text-xl font-bold" style={{ color: textColor }}>
-              {user?.nickname || school.toUpperCase()}
-            </p>
-            <p className="text-sm text-gray-500">{school.toUpperCase()}</p>
-          </div>
+    <div
+      className="min-h-screen px-4 py-6 sm:px-6"
+      style={{ backgroundColor: schoolTheme?.bg || "#f6f3ff" }}
+    >
+      <div className="mx-auto max-w-7xl">
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
+          {/* Left: Profile */}
+          <aside className="lg:col-span-3">
+            <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+              <div
+                className="mx-auto mb-4 flex h-24 w-24 items-center justify-center rounded-full text-2xl font-bold text-gray-900"
+                style={avatarBg(schoolTheme?.bg)}
+              >
+                {initials}
+              </div>
+              <div className="text-center">
+                <div className="text-lg font-bold text-gray-900">
+                  {user?.nickname || "Guest"}
+                </div>
+                <div className="mt-0.5 text-xs uppercase tracking-wide text-gray-500">
+                  {school?.toUpperCase() || "SCHOOL"}
+                </div>
+              </div>
 
-          <ul className="mt-6 space-y-3 text-sm text-gray-700">
-            <li>
-              <Link to={schoolPath("/myposts")} className="transition hover:text-indigo-600">
-                My Posts
-              </Link>
-            </li>
-            <li>
-              <Link to={schoolPath("/liked")} className="transition hover:text-indigo-600">
-                Liked
-              </Link>
-            </li>
-            <li>
-              <Link to={schoolPath("/commented")} className="transition hover:text-indigo-600">
-                Commented
-              </Link>
-            </li>
-            <li>
-              <Link to={schoolPath("/personal-schedule")} className="transition hover:text-indigo-600">
-                Schedule
-              </Link>
-            </li>
-            <li>
-              <Link to={schoolPath("/market")} className="transition hover:text-indigo-600">
-                Marketplace
-              </Link>
-            </li>
-            <li>
-              <Link to={schoolPath("/foodmap")} className="transition hover:text-indigo-600">
-                Food Map
-              </Link>
-            </li>
-          </ul>
-        </aside>
+              <nav className="mt-6 space-y-2 text-sm">
+                <DashLink onClick={() => nav(schoolPath("/myposts"))}>My Posts</DashLink>
+                <DashLink onClick={() => nav(schoolPath("/liked"))}>Liked</DashLink>
+                <DashLink onClick={() => nav(schoolPath("/commented"))}>Commented</DashLink>
+                <DashLink onClick={() => nav(schoolPath("/personal-schedule"))}>
+                  Schedule
+                </DashLink>
+                <DashLink onClick={() => nav(schoolPath("/market"))}>Marketplace</DashLink>
+                <DashLink onClick={() => nav(schoolPath("/foodmap"))}>Food Map</DashLink>
+              </nav>
+            </div>
+          </aside>
 
-        {/* Main area */}
-        <main className="flex w-full flex-1 flex-col">
-          {/* Top row: Free Board (8) + Course Hub (4) */}
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-            {/* Free Board Preview */}
-            <section className="lg:col-span-8 rounded-2xl border border-sand bg-white p-6 shadow-md">
-              <div className="mb-4 flex items-center justify-between">
-                <Link to={schoolPath("/freeboard")}>
-                  <h2 className="cursor-pointer text-2xl font-bold hover:underline" style={{ color: textColor }}>
-                    Free Board
-                  </h2>
-                </Link>
-
-                {/* View All → 공개 리스트로 이동 (비로그인도 OK) */}
-                <Link to={schoolPath("/freeboard")} className="text-sm text-blue-600 hover:underline">
-                  View All
-                </Link>
+          {/* Center: Main */}
+          <main className="lg:col-span-6">
+            {/* Free Board (titles only) */}
+            <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+              <div className="mb-3 flex items-center justify-between">
+                <h2
+                  onClick={() => nav(schoolPath("/freeboard"))}
+                  className="cursor-pointer text-2xl font-extrabold hover:underline"
+                  style={{ color: schoolTheme?.text || "#4c1d95" }}
+                >
+                  Free Board
+                </h2>
               </div>
 
               {loadingPosts ? (
-                <ul className="space-y-3">
-                  {Array.from({ length: PREVIEW_COUNT }).map((_, i) => (
-                    <li key={i} className="animate-pulse">
-                      <div className="h-5 w-2/3 rounded bg-gray-100" />
-                      <div className="mt-2 h-3 w-1/3 rounded bg-gray-100" />
+                <ul className="space-y-4">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <li key={i}>
+                      <div className="h-5 w-2/3 animate-pulse rounded bg-gray-100" />
+                      <div className="mt-2 h-3 w-1/3 animate-pulse rounded bg-gray-100" />
                     </li>
                   ))}
                 </ul>
-              ) : latestPosts.length === 0 ? (
-                <p className="text-sm text-gray-500">Latest posts will appear here.</p>
+              ) : errorPosts ? (
+                <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
+                  {errorPosts}
+                </div>
+              ) : posts.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-gray-300 p-6 text-center text-sm text-gray-600">
+                  No posts yet. Be the first to write!
+                </div>
               ) : (
-                <ul className="divide-y">
-                  {latestPosts.map((p) => (
-                    <li key={p._id || p.id} className="py-3">
+                <ul className="divide-y divide-gray-100">
+                  {posts.map((p) => (
+                    <li key={p._id} className="py-4">
                       <button
+                        onClick={() =>
+                          ensureAuth(() => nav(schoolPath(`/freeboard/${p._id}`)))
+                        }
                         className="block w-full text-left"
-                        onClick={() => ensureAuth(() => navigate(schoolPath(`/freeboard/${p._id || p.id}`)))}
                       >
-                        <div className="flex items-center justify-between">
-                          <div className="font-medium text-gray-900 line-clamp-2">{p.title}</div>
-                          <div className="ml-3 shrink-0 text-xs text-gray-500">
-                            {p.createdAt ? dayjs(p.createdAt).fromNow() : ""}
-                          </div>
-                        </div>
+                        <h3 className="line-clamp-1 text-base font-semibold text-gray-900 hover:underline">
+                          {p.title}
+                        </h3>
+                        <p className="mt-1 text-xs text-gray-500">
+                          {dayjs(p.createdAt).fromNow()}
+                        </p>
                       </button>
                     </li>
                   ))}
                 </ul>
               )}
 
-              <div className="mt-4 flex justify-end">
+              <div className="mt-4 text-right">
                 <button
-                  onClick={() => ensureAuth(() => navigate(schoolPath("/freeboard/write")))}
+                  onClick={() => ensureAuth(() => nav(schoolPath("/freeboard/write")))}
                   className="rounded-xl px-4 py-2 text-sm font-semibold text-white shadow"
-                  style={{ backgroundColor: primary }}
+                  style={{ backgroundColor: schoolTheme?.primary || "#6b46c1" }}
                 >
                   + Write Post
                 </button>
               </div>
             </section>
 
-            {/* Course Hub Preview (materials) */}
-            <section className="lg:col-span-4">
-              <CourseHubPreview
-                school={school}
-                primary={primary}
-                textColor={textColor}
-                ensureAuth={ensureAuth}
-                schoolPath={schoolPath}
-                navigate={navigate}
-              />
+            {/* Course Material (main area) */}
+            <section className="mt-5 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+              <div className="mb-3 flex items-center justify-between">
+                <h2
+                  onClick={() => nav(schoolPath("/courses"))}
+                  className="cursor-pointer text-2xl font-extrabold hover:underline"
+                  style={{ color: schoolTheme?.text || "#4c1d95" }}
+                >
+                  CourseHub
+                </h2>
+              </div>
+              <CourseHubPreview />
             </section>
-          </div>
+          </main>
 
-          {/* Bottom: compact Food Map */}
-          <section
-            onClick={() => navigate(schoolPath("/foodmap"))}
-            className="mt-6 cursor-pointer overflow-hidden rounded-2xl border border-sand bg-white p-0 shadow-inner transition hover:shadow-lg"
-            title="Go to Food Map"
-          >
-            <div className="p-6">
-              <h2 className="mb-1 flex items-center gap-2 text-lg font-semibold" style={{ color: textColor }}>
-                🍽️ Explore Nearby Food
-                <span className="ml-2 text-xs text-blue-600 underline">Open map</span>
-              </h2>
-              <p className="text-sm text-gray-700">
-                Discover top-rated restaurants and cafes near campus. Click to open the full map.
-              </p>
-            </div>
-
-            <div className="h-56 select-none">
-              <MapContainer
-                center={[SCHOOL_CENTER.lat, SCHOOL_CENTER.lon]}
-                zoom={15}
-                style={{ height: "100%", width: "100%" }}
-                attributionControl={false}
-                zoomControl={false}
+          {/* Right: Side widgets */}
+          <aside className="space-y-5 lg:col-span-3">
+            <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+              <h3
+                onClick={() => nav(schoolPath("/courses"))}
+                className="mb-3 cursor-pointer text-lg font-bold text-gray-900 hover:underline"
               >
-                <TileLayer
-                  attribution='&copy; OpenStreetMap contributors'
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                />
-                <Marker position={[SCHOOL_CENTER.lat, SCHOOL_CENTER.lon]}>
-                  <Popup>Campus Center</Popup>
-                </Marker>
-              </MapContainer>
+                Course Hub
+              </h3>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => nav(schoolPath("/courses/write"))}
+                  className="flex-1 rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 shadow-sm hover:bg-gray-50"
+                >
+                  Upload note
+                </button>
+                <button
+                  onClick={() => nav(schoolPath("/courses"))}
+                  className="flex-1 rounded-xl px-3 py-2 text-sm font-semibold text-white shadow"
+                  style={{ backgroundColor: schoolTheme?.primary || "#6b46c1" }}
+                >
+                  Open Course Hub
+                </button>
+              </div>
             </div>
-          </section>
-        </main>
+
+            <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+              <div
+                onClick={() => nav(schoolPath("/foodmap"))}
+                className="mb-2 cursor-pointer text-sm font-semibold text-gray-900 hover:underline"
+              >
+                🍱 Explore Nearby Food
+              </div>
+              <p className="text-xs text-gray-600">
+                Discover top-rated restaurants and cafes near campus.
+              </p>
+              <div className="mt-3 h-28 w-full overflow-hidden rounded-lg bg-gray-100">
+                <div className="h-full w-full animate-pulse" />
+              </div>
+            </div>
+          </aside>
+        </div>
       </div>
     </div>
   );
 }
+
+function DashLink({ children, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      className="w-full rounded-xl border border-transparent px-3 py-2 text-left text-gray-700 hover:border-gray-200 hover:bg-gray-50"
+    >
+      {children}
+    </button>
+  );
+}
+
+
+
 
 
 
