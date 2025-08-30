@@ -1,6 +1,7 @@
 // backend/routes/materials.js
 const express = require("express");
 const router = express.Router({ mergeParams: true });
+
 const Material = require("../models/Material");
 const CourseCatalog = require("../models/CourseCatalog");
 
@@ -26,16 +27,14 @@ const ALLOWED_MIME = new Set([
 const MAX_SIZE = 25 * 1024 * 1024; // 25MB
 
 /**
- * NEW: school-wide recent materials for dashboard preview
  * GET /api/:school/materials/recent?limit=5
- *  - limit: 1..20 (default 5)
- * Returns latest materials (any course/semester) for the given school.
+ * 최근 업로드된 자료를 학교 단위로 반환(대시보드 프리뷰용)
  */
 router.get("/recent", async (req, res) => {
   const school = low(req.params.school);
   const limit = Math.min(20, Math.max(1, parseInt(req.query.limit || "5", 10)));
 
-  const items = await Material.find({ school, status: { $ne: "archived" } })
+  const items = await Material.find({ school })
     .sort({ createdAt: -1 })
     .limit(limit)
     .lean();
@@ -44,20 +43,20 @@ router.get("/recent", async (req, res) => {
     items: items.map((m) => ({
       id: m._id,
       courseCode: m.courseCode,
-      courseTitle: m.courseTitle,
-      semester: m.semester,
-      materialType: m.materialType,
+      courseTitle: m.courseTitle || "",
       kind: m.kind,
+      materialType: m.materialType || undefined,
       title: m.title,
       authorName: m.authorName,
       uploaderEmail: m.uploaderEmail,
+      isFree: typeof m.isFree === "boolean" ? m.isFree : undefined,
+      price: typeof m.price === "number" ? m.price : undefined,
       createdAt: m.createdAt,
     })),
   });
 });
 
 /**
- * List materials for a course & semester
  * GET /api/:school/materials
  * Query:
  *   course=CS-UY%201133     (required)
@@ -65,7 +64,7 @@ router.get("/recent", async (req, res) => {
  *   kind=note|syllabus|exam|slide|link|other|all (default: all)
  *   materialType=personalMaterial|personalNote|all (optional)
  *   isFree=true|false        (optional)
- *   sort=new|top|price       (default: new; price => free first, then cheapest)
+ *   sort=new|top|price       (default: new)
  *   page=1&limit=20
  */
 router.get("/", async (req, res) => {
@@ -131,7 +130,6 @@ router.get("/", async (req, res) => {
 });
 
 /**
- * Get a single material
  * GET /api/:school/materials/:id
  */
 router.get("/:id", async (req, res) => {
@@ -143,9 +141,8 @@ router.get("/:id", async (req, res) => {
 });
 
 /**
- * Create (no attachment required)
  * POST /api/:school/materials
- * Body:
+ * Body (Frame 9 — file upload OPTIONAL):
  *   { courseCode, courseTitle?, semester, kind,
  *     materialType?, isFree?, price?, sharePreference?,
  *     title?, tags?, url?, fileUrl?, filePublicId?, fileMime?, fileSize?, hash? }
@@ -167,6 +164,7 @@ router.post("/", async (req, res) => {
   const fileSize = Number.isFinite(body.fileSize) ? body.fileSize : 0;
   const hash = n(body.hash || "");
 
+  // New (listing meta)
   const materialType = n(body.materialType || "personalMaterial");
   const isFree = typeof body.isFree === "boolean" ? body.isFree : true;
   const price = Number.isFinite(body.price) ? Math.max(0, body.price) : 0;
@@ -180,9 +178,12 @@ router.post("/", async (req, res) => {
     return res.status(400).json({ message: "invalid kind" });
   }
 
+  // attachments optional, but validate if present
   if (fileUrl) {
     if (fileSize > MAX_SIZE) return res.status(400).json({ message: "File too large" });
-    if (fileMime && !ALLOWED_MIME.has(fileMime)) return res.status(400).json({ message: "File type not allowed" });
+    if (fileMime && !ALLOWED_MIME.has(fileMime)) {
+      return res.status(400).json({ message: "File type not allowed" });
+    }
   }
 
   if (!isFree && price < 1) return res.status(400).json({ message: "Price must be at least 1" });
@@ -223,8 +224,7 @@ router.post("/", async (req, res) => {
 });
 
 /**
- * Delete (owner or admin)
- * DELETE /api/:school/materials/:id
+ * DELETE /api/:school/materials/:id  (owner/admin only)
  */
 router.delete("/:id", async (req, res) => {
   const school = low(req.params.school);
@@ -243,6 +243,7 @@ router.delete("/:id", async (req, res) => {
 });
 
 module.exports = router;
+
 
 
 
