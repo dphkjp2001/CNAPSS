@@ -28,8 +28,8 @@ const MAX_SIZE = 25 * 1024 * 1024; // 25MB
 /**
  * NEW: school-wide recent materials for dashboard preview
  * GET /api/:school/materials/recent?limit=5
- * - limit: 1..20 (default 5)
- * Returns: latest materials (any course/semester) for the given school.
+ *  - limit: 1..20 (default 5)
+ * Returns latest materials (any course/semester) for the given school.
  */
 router.get("/recent", async (req, res) => {
   const school = low(req.params.school);
@@ -57,6 +57,7 @@ router.get("/recent", async (req, res) => {
 });
 
 /**
+ * List materials for a course & semester
  * GET /api/:school/materials
  * Query:
  *   course=CS-UY%201133     (required)
@@ -130,6 +131,7 @@ router.get("/", async (req, res) => {
 });
 
 /**
+ * Get a single material
  * GET /api/:school/materials/:id
  */
 router.get("/:id", async (req, res) => {
@@ -141,8 +143,9 @@ router.get("/:id", async (req, res) => {
 });
 
 /**
+ * Create (no attachment required)
  * POST /api/:school/materials
- * Body (NO file required):
+ * Body:
  *   { courseCode, courseTitle?, semester, kind,
  *     materialType?, isFree?, price?, sharePreference?,
  *     title?, tags?, url?, fileUrl?, filePublicId?, fileMime?, fileSize?, hash? }
@@ -220,7 +223,8 @@ router.post("/", async (req, res) => {
 });
 
 /**
- * DELETE /api/:school/materials/:id  (owner/admin only)
+ * Delete (owner or admin)
+ * DELETE /api/:school/materials/:id
  */
 router.delete("/:id", async (req, res) => {
   const school = low(req.params.school);
@@ -239,5 +243,6 @@ router.delete("/:id", async (req, res) => {
 });
 
 module.exports = router;
+
 
 

@@ -12,7 +12,16 @@ export async function createMaterial({ school, token, payload }) {
   });
 }
 
-export async function listMaterials({ school, token, course, semester, kind = "all", sort = "new", page = 1, limit = 50 }) {
+export async function listMaterials({
+  school,
+  token,
+  course,
+  semester,
+  kind = "all",
+  sort = "new",
+  page = 1,
+  limit = 50,
+}) {
   const qs = new URLSearchParams({
     course,
     semester,
@@ -21,13 +30,23 @@ export async function listMaterials({ school, token, course, semester, kind = "a
     page: String(page),
     limit: String(limit),
   });
-  return apiFetch(`${import.meta.env.VITE_API_URL}/api/${school}/materials?${qs.toString()}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  return apiFetch(
+    `${import.meta.env.VITE_API_URL}/api/${school}/materials?${qs.toString()}`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
 }
 
 export async function getMaterial({ school, token, id }) {
   return apiFetch(`${import.meta.env.VITE_API_URL}/api/${school}/materials/${id}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
+}
+
+// 👇 NEW: dashboard preview (school-wide recent)
+export async function listRecentMaterials({ school, token, limit = 5 }) {
+  const qs = new URLSearchParams({ limit: String(Math.max(1, Math.min(20, limit))) });
+  return apiFetch(
+    `${import.meta.env.VITE_API_URL}/api/${school}/materials/recent?${qs.toString()}`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
 }

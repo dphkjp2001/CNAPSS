@@ -5,6 +5,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useSchool } from "../../contexts/SchoolContext";
 import { useSchoolPath } from "../../utils/schoolPath";
 import { useLoginGate } from "../../hooks/useLoginGate";
+import { listRecentMaterials } from "../../api/materials";
 
 const materialTypeLabel = (t) =>
   t === "personalNote" ? "personal note" : "personal material";
@@ -20,8 +21,6 @@ export default function CourseHubPreview() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
 
-  const API = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
-
   useEffect(() => {
     let alive = true;
     if (!token || !school) return;
@@ -29,26 +28,19 @@ export default function CourseHubPreview() {
       try {
         setLoading(true);
         setErr("");
-        const res = await fetch(
-          `${API}/api/${encodeURIComponent(school)}/materials/recent?limit=5`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        if (!res.ok) throw new Error("failed");
-        const json = await res.json();
-        if (alive) setItems(Array.isArray(json?.items) ? json.items : []);
+        const data = await listRecentMaterials({ school, token, limit: 5 });
+        if (!alive) return;
+        setItems(Array.isArray(data?.items) ? data.items : []);
       } catch (e) {
-        if (alive) {
-          setErr("Failed to load recent materials.");
-          setItems([]);
-        }
+        if (!alive) return;
+        setErr("Failed to load recent materials.");
+        setItems([]);
       } finally {
         if (alive) setLoading(false);
       }
     })();
-    return () => {
-      alive = false;
-    };
-  }, [API, token, school]);
+    return () => { alive = false; };
+  }, [token, school]);
 
   return (
     <div className="rounded-2xl bg-white p-6 shadow-sm">
@@ -93,7 +85,7 @@ export default function CourseHubPreview() {
                   )
                 }
               >
-                {/* 한 줄: 과목명 — 교수이름(N/A) — 파일 타입 */}
+                {/* 과목명 — 교수명(N/A) — 자료 타입 */}
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <div className="truncate text-sm font-medium text-gray-900">
@@ -101,13 +93,9 @@ export default function CourseHubPreview() {
                       <span className="mx-2 text-gray-400">—</span>
                       <span className="text-gray-700">N/A</span>
                       <span className="mx-2 text-gray-400">—</span>
-                      <span className="text-gray-600">
-                        {materialTypeLabel(m.materialType)}
-                      </span>
+                      <span className="text-gray-600">{materialTypeLabel(m.materialType)}</span>
                     </div>
-                    <div className="mt-1 truncate text-xs text-gray-500">
-                      {m.title}
-                    </div>
+                    <div className="mt-1 truncate text-xs text-gray-500">{m.title}</div>
                   </div>
                   <span className="shrink-0 text-xs text-blue-600 underline">open</span>
                 </div>
@@ -134,4 +122,5 @@ export default function CourseHubPreview() {
     </div>
   );
 }
+
 
