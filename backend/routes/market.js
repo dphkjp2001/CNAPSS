@@ -1,176 +1,3 @@
-// // backend/routes/market.js
-// const express = require("express");
-// const router = express.Router();
-// const MarketItem = require("../models/MarketItem");
-// const User = require("../models/User");
-// const Request = require("../models/Request");
-// const Conversation = require("../models/Conversation");
-// const Message = require("../models/Message");
-// const { deleteFromCloudinary } = require("../utils/deleteFromCloudinary");
-
-// // ✅ 전체 목록
-// router.get("/", async (req, res) => {
-//   try {
-//     const filter = req.query.school ? { school: req.query.school } : {};
-//     const items = await MarketItem.find(filter).sort({ createdAt: -1 });
-//     res.json(items);
-//   } catch (err) {
-//     res.status(500).json({ error: "Failed to fetch items" });
-//   }
-// });
-
-// // ✅ 문의 여부 확인
-// router.get("/request/:itemId/:buyerEmail", async (req, res) => {
-//   const { itemId, buyerEmail } = req.params;
-
-//   try {
-//     const exists = await Request.findOne({ itemId, buyer: buyerEmail });
-//     res.json({ alreadySent: !!exists });
-//   } catch (err) {
-//     console.error("❌ 문의 여부 확인 실패:", err);
-//     res.status(500).json({ message: "Internal server error" });
-//   }
-// });
-
-// // ✅ 문의 요청 + 채팅방/메시지 생성
-// // ✅ 이미 상단에 필요한 모델 불러온 상태 가정
-// router.post("/request", async (req, res) => {
-//   const { itemId, buyer, message } = req.body;
-
-//   if (!itemId || !buyer || !message) {
-//     return res.status(400).json({ message: "필수 정보가 누락되었습니다." });
-//   }
-
-//   try {
-//     const exists = await Request.findOne({ itemId, buyer });
-//     if (exists) {
-//       return res.status(409).json({ message: "이미 요청을 보냈습니다." });
-//     }
-
-//     // 1. Request 저장
-//     const newRequest = new Request({ itemId, buyer, message });
-//     await newRequest.save();
-
-//     // 2. 판매자 확인
-//     const item = await MarketItem.findById(itemId);
-//     if (!item) return res.status(404).json({ message: "판매 아이템을 찾을 수 없습니다." });
-//     const seller = item.seller;
-
-//     // 3. Conversation 확인/생성 (기존 participants → buyer/seller로 수정)
-//     let conversation = await Conversation.findOne({
-//       itemId,
-//       buyer,
-//       seller,
-//     });
-
-//     if (!conversation) {
-//       conversation = new Conversation({
-//         itemId,
-//         buyer,
-//         seller,
-//       });
-//       await conversation.save();
-//     }
-
-//     // 4. 메시지 저장
-//     const newMessage = new Message({
-//       conversationId: conversation._id,
-//       sender: buyer,
-//       content: message,
-//     });
-//     await newMessage.save();
-
-//     // 5. 최신 메시지 업데이트
-//     conversation.lastMessage = message;
-//     conversation.updatedAt = new Date();
-//     await conversation.save();
-
-//     res.status(201).json({
-//       message: "문의 전송 완료",
-//       conversationId: conversation._id,
-//     });
-
-//   } catch (err) {
-//     console.error("❌ 문의 저장 실패:", err);
-//     res.status(500).json({ message: "서버 오류로 문의 저장 실패" });
-//   }
-// });
-
-
-// // ✅ 단일 아이템 조회 + 닉네임 포함
-// router.get("/:id", async (req, res) => {
-//   try {
-//     const item = await MarketItem.findById(req.params.id).lean();
-//     if (!item) return res.status(404).json({ error: "Item not found" });
-
-//     const sellerUser = await User.findOne({ email: item.seller }).lean();
-//     const sellerNickname = sellerUser?.nickname || "Unknown";
-
-//     res.json({
-//       ...item,
-//       sellerNickname,
-//     });
-//   } catch (err) {
-//     res.status(500).json({ error: "Failed to fetch item" });
-//   }
-// });
-
-// // ✅ 아이템 등록
-// router.post("/", async (req, res) => {
-//   try {
-//     const { title, description, price, images, school, seller } = req.body;
-//     const item = new MarketItem({
-//       title,
-//       description,
-//       price,
-//       images,
-//       school,
-//       seller,
-//     });
-//     const saved = await item.save();
-//     res.status(201).json(saved);
-//   } catch (err) {
-//     res.status(400).json({ error: "Failed to create item" });
-//   }
-// });
-
-// // ✅ 아이템 수정
-// router.put("/:id", async (req, res) => {
-//   try {
-//     const { title, description, price, images } = req.body;
-//     const item = await MarketItem.findByIdAndUpdate(
-//       req.params.id,
-//       { title, description, price, images },
-//       { new: true }
-//     );
-//     if (!item) return res.status(404).json({ error: "Item not found" });
-//     res.json(item);
-//   } catch (err) {
-//     res.status(500).json({ error: "Failed to update item" });
-//   }
-// });
-
-// // ✅ 아이템 삭제
-// router.delete("/:id", async (req, res) => {
-//   try {
-//     const item = await MarketItem.findById(req.params.id);
-//     if (!item) return res.status(404).json({ error: "Item not found" });
-
-//     if (Array.isArray(item.images)) {
-//       for (const imageUrl of item.images) {
-//         await deleteFromCloudinary(imageUrl);
-//       }
-//     }
-
-//     await item.deleteOne();
-//     res.json({ message: "Item deleted and images removed" });
-//   } catch (err) {
-//     res.status(500).json({ error: "Failed to delete item", detail: err.message });
-//   }
-// });
-
-// module.exports = router;
-
 // backend/routes/market.js
 const express = require("express");
 const mongoose = require("mongoose");
@@ -249,6 +76,7 @@ router.get("/mine", async (req, res) => {
 /**
  * GET /request/:itemId/:buyerEmail
  * - 문의 보냈는지 여부 (본인만 확인 가능, superadmin 예외)
+ * - ✅ school 스코프 반영
  */
 router.get("/request/:itemId/:buyerEmail", async (req, res) => {
   const { itemId, buyerEmail } = req.params;
@@ -263,7 +91,11 @@ router.get("/request/:itemId/:buyerEmail", async (req, res) => {
     const item = await MarketItem.findOne({ _id: itemId, school: req.user.school });
     if (!item) return res.status(404).json({ message: "Item not found." });
 
-    const exists = await Request.findOne({ itemId, buyer: buyerEmail.toLowerCase().trim() });
+    const exists = await Request.findOne({
+      school: req.user.school,
+      itemId,
+      buyer: buyerEmail.toLowerCase().trim(),
+    });
     res.json({ alreadySent: !!exists });
   } catch (err) {
     console.error("Check request exists error:", err);
@@ -276,9 +108,8 @@ router.get("/request/:itemId/:buyerEmail", async (req, res) => {
  * - 문의 요청 + 대화/메시지 생성
  * body: { itemId, message }
  * - buyer는 토큰에서 읽음(클라 입력 무시)
+ * - ✅ Request 생성/조회에 school 주입(스키마에서 required) 
  */
-// === REPLACE THIS HANDLER in backend/routes/market.js ===
-// POST /request  body: { itemId, message }
 router.post("/request", async (req, res) => {
   const { itemId, message } = req.body;
   if (!isValidId(itemId) || !message) {
@@ -292,38 +123,36 @@ router.post("/request", async (req, res) => {
 
     const buyer = req.user.email;
     const seller = item.seller;
-    const school = req.user.school; // ✅ 이걸 주입해 줄 것
+    const school = req.user.school;
 
     if (buyer === seller) {
       return res.status(400).json({ message: "You cannot inquire about your own item." });
     }
 
-    // 2) 중복 요청 방지
-    const dup = await Request.findOne({ itemId, buyer });
+    // 2) 중복 요청 방지 (school 포함)
+    const dup = await Request.findOne({ school, itemId, buyer });
     if (dup) {
       return res.status(409).json({ message: "Request already sent." });
     }
 
-    // 3) Request 생성 (Request 스키마에 school이 없어도 괜찮음)
-    const newRequest = await Request.create({ itemId, buyer, message });
+    // 3) Request 생성 (✅ school 필수)
+    const newRequest = await Request.create({ school, itemId, buyer, message });
 
-    // 4) 대화 찾기 (먼저 '같은 school' 기준으로)
-    let conversation =
-      await Conversation.findOne({ itemId, buyer, seller, school });
+    // 4) 대화 찾기/생성 (school 기준)
+    let conversation = await Conversation.findOne({ itemId, buyer, seller, school });
 
-    // 4-1) 과거 문서 호환: school 없이 만들어진 대화가 있으면 그걸 승격(backfill)
+    // 과거에 school 없이 만들어진 문서 호환
     if (!conversation) {
       const old = await Conversation.findOne({ itemId, buyer, seller, school: { $exists: false } });
       if (old) {
-        old.school = school;        // ✅ 업그레이드
+        old.school = school;
         await old.save();
         conversation = old;
       }
     }
 
-    // 4-2) 없으면 새로 생성 (school 주입)
     if (!conversation) {
-      conversation = await Conversation.create({ itemId, buyer, seller, school }); // ✅
+      conversation = await Conversation.create({ itemId, buyer, seller, school });
     }
 
     // 5) 메시지 저장 (school 주입)
@@ -331,13 +160,13 @@ router.post("/request", async (req, res) => {
       conversationId: conversation._id,
       sender: buyer,
       content: message,
-      school, // ✅
+      school,
     });
 
     // 6) 대화 미리보기 갱신
     conversation.lastMessage = message;
     conversation.updatedAt = new Date();
-    if (!conversation.school) conversation.school = school; // 안전장치
+    if (!conversation.school) conversation.school = school;
     await conversation.save();
 
     return res.status(201).json({
@@ -350,7 +179,6 @@ router.post("/request", async (req, res) => {
     return res.status(500).json({ message: "Failed to send request." });
   }
 });
-
 
 /**
  * GET /:id
@@ -379,7 +207,6 @@ router.get("/:id", async (req, res) => {
 /**
  * POST /
  * - 아이템 등록 (seller, school은 서버 주입)
- * body: { title, description?, price, images? }
  */
 router.post("/", async (req, res) => {
   try {
@@ -388,7 +215,6 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ message: "title and price are required." });
     }
 
-    // (선택) 본인 인증 상태 확인
     const me = await User.findOne({ email: req.user.email });
     if (!me || !me.isVerified) {
       return res.status(403).json({ message: "Only verified users can create items." });
@@ -400,7 +226,7 @@ router.post("/", async (req, res) => {
       price: Number(price),
       images: Array.isArray(images) ? images : [],
       seller: req.user.email,
-      school: req.user.school, // 🔐 서버가 주입
+      school: req.user.school,
     });
 
     res.status(201).json(item);
@@ -412,8 +238,7 @@ router.post("/", async (req, res) => {
 
 /**
  * PUT /:id
- * - 아이템 수정 (작성자 본인 또는 superadmin)
- * body: { title?, description?, price?, images? }
+ * - 아이템 수정
  */
 router.put("/:id", async (req, res) => {
   const { id } = req.params;
@@ -446,7 +271,6 @@ router.put("/:id", async (req, res) => {
 /**
  * PATCH /:id/status
  * - 상태 변경 (available|reserved|sold)
- * - 작성자 본인 또는 superadmin
  */
 router.patch("/:id/status", async (req, res) => {
   const { id } = req.params;
@@ -478,8 +302,7 @@ router.patch("/:id/status", async (req, res) => {
 
 /**
  * DELETE /:id
- * - 아이템 삭제 (작성자 본인 또는 superadmin)
- * - 이미지가 있으면 Cloudinary에서 정리
+ * - 아이템 삭제 + Cloudinary 정리
  */
 router.delete("/:id", async (req, res) => {
   const { id } = req.params;
@@ -500,7 +323,6 @@ router.delete("/:id", async (req, res) => {
         try {
           await deleteFromCloudinary(imageUrl);
         } catch (e) {
-          // 개별 이미지 삭제 실패는 전체 삭제를 막지 않음
           console.warn("Cloudinary deletion skipped:", e?.message || e);
         }
       }
@@ -515,4 +337,5 @@ router.delete("/:id", async (req, res) => {
 });
 
 module.exports = router;
+
 

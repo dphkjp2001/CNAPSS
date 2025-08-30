@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useSchool } from "../../contexts/SchoolContext";
 import { useAuth } from "../../contexts/AuthContext";
 import { useSchoolPath } from "../../utils/schoolPath";
+import { getJson } from "../../api/http";
 import CourseCodePicker from "../../components/CourseCodePicker";
 
 const termOfMonth = (m) => (m >= 8 ? "fall" : m >= 5 ? "summer" : "spring");
@@ -19,97 +20,89 @@ export default function CourseBrowser() {
   const navigate = useNavigate();
   const schoolPath = useSchoolPath();
 
-  // search inputs
-  const [courseQuery, setCourseQuery] = useState("");
-  const [selectedCourse, setSelectedCourse] = useState("");
-  const [instructorQuery, setInstructorQuery] = useState("");
-
-  // semester (backend requires this for materials list)
   const [semester, setSemester] = useState(currentSemester());
   const semesterOptions = useMemo(() => {
     const now = new Date();
     const y = now.getFullYear();
+    // keep it simple and close to wireframe range
     return Array.from(
       new Set([`${y - 1}-fall`, `${y}-spring`, `${y}-summer`, `${y}-fall`, `${y + 1}-spring`])
     );
   }, []);
 
-  // data state
-  const [courses, setCourses] = useState([]); // search results for courses
-  const [materials, setMaterials] = useState([]); // materials for the selected course & semester
+  const [courseQuery, setCourseQuery] = useState("");
+  const [selectedCourse, setSelectedCourse] = useState("");
+  const [instructorQuery, setInstructorQuery] = useState("");
+
+  const [courses, setCourses] = useState([]);
+  const [materials, setMaterials] = useState([]);
   const [loadingCourses, setLoadingCourses] = useState(false);
   const [loadingMaterials, setLoadingMaterials] = useState(false);
   const [error, setError] = useState("");
 
   const API = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
 
-  // search courses (server)
   const fetchCourses = useCallback(
     async (q) => {
-      if (!token || !school) return;
+      if (!school || !token) return;
       setLoadingCourses(true);
       setError("");
       try {
-        const res = await fetch(
-          `${API}/api/${encodeURIComponent(school)}/courses/search?q=${encodeURIComponent(q || "")}&limit=20`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        if (!res.ok) throw new Error("Failed to search courses");
-        const json = await res.json();
+        const url = `${API}/api/${encodeURIComponent(school)}/courses/search?q=${encodeURIComponent(
+          q || ""
+        )}&limit=20`;
+        const json = await getJson(url);
         setCourses(Array.isArray(json.items) ? json.items : []);
-      } catch (e) {
+      } catch {
         setCourses([]);
         setError("Failed to load course search results.");
       } finally {
         setLoadingCourses(false);
       }
     },
-    [API, token, school]
+    [API, school, token]
   );
 
-  // load materials for a selected course+semester (server)
   const fetchMaterials = useCallback(
     async (code) => {
-      if (!token || !school || !code) {
+      if (!school || !token || !code) {
         setMaterials([]);
         return;
       }
       setLoadingMaterials(true);
       setError("");
       try {
-        const url =
-          `${API}/api/${encodeURIComponent(school)}/materials` +
-          `?course=${encodeURIComponent(code)}` +
-          `&semester=${encodeURIComponent(semester)}` +
-          `&kind=all&sort=new&page=1&limit=50`;
-        const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-        if (!res.ok) throw new Error("Failed to load materials");
-        const json = await res.json();
+        const qs = new URLSearchParams({
+          course: code,
+          semester,
+          kind: "all",
+          sort: "new",
+          page: "1",
+          limit: "50",
+        }).toString();
+        const url = `${API}/api/${encodeURIComponent(school)}/materials?${qs}`;
+        const json = await getJson(url);
         setMaterials(Array.isArray(json.items) ? json.items : []);
-      } catch (e) {
+      } catch {
         setMaterials([]);
         setError("Failed to load materials.");
       } finally {
         setLoadingMaterials(false);
       }
     },
-    [API, token, school, semester]
+    [API, school, token, semester]
   );
 
-  // when a course is chosen, fetch materials
   useEffect(() => {
     if (selectedCourse) fetchMaterials(selectedCourse);
   }, [selectedCourse, fetchMaterials]);
 
-  // optional client-side filter by "instructor" text.
-  // (Backend doesn't have instructor field yet; later we can wire it when schema updates.)
+  // optional local filter by "instructor" text (best-effort; backend does not have instructor yet)
   const visibleMaterials = useMemo(() => {
     const q = (instructorQuery || "").trim().toLowerCase();
     if (!q) return materials;
     return materials.filter((m) => {
-      // best-effort: try to match against title or authorName
-      const hay =
-        `${m.title || ""} ${m.authorName || ""} ${m.uploaderEmail || ""}`.toLowerCase();
+      const hay = `${m.title || ""} ${m.authorName || ""} ${m.uploaderEmail || ""}`.toLowerCase();
       return hay.includes(q);
     });
   }, [materials, instructorQuery]);
@@ -120,15 +113,15 @@ export default function CourseBrowser() {
   };
 
   const onPickCourse = (code) => {
-    setSelectedCourse(code?.toUpperCase() || "");
-    setCourseQuery(code?.toUpperCase() || "");
-    // materials will auto-load by effect
+    setSelectedCourse((code || "").toUpperCase());
+    setCourseQuery((code || "").toUpperCase());
   };
 
   return (
     <div className="p-6">
       <h1 className="mb-2 text-xl font-semibold">CourseHub</h1>
 
+      {/* Search header */}
       <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center">
         <select
           value={semester}
@@ -161,7 +154,7 @@ export default function CourseBrowser() {
           </button>
         </div>
 
-        {/* optional instructor filter */}
+        {/* Optional instructor filter */}
         <div className="flex w-full items-center gap-2">
           <input
             value={instructorQuery}
@@ -171,10 +164,7 @@ export default function CourseBrowser() {
           />
           <button
             className="rounded-lg border px-3 py-2 text-sm"
-            onClick={() => {
-              // no extra network; just triggers memoized filter by state change
-              setInstructorQuery((v) => v.trim());
-            }}
+            onClick={() => setInstructorQuery((v) => v.trim())}
           >
             search
           </button>
@@ -190,7 +180,7 @@ export default function CourseBrowser() {
         </button>
       </div>
 
-      {/* Course search results (click → choose course & load materials) */}
+      {/* Course search results */}
       {courseQuery?.trim() && (
         <div className="mb-4 rounded-xl border bg-white">
           <div className="border-b p-3 text-xs text-gray-500">
@@ -229,7 +219,7 @@ export default function CourseBrowser() {
         </div>
       )}
 
-      {/* Materials list */}
+      {/* Materials list for the selected course */}
       <div className="rounded-xl border bg-white">
         <div className="flex items-center justify-between border-b p-3">
           <div className="text-sm">
@@ -259,7 +249,6 @@ export default function CourseBrowser() {
           )}
         </div>
 
-        {/* list body */}
         {!selectedCourse ? (
           <div className="p-6 text-sm text-gray-600">
             Search and select a course to view materials.
@@ -280,16 +269,26 @@ export default function CourseBrowser() {
                     </div>
                     <div className="mt-1 text-xs text-gray-500">
                       by {m.authorName || m.uploaderEmail || "Unknown"} ·{" "}
-                      {new Date(m.createdAt).toLocaleDateString()}
+                      {m.createdAt ? new Date(m.createdAt).toLocaleDateString() : ""}
                     </div>
                     {(m.url || m.fileUrl) && (
                       <div className="mt-1 text-xs">
                         {m.url ? (
-                          <a href={m.url} target="_blank" rel="noreferrer" className="text-blue-600 underline">
+                          <a
+                            href={m.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-blue-600 underline"
+                          >
                             external link
                           </a>
                         ) : (
-                          <a href={m.fileUrl} target="_blank" rel="noreferrer" className="text-blue-600 underline">
+                          <a
+                            href={m.fileUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-blue-600 underline"
+                          >
                             file
                           </a>
                         )}
@@ -327,4 +326,5 @@ export default function CourseBrowser() {
     </div>
   );
 }
+
 

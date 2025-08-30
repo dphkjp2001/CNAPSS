@@ -1,151 +1,229 @@
 // frontend/src/pages/courses/MaterialDetail.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { useAuth } from "../../contexts/AuthContext";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useSchool } from "../../contexts/SchoolContext";
+import { useAuth } from "../../contexts/AuthContext";
 import { useSchoolPath } from "../../utils/schoolPath";
-import { getMaterial } from "../../api/materials";
+import { getJson, deleteJson } from "../../api/http";
 
-function Badge({ children }) {
-  return (
-    <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-xs text-gray-700">
-      {children}
-    </span>
-  );
-}
+const prettyShare = (v) =>
+  v === "in_person" ? "In person" : v === "online" ? "Online" : "Doesn't matter";
 
-export default function MaterialDetail() {
+export default function CourseMaterialDetail() {
   const { id } = useParams();
-  const { token } = useAuth();
   const { school } = useSchool();
-  const schoolPath = useSchoolPath();
+  const { user } = useAuth();
+  const [sp] = useSearchParams();
   const navigate = useNavigate();
-  const { search } = useLocation();
+  const schoolPath = useSchoolPath();
 
-  const [item, setItem] = useState(null);
+  const courseCode = sp.get("course") || "";
+  const sem = sp.get("sem") || "";
+
+  const [doc, setDoc] = useState(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
 
-  // for "Back to list": keep course & semester context if provided via query
-  const backCourse = useMemo(() => new URLSearchParams(search).get("course") || "", [search]);
-  const backSem = useMemo(() => new URLSearchParams(search).get("sem") || "", [search]);
+  const API = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
+
+  const isOwner = useMemo(() => {
+    if (!doc || !user?.email) return false;
+    return (doc.uploaderEmail || "").toLowerCase() === (user.email || "").toLowerCase();
+  }, [doc, user]);
 
   useEffect(() => {
     let alive = true;
     async function run() {
-      if (!token || !school || !id) return;
+      if (!id || !school) return;
       setLoading(true);
       setErr("");
       try {
-        const data = await getMaterial({ school, token, id });
+        const url = `${API}/api/${encodeURIComponent(school)}/materials/${encodeURIComponent(id)}`;
+        const data = await getJson(url);
         if (!alive) return;
-        setItem(data || null);
+        setDoc(data || null);
       } catch (e) {
-        if (alive) {
-          setItem(null);
-          setErr("Failed to load the material.");
-        }
+        if (!alive) return;
+        setDoc(null);
+        setErr(e?.status === 404 ? "This posting was not found." : "Failed to load the posting.");
       } finally {
         if (alive) setLoading(false);
       }
     }
     run();
-    return () => { alive = false; };
-  }, [token, school, id]);
+    return () => {
+      alive = false;
+    };
+  }, [API, id, school]);
 
   const onBack = () => {
-    if (backCourse && backSem) {
+    // Prefer going back to list with preserved course/sem when available
+    if (courseCode && sem) {
       navigate(
-        schoolPath(`/courses/${encodeURIComponent(backCourse)}/materials?sem=${encodeURIComponent(backSem)}`)
+        schoolPath(
+          `/courses/${encodeURIComponent(courseCode)}/materials?sem=${encodeURIComponent(sem)}`
+        )
       );
     } else {
       navigate(-1);
     }
   };
 
-  if (loading) return <div className="p-6 text-sm text-gray-600">Loading…</div>;
-  if (err) return (
-    <div className="p-6">
-      <button className="mb-3 rounded-xl border px-3 py-1.5 text-sm" onClick={onBack}>← Back</button>
-      <p className="text-sm text-red-600">{err}</p>
-    </div>
-  );
-  if (!item) return null;
+  async function onDelete() {
+    if (!doc) return;
+    const ok = window.confirm("Delete this posting? This cannot be undone.");
+    if (!ok) return;
+    try {
+      const url = `${API}/api/${encodeURIComponent(school)}/materials/${encodeURIComponent(
+        doc._id || id
+      )}`;
+      await deleteJson(url);
+      // After deletion, return to course list (if we know it), else back
+      onBack();
+    } catch {
+      alert("Failed to delete. Please try again.");
+    }
+  }
 
-  const created = item.createdAt ? new Date(item.createdAt).toLocaleString() : "";
-  const hasAttachment = !!(item.url || item.fileUrl);
+  const primaryLink = useMemo(() => {
+    if (!doc) return null;
+    if (doc.url) return { href: doc.url, label: "Open external link" };
+    if (doc.fileUrl) return { href: doc.fileUrl, label: "Open file" };
+    return null;
+  }, [doc]);
 
   return (
     <div className="p-6">
       <div className="mb-3 flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Material detail</h1>
-        <button className="rounded-xl border px-3 py-1.5 text-sm" onClick={onBack}>← Back</button>
+        <h1 className="text-xl font-semibold">Material</h1>
+        <button className="rounded-xl border px-3 py-1.5 text-sm" onClick={onBack}>
+          ← Back
+        </button>
       </div>
 
-      <div className="rounded-2xl border bg-white p-5">
-        <div className="mb-2 text-sm text-gray-500">
-          {item.courseCode ? <Badge>{item.courseCode}</Badge> : null}{" "}
-          {item.semester ? <Badge>{item.semester}</Badge> : null}{" "}
-          {item.kind ? <Badge>{String(item.kind).toUpperCase()}</Badge> : null}
-          {/* Optional future fields (harmless if missing) */}
-          {typeof item.isFree === "boolean" ? (
-            item.isFree ? <Badge>FREE</Badge> : <Badge>PAID {typeof item.price === "number" ? `· $${item.price}` : ""}</Badge>
-          ) : null}
-          {item.materialType ? <Badge>{item.materialType}</Badge> : null}
-          {item.sharePreference ? <Badge>{item.sharePreference}</Badge> : null}
-        </div>
+      {loading ? (
+        <div className="rounded-xl border p-6 text-sm text-gray-600">Loading…</div>
+      ) : err ? (
+        <div className="rounded-xl border p-6 text-sm text-red-600">{err}</div>
+      ) : !doc ? (
+        <div className="rounded-xl border p-6 text-sm text-gray-600">No data.</div>
+      ) : (
+        <div className="space-y-4">
+          {/* Header card */}
+          <div className="rounded-xl border bg-white p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-sm text-gray-500">
+                  {doc.courseCode} · {doc.semester}
+                </div>
+                <div className="mt-0.5 text-lg font-semibold">{doc.title || doc.courseCode}</div>
+                <div className="mt-1 text-xs text-gray-500">
+                  {doc.kind ? doc.kind.toUpperCase() : "MATERIAL"} ·{" "}
+                  {new Date(doc.createdAt).toLocaleString()}
+                </div>
+              </div>
 
-        <h2 className="mb-2 text-lg font-medium">{item.title || item.courseCode}</h2>
+              <div className="shrink-0 text-right">
+                <div className="text-2xl font-bold">
+                  {doc.isFree ? (
+                    <span className="text-green-600">Free</span>
+                  ) : (
+                    <>${doc.price}</>
+                  )}
+                </div>
+                <div className="mt-1 text-xs text-gray-600">
+                  {prettyShare(doc.sharePreference)}
+                </div>
+              </div>
+            </div>
 
-        <div className="mb-3 text-sm text-gray-600">
-          by <b>{item.authorName || item.uploaderEmail || "Unknown"}</b>
-          {created ? <> · {created}</> : null}
-        </div>
-
-        {hasAttachment ? (
-          <div className="mb-4">
-            {item.url ? (
-              <a href={item.url} target="_blank" rel="noreferrer" className="text-blue-600 underline">
-                Open external link
+            {primaryLink ? (
+              <a
+                href={primaryLink.href}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-3 inline-block rounded-lg border px-3 py-1.5 text-sm text-blue-600"
+              >
+                {primaryLink.label}
               </a>
-            ) : (
-              <a href={item.fileUrl} target="_blank" rel="noreferrer" className="text-blue-600 underline">
-                Open file
-              </a>
+            ) : null}
+          </div>
+
+          {/* Meta */}
+          <div className="rounded-xl border bg-white p-4">
+            <div className="grid gap-2 text-sm sm:grid-cols-2">
+              <div>
+                <div className="text-gray-500">Posted by</div>
+                <div className="font-medium">
+                  {doc.authorName || doc.uploaderEmail || "Unknown"}
+                  {isOwner ? <span className="ml-2 rounded bg-gray-100 px-2 py-0.5 text-xs">You</span> : null}
+                </div>
+              </div>
+              <div>
+                <div className="text-gray-500">Type</div>
+                <div className="font-medium">
+                  {doc.materialType === "personalNote" ? "Personal Class Note" : "Personal Class Material"}
+                </div>
+              </div>
+              <div>
+                <div className="text-gray-500">Legacy kind</div>
+                <div className="font-medium">{doc.kind || "-"}</div>
+              </div>
+              <div>
+                <div className="text-gray-500">Tags</div>
+                <div className="font-medium">
+                  {(doc.tags || []).length ? doc.tags.join(", ") : "-"}
+                </div>
+              </div>
+            </div>
+
+            {(doc.fileMime || doc.fileSize) && (
+              <div className="mt-3 text-xs text-gray-500">
+                {doc.fileMime ? <>MIME: {doc.fileMime} · </> : null}
+                {Number.isFinite(doc.fileSize) && doc.fileSize > 0 ? (
+                  <>Size: {(doc.fileSize / 1024 / 1024).toFixed(2)} MB</>
+                ) : null}
+              </div>
             )}
           </div>
-        ) : (
-          <div className="mb-4 rounded-lg border border-dashed p-3 text-sm text-gray-500">
-            No attachment provided for this posting.
-          </div>
-        )}
 
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="text-xs text-gray-500">
-            ❤ {item.likeCount || 0} · 👁 {item.viewCount || 0}
-          </div>
-
-          {/* Later: “Inquiry / Message” button can be added here */}
-          <div className="flex gap-2">
-            {item.courseCode && (
+          {/* Actions */}
+          <div className="flex flex-wrap gap-2">
+            {courseCode && sem ? (
               <button
-                className="rounded-lg border px-3 py-1.5 text-sm"
+                className="rounded-xl border px-3 py-2 text-sm"
                 onClick={() =>
                   navigate(
                     schoolPath(
-                      `/courses/${encodeURIComponent(item.courseCode)}/materials?sem=${encodeURIComponent(
-                        item.semester || ""
-                      )}`
+                      `/courses/${encodeURIComponent(courseCode)}/materials?sem=${encodeURIComponent(sem)}`
                     )
                   )
                 }
               >
-                View course materials
+                View course list
               </button>
-            )}
+            ) : null}
+
+            {isOwner ? (
+              <button
+                className="rounded-xl border border-red-600 px-3 py-2 text-sm text-red-600"
+                onClick={onDelete}
+              >
+                Delete
+              </button>
+            ) : null}
           </div>
+
+          {/* Disclaimer (wireframe tiny text) */}
+          <p className="text-xs text-gray-500">
+            Only personal notes and self-created materials are permitted. Official course notes,
+            commercial notes, or copyrighted materials are not allowed. The platform is not
+            responsible for any transactions, content accuracy, or disputes.
+          </p>
         </div>
-      </div>
+      )}
     </div>
   );
 }
+
+

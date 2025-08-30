@@ -20,12 +20,11 @@ const MarketWrite = () => {
   const schoolPath = useSchoolPath();
   const { user, token } = useAuth();
   const { school, schoolTheme } = useSchool();
-  const baseURL = import.meta.env.VITE_API_URL;
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
-  // images: [{ url, uploading?: boolean, isCover?: boolean }]
+  // images: [{ url: string, public_id?: string, uploading?: boolean, isCover?: boolean }]
   const [images, setImages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
@@ -59,11 +58,18 @@ const MarketWrite = () => {
     // sequential upload
     for (let i = 0; i < files.length; i++) {
       try {
-        const url = await uploadToCloudinary(files[i]); // util returns final URL
+        // ⬇️ util returns a full JSON (secure_url, public_id, ...)
+        const uploaded = await uploadToCloudinary(files[i]);
+        const finalUrl = uploaded.secure_url;   // string
+        const publicId = uploaded.public_id;    // keep for future delete
+
         setImages((prev) => {
           const next = [...prev];
+          // replace the next "uploading" placeholder in order
           const idx = next.findIndex((x) => x.uploading);
-          if (idx !== -1) next[idx] = { ...next[idx], url, uploading: false };
+          if (idx !== -1) {
+            next[idx] = { ...next[idx], url: finalUrl, public_id: publicId, uploading: false };
+          }
           return next;
         });
       } catch (e) {
@@ -105,16 +111,17 @@ const MarketWrite = () => {
       setErr("");
 
       await createItem({
-         school,
-         token,
-         payload: {
+        school,
+        token,
+        payload: {
           title: title.trim(),
           description: description.trim(),
           price: parseFloat(price),
-         seller: user?.email,
-        images: images.map((i) => i.url),
-          },
+          seller: user?.email,               // server ignores this and uses req.user.email
+          images: images.map((i) => i.url),  // <-- now guaranteed to be strings
+        },
       });
+
       navigate(schoolPath("/market"));
     } catch (error) {
       console.error(error);
@@ -310,6 +317,7 @@ const MarketWrite = () => {
 };
 
 export default MarketWrite;
+
 
 
 

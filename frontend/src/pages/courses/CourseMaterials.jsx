@@ -4,11 +4,12 @@ import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useSchool } from "../../contexts/SchoolContext";
 import { useAuth } from "../../contexts/AuthContext";
 import { useSchoolPath } from "../../utils/schoolPath";
-import { listMaterials } from "../../api/materials";
+import { getJson } from "../../api/http";
 
 const termOfMonth = (m) => (m >= 8 ? "fall" : m >= 5 ? "summer" : "spring");
 const currentSemester = () => {
-  const now = new Date(); const y = now.getFullYear();
+  const now = new Date();
+  const y = now.getFullYear();
   return `${y}-${termOfMonth(now.getMonth() + 1)}`;
 };
 
@@ -27,7 +28,12 @@ export default function CourseMaterials() {
   const [sort, setSort] = useState("new");
   const [err, setErr] = useState("");
 
-  const kinds = useMemo(() => ["all", "note", "syllabus", "exam", "slide", "link", "other"], []);
+  const kinds = useMemo(
+    () => ["all", "note", "syllabus", "exam", "slide", "link", "other"],
+    []
+  );
+
+  const API = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
 
   useEffect(() => {
     let alive = true;
@@ -36,19 +42,19 @@ export default function CourseMaterials() {
       setLoading(true);
       setErr("");
       try {
-        const data = await listMaterials({
-          school,
-          token,
+        const qs = new URLSearchParams({
           course: decodeURIComponent(courseId),
           semester: sem,
           kind,
           sort,
-          page: 1,
-          limit: 50,
-        });
+          page: "1",
+          limit: "50",
+        }).toString();
+        const url = `${API}/api/${encodeURIComponent(school)}/materials?${qs}`;
+        const data = await getJson(url);
         if (!alive) return;
         setItems(Array.isArray(data?.items) ? data.items : []);
-      } catch (e) {
+      } catch {
         if (alive) {
           setItems([]);
           setErr("Failed to load materials.");
@@ -58,19 +64,29 @@ export default function CourseMaterials() {
       }
     }
     run();
-    return () => { alive = false; };
-  }, [token, school, courseId, sem, kind, sort]);
+    return () => {
+      alive = false;
+    };
+  }, [API, token, school, courseId, sem, kind, sort]);
 
   const goDetail = (id) => {
-    const qs = new URLSearchParams({ course: decodeURIComponent(courseId), sem }).toString();
+    const qs = new URLSearchParams({
+      course: decodeURIComponent(courseId),
+      sem,
+    }).toString();
     navigate(schoolPath(`/courses/materials/${id}?${qs}`));
   };
 
   return (
     <div className="p-6">
       <div className="mb-2 flex items-baseline justify-between">
-        <h1 className="text-xl font-semibold">{decodeURIComponent(courseId)} · Materials</h1>
-        <button className="rounded-xl border px-3 py-1.5 text-sm" onClick={() => navigate(-1)}>
+        <h1 className="text-xl font-semibold">
+          {decodeURIComponent(courseId)} · Materials
+        </h1>
+        <button
+          className="rounded-xl border px-3 py-1.5 text-sm"
+          onClick={() => navigate(-1)}
+        >
           ← Back
         </button>
       </div>
@@ -82,13 +98,27 @@ export default function CourseMaterials() {
           className="w-44 rounded-lg border px-3 py-2 text-sm"
         >
           {(() => {
-            const now = new Date(), y = now.getFullYear();
-            const opts = Array.from(new Set([`${y-1}-fall`, `${y}-spring`, `${y}-summer`, `${y}-fall`, `${y+1}-spring`]));
-            return opts.map((s) => <option key={s} value={s}>{s}</option>);
+            const now = new Date();
+            const y = now.getFullYear();
+            const opts = Array.from(
+              new Set([
+                `${y - 1}-fall`,
+                `${y}-spring`,
+                `${y}-summer`,
+                `${y}-fall`,
+                `${y + 1}-spring`,
+              ])
+            );
+            return opts.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ));
           })()}
         </select>
 
-        <div className="flex gap-2">
+        {/* Kind filter */}
+        <div className="flex flex-wrap gap-2">
           {kinds.map((k) => (
             <button
               key={k}
@@ -102,6 +132,7 @@ export default function CourseMaterials() {
           ))}
         </div>
 
+        {/* Sort */}
         <div className="flex items-center gap-2">
           <label className="text-xs text-gray-600">Sort</label>
           <select
@@ -111,6 +142,7 @@ export default function CourseMaterials() {
           >
             <option value="new">Newest</option>
             <option value="top">Top</option>
+            <option value="price">Price</option>
           </select>
         </div>
 
@@ -118,7 +150,9 @@ export default function CourseMaterials() {
 
         <button
           className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
-          onClick={() => navigate(schoolPath(`/courses/${encodeURIComponent(courseId)}/upload`))}
+          onClick={() =>
+            navigate(schoolPath(`/courses/${encodeURIComponent(courseId)}/upload`))
+          }
         >
           Upload
         </button>
@@ -141,7 +175,8 @@ export default function CourseMaterials() {
               >
                 <div className="min-w-0">
                   <div className="text-sm font-medium">
-                    {m.kind ? m.kind.toUpperCase() : "MATERIAL"} · <span className="text-gray-700">{m.title}</span>
+                    {m.kind ? m.kind.toUpperCase() : "MATERIAL"} ·{" "}
+                    <span className="text-gray-700">{m.title}</span>
                   </div>
                   <div className="mt-1 text-xs text-gray-500">
                     by {m.authorName || m.uploaderEmail || "Unknown"} ·{" "}
@@ -149,7 +184,9 @@ export default function CourseMaterials() {
                   </div>
                 </div>
                 <div className="shrink-0 text-right">
-                  <div className="text-xs text-gray-500">❤ {m.likeCount || 0} · 👁 {m.viewCount || 0}</div>
+                  <div className="text-xs text-gray-500">
+                    ❤ {m.likeCount || 0} · 👁 {m.viewCount || 0}
+                  </div>
                 </div>
               </button>
             </li>
@@ -161,3 +198,4 @@ export default function CourseMaterials() {
     </div>
   );
 }
+

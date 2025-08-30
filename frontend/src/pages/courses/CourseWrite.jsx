@@ -5,11 +5,12 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useSchool } from "../../contexts/SchoolContext";
 import { useSchoolPath } from "../../utils/schoolPath";
 import CourseCodePicker from "../../components/CourseCodePicker";
-import { createMaterial } from "../../api/materials";
+import { postJson } from "../../api/http";
 
 const termOfMonth = (m) => (m >= 8 ? "fall" : m >= 5 ? "summer" : "spring");
 const currentSemester = () => {
-  const now = new Date(); const y = now.getFullYear();
+  const now = new Date();
+  const y = now.getFullYear();
   return `${y}-${termOfMonth(now.getMonth() + 1)}`;
 };
 
@@ -22,16 +23,18 @@ export default function CourseWrite() {
   const [sp] = useSearchParams();
 
   // Preselect from URL when available
-  const [courseCode, setCourseCode] = useState(decodeURIComponent(params.courseId || ""));
+  const [courseCode, setCourseCode] = useState(
+    decodeURIComponent(params.courseId || "")
+  );
   const [semester, setSemester] = useState(sp.get("sem") || currentSemester());
 
-  // Frame 9 fields (no file upload)
+  // Frame 9 fields
   const [materialType, setMaterialType] = useState("personalMaterial"); // personalMaterial | personalNote
   const [isFree, setIsFree] = useState(true);
   const [price, setPrice] = useState(0);
   const [sharePreference, setSharePreference] = useState("either"); // in_person | online | either
 
-  // Legacy kind (for compatibility with listing)
+  // Legacy kind (for compatibility with listing filter)
   const [kind, setKind] = useState("note"); // note | syllabus | exam | slide | link | other
 
   const [busy, setBusy] = useState(false);
@@ -50,8 +53,11 @@ export default function CourseWrite() {
   );
 
   const semesterOptions = useMemo(() => {
-    const now = new Date(), y = now.getFullYear();
-    return Array.from(new Set([`${y-1}-fall`, `${y}-spring`, `${y}-summer`, `${y}-fall`, `${y+1}-spring`]));
+    const now = new Date();
+    const y = now.getFullYear();
+    return Array.from(
+      new Set([`${y - 1}-fall`, `${y}-spring`, `${y}-summer`, `${y}-fall`, `${y + 1}-spring`])
+    );
   }, []);
 
   async function onSubmit(e) {
@@ -61,7 +67,6 @@ export default function CourseWrite() {
 
     if (!courseCode?.trim()) return setErr("Please select a course code.");
     if (!semester) return setErr("Please select a semester.");
-
     if (!isFree && (Number.isNaN(price) || Number(price) < 1)) {
       return setErr("Please enter a valid price (≥ 1).");
     }
@@ -71,7 +76,7 @@ export default function CourseWrite() {
 
       const payload = {
         courseCode: courseCode.toUpperCase(),
-        courseTitle: "",           // (optional)
+        courseTitle: "", // optional
         semester,
         // legacy kind for compatibility with list filter
         kind,
@@ -80,22 +85,27 @@ export default function CourseWrite() {
         isFree,
         price: Number(isFree ? 0 : price),
         sharePreference,
-        // no file/url — purely a listing
+        // listing only; no file/url now
         url: "",
         fileUrl: "",
         filePublicId: "",
         fileMime: "",
         fileSize: 0,
-        title: courseCode.toUpperCase(), // backend also sets this, but keep explicit
+        title: courseCode.toUpperCase(),
         tags: [],
       };
 
-      await createMaterial({ school, token, payload });
+      const API = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
+      await postJson(`${API}/api/${encodeURIComponent(school)}/materials`, payload);
 
       navigate(
-        schoolPath(`/courses/${encodeURIComponent(courseCode.toUpperCase())}/materials?sem=${encodeURIComponent(semester)}`)
+        schoolPath(
+          `/courses/${encodeURIComponent(
+            courseCode.toUpperCase()
+          )}/materials?sem=${encodeURIComponent(semester)}`
+        )
       );
-    } catch (e) {
+    } catch {
       setErr("Failed to create your posting. Please try again.");
     } finally {
       setBusy(false);
@@ -125,7 +135,9 @@ export default function CourseWrite() {
               className="w-full rounded-lg border px-3 py-2 text-sm"
             >
               {semesterOptions.map((s) => (
-                <option key={s} value={s}>{s}</option>
+                <option key={s} value={s}>
+                  {s}
+                </option>
               ))}
             </select>
           </div>
@@ -138,7 +150,9 @@ export default function CourseWrite() {
               className="w-full rounded-lg border px-3 py-2 text-sm"
             >
               {kindOptions.map((k) => (
-                <option key={k.value} value={k.value}>{k.ui}</option>
+                <option key={k.value} value={k.value}>
+                  {k.ui}
+                </option>
               ))}
             </select>
           </div>
@@ -246,6 +260,13 @@ export default function CourseWrite() {
           </div>
         </div>
 
+        {/* Disclaimer (tiny text similar to wireframe) */}
+        <p className="text-xs text-gray-500">
+          Only personal notes and self-created materials are permitted. Official course notes,
+          commercial notes, or copyrighted materials are not allowed. The platform is not
+          responsible for any transactions, content accuracy, or disputes.
+        </p>
+
         {err ? <p className="text-sm text-red-600">{err}</p> : null}
 
         <div className="flex justify-end gap-2">
@@ -268,5 +289,6 @@ export default function CourseWrite() {
     </div>
   );
 }
+
 
 
