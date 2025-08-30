@@ -26,6 +26,37 @@ const ALLOWED_MIME = new Set([
 const MAX_SIZE = 25 * 1024 * 1024; // 25MB
 
 /**
+ * NEW: school-wide recent materials for dashboard preview
+ * GET /api/:school/materials/recent?limit=5
+ * - limit: 1..20 (default 5)
+ * Returns: latest materials (any course/semester) for the given school.
+ */
+router.get("/recent", async (req, res) => {
+  const school = low(req.params.school);
+  const limit = Math.min(20, Math.max(1, parseInt(req.query.limit || "5", 10)));
+
+  const items = await Material.find({ school, status: { $ne: "archived" } })
+    .sort({ createdAt: -1 })
+    .limit(limit)
+    .lean();
+
+  res.json({
+    items: items.map((m) => ({
+      id: m._id,
+      courseCode: m.courseCode,
+      courseTitle: m.courseTitle,
+      semester: m.semester,
+      materialType: m.materialType,
+      kind: m.kind,
+      title: m.title,
+      authorName: m.authorName,
+      uploaderEmail: m.uploaderEmail,
+      createdAt: m.createdAt,
+    })),
+  });
+});
+
+/**
  * GET /api/:school/materials
  * Query:
  *   course=CS-UY%201133     (required)
@@ -111,14 +142,10 @@ router.get("/:id", async (req, res) => {
 
 /**
  * POST /api/:school/materials
- * Body (Frame 9 — NO file upload required):
+ * Body (NO file required):
  *   { courseCode, courseTitle?, semester, kind,
  *     materialType?, isFree?, price?, sharePreference?,
  *     title?, tags?, url?, fileUrl?, filePublicId?, fileMime?, fileSize?, hash? }
- *
- * Notes:
- *  - fileUrl OR url are optional now (listing-only allowed).
- *  - If isFree === false, price must be >= 1 (USD assumed).
  */
 router.post("/", async (req, res) => {
   const school = low(req.params.school);
@@ -137,7 +164,6 @@ router.post("/", async (req, res) => {
   const fileSize = Number.isFinite(body.fileSize) ? body.fileSize : 0;
   const hash = n(body.hash || "");
 
-  // New fields
   const materialType = n(body.materialType || "personalMaterial");
   const isFree = typeof body.isFree === "boolean" ? body.isFree : true;
   const price = Number.isFinite(body.price) ? Math.max(0, body.price) : 0;
@@ -146,22 +172,18 @@ router.post("/", async (req, res) => {
   if (!courseCode) return res.status(400).json({ message: "courseCode is required" });
   if (!semester || !SEM.test(semester)) return res.status(400).json({ message: "Invalid semester" });
 
-  // normalize kind (quiz -> exam)
   if (kind === "quiz") kind = "exam";
   if (!["note", "syllabus", "exam", "slide", "link", "other"].includes(kind)) {
     return res.status(400).json({ message: "invalid kind" });
   }
 
-  // Attachments are OPTIONAL now — but validate if provided
   if (fileUrl) {
-    if (fileSize > 25 * 1024 * 1024) return res.status(400).json({ message: "File too large" });
+    if (fileSize > MAX_SIZE) return res.status(400).json({ message: "File too large" });
     if (fileMime && !ALLOWED_MIME.has(fileMime)) return res.status(400).json({ message: "File type not allowed" });
   }
 
-  // If paid listing, require a positive price
   if (!isFree && price < 1) return res.status(400).json({ message: "Price must be at least 1" });
 
-  // Minimal course upsert for search consistency
   if (courseTitle) {
     await CourseCatalog.findOneAndUpdate(
       { school, code: courseCode },
@@ -217,4 +239,5 @@ router.delete("/:id", async (req, res) => {
 });
 
 module.exports = router;
+
 
