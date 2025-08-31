@@ -1,0 +1,171 @@
+// frontend/src/pages/courses/Courses.jsx
+import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../contexts/AuthContext";
+import { useSchool } from "../../contexts/SchoolContext";
+import { useSchoolPath } from "../../utils/schoolPath";
+import { listRecentMaterials } from "../../api/materials";
+
+// 단순 포맷터들
+const prettyKind = (v) =>
+  v === "note"
+    ? "Class Note"
+    : v === "syllabus"
+    ? "Syllabus"
+    : v === "exam"
+    ? "Exam"
+    : v === "slide"
+    ? "Slide"
+    : v === "link"
+    ? "Link"
+    : "Other";
+
+const timeAgo = (iso) => {
+  if (!iso) return "";
+  const d = new Date(iso).getTime();
+  const diff = Math.max(0, Date.now() - d);
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d2 = Math.floor(h / 24);
+  return `${d2}d ago`;
+};
+
+export default function Courses() {
+  const { token } = useAuth();
+  const { school } = useSchool();
+  const navigate = useNavigate();
+  const schoolPath = useSchoolPath();
+
+  // 화면 상태
+  const [items, setItems] = useState([]);
+  const [limit, setLimit] = useState(20); // 필요 시 더보기
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState("");
+
+  // 테마 감안 없이 깔끔한 기본 스타일
+  const containerClass = "mx-auto max-w-5xl p-4 sm:p-6";
+  const cardClass =
+    "rounded-2xl border shadow-sm p-4 hover:shadow-md transition-shadow bg-white";
+
+  useEffect(() => {
+    let alive = true;
+    async function run() {
+      if (!school || !token) return;
+      setLoading(true);
+      setErr("");
+      try {
+        // 학교 단위 최신 글 가져오기
+        const res = await listRecentMaterials({ school, token, limit });
+        const list = Array.isArray(res?.items) ? res.items : [];
+        if (alive) setItems(list);
+      } catch (e) {
+        if (alive) setErr("Failed to load postings.");
+      } finally {
+        if (alive) setLoading(false);
+      }
+    }
+    run();
+    return () => {
+      alive = false;
+    };
+  }, [school, token, limit]);
+
+  const onCreate = () => navigate(schoolPath("/courses/write"));
+
+  const goDetail = (id) => {
+    // 디테일 화면은 쿼리 없이도 동작(없으면 뒤로가기 처리)합니다. :contentReference[oaicite:2]{index=2}
+    navigate(schoolPath(`/courses/materials/${encodeURIComponent(id)}`));
+  };
+
+  const empty = !loading && !items.length && !err;
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <div className={containerClass}>
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h1 className="text-xl font-semibold">CourseHub</h1>
+          <button
+            onClick={onCreate}
+            className="rounded-xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700"
+          >
+            Create
+          </button>
+        </div>
+
+        {/* 리스트 */}
+        {loading && (
+          <div className="space-y-3">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div
+                key={i}
+                className="h-[84px] animate-pulse rounded-2xl bg-gray-200"
+              />
+            ))}
+          </div>
+        )}
+
+        {err && (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            {err}
+          </div>
+        )}
+
+        {empty && (
+          <div className="rounded-xl border bg-white p-6 text-center text-sm text-gray-500">
+            No postings yet. Be the first to create one!
+          </div>
+        )}
+
+        {!!items.length && (
+          <ul className="space-y-3">
+            {items.map((m) => (
+              <li key={m.id || m._id}>
+                <button
+                  className={cardClass + " w-full text-left"}
+                  onClick={() => goDetail(m.id || m._id)}
+                >
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <div className="text-sm font-semibold">
+                        {m.courseCode || "Unknown course"}
+                        {m.semester ? ` · ${m.semester}` : ""}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {prettyKind(m.kind)}{" "}
+                        {m.materialType ? `• ${m.materialType}` : ""}{" "}
+                        {m.authorName ? `• ${m.authorName}` : ""}
+                      </div>
+                    </div>
+                    <div className="text-xs text-gray-400">{timeAgo(m.createdAt)}</div>
+                  </div>
+
+                  {m.title ? (
+                    <div className="mt-1 text-sm text-gray-700 line-clamp-2">
+                      {m.title}
+                    </div>
+                  ) : null}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {/* (선택) 더보기 */}
+        {!!items.length && items.length >= limit && (
+          <div className="mt-4 flex justify-center">
+            <button
+              className="rounded-xl border px-4 py-2 text-sm hover:bg-gray-50"
+              onClick={() => setLimit((v) => Math.min(100, v + 20))}
+            >
+              Load more
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+

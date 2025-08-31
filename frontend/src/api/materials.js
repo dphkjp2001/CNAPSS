@@ -1,8 +1,12 @@
 // frontend/src/api/materials.js
 import { apiFetch } from "./http";
 
+// VITE_API_URL already includes "/api", e.g. https://api.cnapss.com/api
+const API = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
+
+// POST /api/:school/materials
 export async function createMaterial({ school, token, payload }) {
-  return apiFetch(`${import.meta.env.VITE_API_URL}/api/${school}/materials`, {
+  const res = await apiFetch(`${API}/${encodeURIComponent(school)}/materials`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -10,8 +14,11 @@ export async function createMaterial({ school, token, payload }) {
     },
     body: JSON.stringify(payload),
   });
+  if (!res.ok) throw new Error("Failed to create material");
+  return res.json();
 }
 
+// GET /api/:school/materials?course=&semester=&kind=&sort=&page=&limit=
 export async function listMaterials({
   school,
   token,
@@ -23,30 +30,40 @@ export async function listMaterials({
   limit = 50,
 }) {
   const qs = new URLSearchParams({
-    course,
-    semester,
+    course: course || "",
+    semester: semester || "",
     kind,
     sort,
     page: String(page),
     limit: String(limit),
-  });
-  return apiFetch(
-    `${import.meta.env.VITE_API_URL}/api/${school}/materials?${qs.toString()}`,
-    { headers: { Authorization: `Bearer ${token}` } }
-  );
-}
+  }).toString();
 
-export async function getMaterial({ school, token, id }) {
-  return apiFetch(`${import.meta.env.VITE_API_URL}/api/${school}/materials/${id}`, {
+  const res = await apiFetch(`${API}/${encodeURIComponent(school)}/materials?${qs}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
+  if (!res.ok) throw new Error("Failed to load materials");
+  return res.json();
 }
 
-// 👇 NEW: dashboard preview (school-wide recent)
-export async function listRecentMaterials({ school, token, limit = 5 }) {
-  const qs = new URLSearchParams({ limit: String(Math.max(1, Math.min(20, limit))) });
-  return apiFetch(
-    `${import.meta.env.VITE_API_URL}/api/${school}/materials/recent?${qs.toString()}`,
-    { headers: { Authorization: `Bearer ${token}` } }
-  );
+// GET /api/:school/materials/:id
+export async function getMaterial({ school, token, id }) {
+  const res = await apiFetch(`${API}/${encodeURIComponent(school)}/materials/${id}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error("Failed to load material");
+  return res.json();
 }
+
+// GET /api/:school/materials/recent?limit=
+export async function listRecentMaterials({ school, token, limit = 5 }) {
+  const qs = new URLSearchParams({
+    limit: String(Math.max(1, Math.min(20, limit))),
+  }).toString();
+
+  const res = await apiFetch(`${API}/${encodeURIComponent(school)}/materials/recent?${qs}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error("Failed to load recent materials");
+  return res.json();
+}
+

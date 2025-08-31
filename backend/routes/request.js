@@ -5,60 +5,118 @@ const router = express.Router({ mergeParams: true });
 
 const Request = require("../models/Request");
 const MarketItem = require("../models/MarketItem");
+const Material = require("../models/Material");
 const Conversation = require("../models/Conversation");
 const Message = require("../models/Message");
 
 const norm = (v) => String(v || "").trim().toLowerCase();
 
+function isValidId(id) {
+  return mongoose.Types.ObjectId.isValid(String(id));
+}
+
 /**
  * POST /api/:school/request
- * body: { itemId, message }
- * - buyer email은 req.user.email에서 가져온다(신뢰 가능한 소스)
- * - item.school과 req.params.school이 일치해야 한다
+ * body (market):   { type: "market",  targetId, message }
+ * body (coursehub):{ type: "coursehub", targetId, message }
+ *  - buyer email은 req.user.email
+ *  - target.school 과 URL의 :school 일치
+ *  - 기존 마켓 플로우는 itemId로도 계속 동작 (호환)
  */
 router.post("/", async (req, res) => {
   try {
     const school = norm(req.params.school);
     const buyerEmail = norm(req.user?.email);
-    const { itemId, message } = req.body || {};
+    const { type, targetId, itemId, message } = req.body || {};
 
-    if (!school || !buyerEmail || !itemId || !message) {
+    if (!school || !buyerEmail || !message) {
       return res.status(400).json({ message: "Missing required fields." });
     }
 
-    const objectId = new mongoose.Types.ObjectId(itemId);
+    // ─────────────────────────────────────────
+    // 1) 타겟 판별
+    let source = (type || "").trim().toLowerCase();
+    let targetObject = null;
+    let sellerEmail = "";
+    let resourceTitle = "";
+    let resId = null;
 
-    // 1) 아이템 + 학교 확인
-    const item = await MarketItem.findOne({ _id: objectId, school }).lean();
-    if (!item) return res.status(404).json({ message: "Item not found." });
+    if (!source) {
+      // 레거시: itemId가 오면 market으로 간주
+      if (itemId) source = "market";
+    }
 
-    const sellerEmail = norm(item.seller);
+    if (source === "market") {
+      const id = targetId || itemId;
+      if (!isValidId(id)) return res.status(400).json({ message: "Invalid itemId." });
+      targetObject = await MarketItem.findOne({ _id: id, school }).lean();
+      if (!targetObject) return res.status(404).json({ message: "Item not found." });
+      sellerEmail = norm(targetObject.seller);
+      resourceTitle = targetObject.title || "";
+      resId = new mongoose.Types.ObjectId(id);
+    } else if (source === "coursehub") {
+      if (!isValidId(targetId)) return res.status(400).json({ message: "Invalid materialId." });
+      targetObject = await Material.findOne({ _id: targetId, school }).lean();
+      if (!targetObject) return res.status(404).json({ message: "Material not found." });
+      // uploaderEmail 이 소유자 이메일
+      sellerEmail = norm(targetObject.uploaderEmail || targetObject.authorEmail || "");
+      if (!sellerEmail) return res.status(400).json({ message: "Material owner email missing." });
+      // 리스트 표시용 스냅샷
+      resourceTitle = targetObject.courseTitle
+        ? targetObject.courseTitle
+        : targetObject.courseCode || "";
+      resId = new mongoose.Types.ObjectId(targetId);
+    } else {
+      return res.status(400).json({ message: "Invalid type." });
+    }
 
-    // 2) 중복 요청 방지(학교 단위)
-    const exists = await Request.findOne({ school, itemId: objectId, buyer: buyerEmail });
+    if (buyerEmail === sellerEmail) {
+      return res.status(400).json({ message: "Cannot send request to yourself." });
+    }
+
+    // ─────────────────────────────────────────
+    // 2) 중복 요청 방지
+    const dupFilter =
+      source === "market"
+        ? { school, source, itemId: resId, buyer: buyerEmail }
+        : { school, source, materialId: resId, buyer: buyerEmail };
+
+    const exists = await Request.findOne(dupFilter);
     if (exists) return res.status(409).json({ message: "Request already sent." });
 
-    await Request.create({ school, itemId: objectId, buyer: buyerEmail, message });
-
-    // 3) 대화방 조회/생성 (학교 포함)
-    let conversation = await Conversation.findOne({
-      itemId: objectId,
+    // 저장
+    const requestDoc = await Request.create({
+      school,
+      source,
+      itemId: source === "market" ? resId : null,
+      materialId: source === "coursehub" ? resId : null,
       buyer: buyerEmail,
       seller: sellerEmail,
-      school,
+      message,
     });
 
+    // ─────────────────────────────────────────
+    // 3) 대화방 조회/생성 (아이템 단위로 고유)
+    const convoFilter = {
+      school,
+      buyer: buyerEmail,
+      seller: sellerEmail,
+      source,
+      resourceId: resId,
+    };
+
+    let conversation = await Conversation.findOne(convoFilter);
     if (!conversation) {
       conversation = await Conversation.create({
-        itemId: objectId,
-        buyer: buyerEmail,
-        seller: sellerEmail,
-        school,
+        ...convoFilter,
+        itemId: source === "market" ? resId : null, // 레거시 호환
+        resourceTitle,
         lastMessage: message,
       });
     }
 
-    // 4) 메시지 저장 (학교 포함)
+    // ─────────────────────────────────────────
+    // 4) 메시지 저장 + 최신화
     await Message.create({
       conversationId: conversation._id,
       sender: buyerEmail,
@@ -66,14 +124,14 @@ router.post("/", async (req, res) => {
       school,
     });
 
-    // 5) 대화방 최신화
     conversation.lastMessage = message;
     conversation.updatedAt = new Date();
     await conversation.save();
 
     return res.status(201).json({
-      message: "Request and chat created successfully.",
+      ok: true,
       conversationId: conversation._id,
+      requestId: requestDoc._id,
     });
   } catch (err) {
     console.error("❌ Request handling failed:", err);
@@ -82,8 +140,8 @@ router.post("/", async (req, res) => {
 });
 
 /**
- * GET /api/:school/request/:itemId/:buyer(ignored)
- * - 프런트 호환을 위해 경로는 유지하되, 실제 buyer는 req.user.email을 사용
+ * GET /api/:school/request/:itemId/:buyer?
+ * - 레거시(마켓) 호환용: 현재는 market만 체크
  */
 router.get("/:itemId/:buyer?", async (req, res) => {
   try {
@@ -91,7 +149,7 @@ router.get("/:itemId/:buyer?", async (req, res) => {
     const buyerEmail = norm(req.user?.email);
     const objectId = new mongoose.Types.ObjectId(req.params.itemId);
 
-    const exists = await Request.findOne({ school, itemId: objectId, buyer: buyerEmail });
+    const exists = await Request.findOne({ school, source: "market", itemId: objectId, buyer: buyerEmail });
     res.json({ alreadySent: !!exists });
   } catch (err) {
     console.error("❌ Lookup failed:", err);
@@ -100,6 +158,7 @@ router.get("/:itemId/:buyer?", async (req, res) => {
 });
 
 module.exports = router;
+
 
 
 

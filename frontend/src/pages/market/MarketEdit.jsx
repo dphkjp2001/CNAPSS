@@ -1,5 +1,5 @@
-// src/pages/market/MarketEdit.jsx
-import React, { useEffect, useMemo, useState } from "react";
+// frontend/src/pages/market/MarketEdit.jsx
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { getItem, updateItem } from "../../api/market";
 import { useAuth } from "../../contexts/AuthContext";
@@ -15,21 +15,16 @@ const currency = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 0,
 });
 
-const MarketEdit = () => {
+export default function MarketEdit() {
   const { id } = useParams();
   const navigate = useNavigate();
   const schoolPath = useSchoolPath();
   const { user, token } = useAuth();
   const { school, schoolTheme } = useSchool();
-  const baseURL = import.meta.env.VITE_API_URL;
+  const fileInputRef = useRef(null);
 
-  const [form, setForm] = useState({
-    title: "",
-    description: "",
-    price: "",
-  });
-
-  // images: [{ url, isCover?: boolean, uploading?: boolean }]
+  const [form, setForm] = useState({ title: "", description: "", price: "" });
+  // images: [{ url: string, public_id?: string, uploading?: boolean, isCover?: boolean }]
   const [images, setImages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
@@ -41,39 +36,39 @@ const MarketEdit = () => {
     return true;
   }, [form.title, form.price]);
 
+  // ⛳ 핵심: 의존성 최소화 (schoolPath, navigate, user 빼기)
   useEffect(() => {
-    let mounted = true;
-    const fetchItem = async () => {
+    let cancelled = false;
+    (async () => {
       try {
         const data = await getItem({ school, token, id });
+        if (cancelled) return;
 
+        // 본인 글만 수정 가능
         if (data.seller !== user?.email) {
           alert("You don’t have permission to edit this listing.");
-          navigate(schoolPath("/market"));
+          navigate(`/` + school + `/market`);
           return;
         }
 
-        if (!mounted) return;
         setForm({
           title: data.title || "",
           description: data.description || "",
           price: String(data.price ?? ""),
         });
+
         const imgs = Array.isArray(data.images) ? data.images : [];
         setImages(imgs.map((u, idx) => ({ url: u, isCover: idx === 0 })));
       } catch (e) {
         console.error(e);
         alert("Failed to load the listing.");
-        navigate(schoolPath("/market"));
+        navigate(`/` + school + `/market`);
       } finally {
-        if (mounted) setLoading(false);
+        if (!cancelled) setLoading(false);
       }
-    };
-    fetchItem();
-    return () => {
-      mounted = false;
-    };
-  }, [id, user, navigate, school, schoolPath, token]);
+    })();
+    return () => { cancelled = true; };
+  }, [id, school, token]); // ✅ 여기에 함수/객체 넣지 않기
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -85,27 +80,40 @@ const MarketEdit = () => {
     setForm((prev) => ({ ...prev, price: cleaned }));
   };
 
-  // instant upload & merge
+  const toUrl = (uploaded) =>
+    typeof uploaded === "string" ? uploaded : uploaded?.secure_url || uploaded?.url || "";
+
+  // 이미지 선택/드롭 → 즉시 업로드
   const handleFiles = async (fileList) => {
     const room = Math.max(0, MAX_IMAGES - images.length);
     const files = Array.from(fileList || []).slice(0, room);
     if (!files.length) return;
 
-    // optimistic placeholders
-    const placeholders = files.map((f) => ({
+    // 낙관적 placeholder
+    const placeholders = files.map((f, i) => ({
       url: URL.createObjectURL(f),
       uploading: true,
+      isCover: images.length === 0 && i === 0,
     }));
     setImages((prev) => [...prev, ...placeholders]);
 
-    // upload sequentially
+    // 순차 업로드
     for (let i = 0; i < files.length; i++) {
       try {
-        const url = await uploadToCloudinary(files[i]);
+        const uploaded = await uploadToCloudinary(files[i]); // 객체 반환
+        const finalUrl = toUrl(uploaded);
+
         setImages((prev) => {
           const next = [...prev];
           const idx = next.findIndex((x) => x.uploading);
-          if (idx !== -1) next[idx] = { url, uploading: false };
+          if (idx !== -1) {
+            next[idx] = {
+              ...next[idx],
+              url: finalUrl,
+              public_id: typeof uploaded === "object" ? uploaded.public_id : undefined,
+              uploading: false,
+            };
+          }
           return next;
         });
       } catch (e) {
@@ -119,18 +127,24 @@ const MarketEdit = () => {
         setErr("Failed to upload one or more images.");
       }
     }
+
+    // 같은 파일 재선택 허용
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const removeImage = (idx) => {
-    setImages((prev) => prev.filter((_, i) => i !== idx));
+    setImages((prev) => {
+      const next = prev.filter((_, i) => i !== idx);
+      if (next.length > 0) next[0].isCover = true; // 항상 0번이 커버
+      return next;
+    });
   };
 
   const setAsCover = (idx) => {
     setImages((prev) => {
-      const next = prev.map((img, i) => ({ ...img, isCover: i === idx }));
-      const [picked] = next.splice(idx, 1);
-      next.unshift(picked);
-      return next;
+      const picked = { ...prev[idx], isCover: true };
+      const rest = prev.filter((_, i) => i !== idx).map((x) => ({ ...x, isCover: false }));
+      return [picked, ...rest];
     });
   };
 
@@ -139,27 +153,22 @@ const MarketEdit = () => {
     if (!isValid || images.some((i) => i.uploading)) return;
 
     try {
-      setLoading(true);
       setErr("");
-
       await updateItem({
-               school,
-               token,
-               id,
-               payload: {
-                 title: form.title.trim(),
-                 description: form.description.trim(),
-                 price: parseFloat(form.price),
-                 images: images.map((i) => i.url), // cover at index 0
-               },
-        });
-      navigate(schoolPath(`/market/${id}`));
+        school,
+        token,
+        id,
+        payload: {
+          title: form.title.trim(),
+          description: form.description.trim(),
+          price: Number(form.price),
+          images: images.map((i) => i.url), // 문자열 배열로 보냄
+        },
+      });
+      navigate(`/` + school + `/market/` + id);
     } catch (e) {
       console.error(e);
       setErr("Failed to save changes. Please try again.");
-      alert("Update failed.");
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -181,7 +190,6 @@ const MarketEdit = () => {
     >
       <div className="mx-auto max-w-3xl">
         <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
-          {/* Header */}
           <div className="border-b border-gray-100 p-5 sm:p-6">
             <h1 className="text-xl font-bold text-gray-900">Edit Listing</h1>
             <p className="mt-1 text-sm text-gray-500">
@@ -189,7 +197,6 @@ const MarketEdit = () => {
             </p>
           </div>
 
-          {/* Body */}
           <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-6">
             {/* Photos */}
             <section>
@@ -208,6 +215,7 @@ const MarketEdit = () => {
               >
                 <input
                   id="file-input"
+                  ref={fileInputRef}
                   type="file"
                   accept="image/*"
                   multiple
@@ -227,10 +235,7 @@ const MarketEdit = () => {
               {images.length > 0 && (
                 <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
                   {images.map((img, idx) => (
-                    <div
-                      key={idx}
-                      className="group relative overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm"
-                    >
+                    <div key={idx} className="group relative overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
                       <div className="aspect-[4/3] bg-gray-50">
                         <img
                           src={img.url}
@@ -317,14 +322,12 @@ const MarketEdit = () => {
               />
             </section>
 
-            {/* Error */}
             {err && (
               <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
                 {err}
               </div>
             )}
 
-            {/* Actions */}
             <div className="flex items-center justify-end gap-2 border-t border-gray-100 pt-4">
               <button
                 type="button"
@@ -347,7 +350,8 @@ const MarketEdit = () => {
       </div>
     </div>
   );
-};
+}
 
 
-export default MarketEdit;
+
+

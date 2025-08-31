@@ -1,3 +1,4 @@
+//src/pages/schedule/CourseSearch.jsx
 import React, { useState, useMemo } from "react";
 
 function CourseSearch({ data, onSelect }) {

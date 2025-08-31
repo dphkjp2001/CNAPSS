@@ -95,8 +95,10 @@ export default function CourseWrite() {
         tags: [],
       };
 
+      // ✅ IMPORTANT: VITE_API_URL already ends with "/api"
+      // so DO NOT prepend another "/api" here.
       const API = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
-      await postJson(`${API}/api/${encodeURIComponent(school)}/materials`, payload);
+      await postJson(`${API}/${encodeURIComponent(school)}/materials`, payload);
 
       navigate(
         schoolPath(
@@ -186,15 +188,14 @@ export default function CourseWrite() {
         </div>
 
         {/* Price */}
-        <div className="flex flex-col gap-2">
+        <div>
           <label className="mb-1 block text-sm font-medium">Price</label>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-4">
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="radio"
-                name="free"
-                value="free"
-                checked={isFree === true}
+                name="priceType"
+                checked={isFree}
                 onChange={() => setIsFree(true)}
               />
               Free
@@ -202,23 +203,21 @@ export default function CourseWrite() {
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="radio"
-                name="free"
-                value="paid"
-                checked={isFree === false}
+                name="priceType"
+                checked={!isFree}
                 onChange={() => setIsFree(false)}
               />
               Paid
             </label>
-
             <input
               type="number"
-              min={1}
+              min="1"
               step="1"
               disabled={isFree}
               value={isFree ? "" : price}
-              onChange={(e) => setPrice(parseInt(e.target.value, 10) || 0)}
+              onChange={(e) => setPrice(Number(e.target.value))}
               placeholder="Amount"
-              className="w-32 rounded-lg border px-3 py-2 text-sm disabled:bg-gray-100"
+              className="w-28 rounded-lg border px-3 py-2 text-sm disabled:bg-gray-100"
             />
           </div>
         </div>
@@ -230,7 +229,7 @@ export default function CourseWrite() {
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="radio"
-                name="sharePreference"
+                name="sharePref"
                 value="in_person"
                 checked={sharePreference === "in_person"}
                 onChange={(e) => setSharePreference(e.target.value)}
@@ -240,7 +239,7 @@ export default function CourseWrite() {
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="radio"
-                name="sharePreference"
+                name="sharePref"
                 value="online"
                 checked={sharePreference === "online"}
                 onChange={(e) => setSharePreference(e.target.value)}
@@ -250,7 +249,7 @@ export default function CourseWrite() {
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="radio"
-                name="sharePreference"
+                name="sharePref"
                 value="either"
                 checked={sharePreference === "either"}
                 onChange={(e) => setSharePreference(e.target.value)}
@@ -260,20 +259,19 @@ export default function CourseWrite() {
           </div>
         </div>
 
-        {/* Disclaimer (tiny text similar to wireframe) */}
-        <p className="text-xs text-gray-500">
-          Only personal notes and self-created materials are permitted. Official course notes,
-          commercial notes, or copyrighted materials are not allowed. The platform is not
-          responsible for any transactions, content accuracy, or disputes.
-        </p>
+        {/* Error */}
+        {err && (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            {err}
+          </div>
+        )}
 
-        {err ? <p className="text-sm text-red-600">{err}</p> : null}
-
-        <div className="flex justify-end gap-2">
+        {/* Actions */}
+        <div className="flex items-center justify-end gap-2">
           <button
             type="button"
-            className="rounded-xl border px-4 py-2 text-sm"
             onClick={() => navigate(-1)}
+            className="rounded-xl border px-4 py-2 text-sm"
           >
             Cancel
           </button>
@@ -282,13 +280,14 @@ export default function CourseWrite() {
             disabled={busy}
             className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
           >
-            {busy ? "Saving..." : "Create"}
+            {busy ? "Creating…" : "Create"}
           </button>
         </div>
       </form>
     </div>
   );
 }
+
 
 
 

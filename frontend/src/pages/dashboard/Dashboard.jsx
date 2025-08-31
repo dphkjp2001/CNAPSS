@@ -11,15 +11,13 @@ import { useSchoolPath } from "../../utils/schoolPath";
 import { useLoginGate } from "../../hooks/useLoginGate";
 
 import { listPosts, getPublicPosts } from "../../api/posts";
-import CourseHubPreview from "./CourseHubPreview";
+// ⛔️ Removed: import CourseHubPreview from "./CourseHubPreview";
 
 dayjs.extend(relativeTime);
 dayjs.locale("en");
 
 const avatarBg = (hex) => ({
-  background:
-    hex ||
-    "linear-gradient(135deg, rgba(124,58,237,0.12), rgba(99,102,241,0.12))",
+  background: hex || "linear-gradient(135deg, rgba(124,58,237,0.12), rgba(99,102,241,0.12))",
 });
 
 export default function Dashboard() {
@@ -45,11 +43,7 @@ export default function Dashboard() {
         if (token) data = await listPosts({ school, token });
         else data = await getPublicPosts({ school, page: 1, limit: 10 });
 
-        const rows = Array.isArray(data)
-          ? data
-          : Array.isArray(data?.items)
-          ? data.items
-          : [];
+        const rows = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : [];
         if (alive) setPosts(rows.slice(0, 5));
       } catch {
         if (alive) setErrorPosts("Failed to load posts.");
@@ -130,9 +124,7 @@ export default function Dashboard() {
                   ))}
                 </ul>
               ) : errorPosts ? (
-                <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
-                  {errorPosts}
-                </div>
+                <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{errorPosts}</div>
               ) : posts.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-gray-300 p-6 text-center text-sm text-gray-600">
                   No posts yet. Be the first to write!
@@ -142,17 +134,13 @@ export default function Dashboard() {
                   {posts.map((p) => (
                     <li key={p._id} className="py-4">
                       <button
-                        onClick={() =>
-                          ensureAuth(() => nav(schoolPath(`/freeboard/${p._id}`)))
-                        }
+                        onClick={() => ensureAuth(() => nav(schoolPath(`/freeboard/${p._id}`)))}
                         className="block w-full text-left"
                       >
                         <h3 className="line-clamp-1 text-base font-semibold text-gray-900 hover:underline">
                           {p.title}
                         </h3>
-                        <p className="mt-1 text-xs text-gray-500">
-                          {dayjs(p.createdAt).fromNow()}
-                        </p>
+                        <p className="mt-1 text-xs text-gray-500">{dayjs(p.createdAt).fromNow()}</p>
                       </button>
                     </li>
                   ))}
@@ -170,7 +158,7 @@ export default function Dashboard() {
               </div>
             </section>
 
-            {/* Course Material (main area) */}
+            {/* CourseHub (no preview — CTA only) */}
             <section className="mt-5 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
               <div className="mb-3 flex items-center justify-between">
                 <h2
@@ -181,7 +169,22 @@ export default function Dashboard() {
                   CourseHub
                 </h2>
               </div>
-              <CourseHubPreview />
+
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => ensureAuth(() => nav(schoolPath("/courses/write")))}
+                  className="rounded-xl border px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                >
+                  Upload note
+                </button>
+                <button
+                  onClick={() => nav(schoolPath("/courses"))}
+                  className="rounded-xl px-4 py-2 text-sm font-semibold text-white shadow"
+                  style={{ backgroundColor: schoolTheme?.primary || "#6b46c1" }}
+                >
+                  Open Course Hub
+                </button>
+              </div>
             </section>
           </main>
 
@@ -242,6 +245,8 @@ function DashLink({ children, onClick }) {
     </button>
   );
 }
+
+
 
 
 

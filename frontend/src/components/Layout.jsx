@@ -360,7 +360,7 @@ function Layout() {
               onClick={() => navigate(schoolPath("/dashboard"))}
               className="transition hover:text-softGold"
             >
-              Course Recs
+              Course Hub
             </button>
 
             <div

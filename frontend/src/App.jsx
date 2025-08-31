@@ -15,10 +15,12 @@ import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
 import AuthRequired from "./pages/auth/AuthRequired";
 
-import CourseBrowser from "./pages/courses/CourseBrowser";
-import CourseMaterials from "./pages/courses/CourseMaterials";
+// ⬇️ NEW: CourseHub 메인 리스트 화면
+import Courses from "./pages/courses/Courses.jsx";
+
+// ⬇️ 유지: 작성/상세
 import CourseWrite from "./pages/courses/CourseWrite";
-import MaterialDetail from "./pages/courses/MaterialDetail"; // ⬅️ NEW
+import MaterialDetail from "./pages/courses/MaterialDetail";
 
 const Dashboard = lazy(() => import("./pages/dashboard/Dashboard"));
 const MyPosts = lazy(() => import("./pages/dashboard/MyPosts"));
@@ -48,6 +50,12 @@ function NormalizeDashboard() {
 function EditToDetailRedirect() {
   const { id } = useParams();
   return <Navigate to={`../freeboard/${id}`} replace />;
+}
+
+// ⬇️ 과거 코스별 폴더 경로 → 메인 리스트로 리다이렉트
+function LegacyCourseMaterialsRedirect() {
+  const { school } = useParams();
+  return <Navigate to={`/${school}/courses`} replace />;
 }
 
 function App() {
@@ -81,39 +89,160 @@ function App() {
 
             {/* FreeBoard */}
             <Route path="freeboard" element={<FreeBoardList />} />
-            <Route path="freeboard/:id" element={<RequireAuth><FreeBoardDetail /></RequireAuth>} />
-            <Route path="freeboard/write" element={<RequireAuth><FreeBoardWrite /></RequireAuth>} />
-            <Route path="freeboard/edit/:id" element={<RequireAuth><EditToDetailRedirect /></RequireAuth>} />
+            <Route
+              path="freeboard/:id"
+              element={
+                <RequireAuth>
+                  <FreeBoardDetail />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="freeboard/write"
+              element={
+                <RequireAuth>
+                  <FreeBoardWrite />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="freeboard/edit/:id"
+              element={
+                <RequireAuth>
+                  <EditToDetailRedirect />
+                </RequireAuth>
+              }
+            />
 
             {/* Dashboard sub-pages */}
-            <Route path="myposts" element={<RequireAuth><MyPosts /></RequireAuth>} />
-            <Route path="liked" element={<RequireAuth><LikedPosts /></RequireAuth>} />
-            <Route path="commented" element={<RequireAuth><CommentedPosts /></RequireAuth>} />
+            <Route
+              path="myposts"
+              element={
+                <RequireAuth>
+                  <MyPosts />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="liked"
+              element={
+                <RequireAuth>
+                  <LikedPosts />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="commented"
+              element={
+                <RequireAuth>
+                  <CommentedPosts />
+                </RequireAuth>
+              }
+            />
 
             {/* Market */}
-            <Route path="market" element={<RequireAuth><MarketList /></RequireAuth>} />
-            <Route path="market/:id" element={<RequireAuth><MarketDetail /></RequireAuth>} />
-            <Route path="market/write" element={<RequireAuth><MarketWrite /></RequireAuth>} />
-            <Route path="market/:id/edit" element={<RequireAuth><MarketEdit /></RequireAuth>} />
+            <Route
+              path="market"
+              element={
+                <RequireAuth>
+                  <MarketList />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="market/:id"
+              element={
+                <RequireAuth>
+                  <MarketDetail />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="market/write"
+              element={
+                <RequireAuth>
+                  <MarketWrite />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="market/:id/edit"
+              element={
+                <RequireAuth>
+                  <MarketEdit />
+                </RequireAuth>
+              }
+            />
 
             {/* Messages */}
-            <Route path="messages" element={<RequireAuth><Messages /></RequireAuth>} />
+            <Route
+              path="messages"
+              element={
+                <RequireAuth>
+                  <Messages />
+                </RequireAuth>
+              }
+            />
 
             {/* Schedule */}
-            <Route path="personal-schedule" element={<RequireAuth><PersonalSchedule /></RequireAuth>} />
-            <Route path="group-availability" element={<RequireAuth><GroupAvailability /></RequireAuth>} />
+            <Route
+              path="personal-schedule"
+              element={
+                <RequireAuth>
+                  <PersonalSchedule />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="group-availability"
+              element={
+                <RequireAuth>
+                  <GroupAvailability />
+                </RequireAuth>
+              }
+            />
 
             {/* FoodMap */}
-            <Route path="foodmap" element={<RequireAuth><FoodMap /></RequireAuth>} />
+            <Route
+              path="foodmap"
+              element={
+                <RequireAuth>
+                  <FoodMap />
+                </RequireAuth>
+              }
+            />
           </Route>
 
           {/* Courses (scoped) */}
-          <Route path="/:school/courses" element={<RequireAuth><CourseBrowser /></RequireAuth>} />
-          <Route path="/:school/courses/:courseId/materials" element={<RequireAuth><CourseMaterials /></RequireAuth>} />
-          <Route path="/:school/courses/write" element={<RequireAuth><CourseWrite /></RequireAuth>} />
-
-          {/* ⬇️ NEW: Material detail */}
-          <Route path="/:school/courses/materials/:id" element={<RequireAuth><MaterialDetail /></RequireAuth>} />
+          <Route
+            path="/:school/courses"
+            element={
+              <RequireAuth>
+                <Courses />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/:school/courses/write"
+            element={
+              <RequireAuth>
+                <CourseWrite />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/:school/courses/materials/:id"
+            element={
+              <RequireAuth>
+                <MaterialDetail />
+              </RequireAuth>
+            }
+          />
+          {/* 과거 코스별 폴더 경로 대응 → 메인으로 */}
+          <Route
+            path="/:school/courses/:courseId/materials"
+            element={<LegacyCourseMaterialsRedirect />}
+          />
 
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/select-school" replace />} />
@@ -124,6 +253,7 @@ function App() {
 }
 
 export default App;
+
 
 
 
