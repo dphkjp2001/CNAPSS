@@ -352,7 +352,7 @@ export default function ChatBox({
         />
         <button
           onClick={handleSend}
-          disabled={!socket}
+          disabled={!input.trim()}
           className="bg-blue-600 text-white px-4 rounded hover:bg-blue-700 disabled:opacity-50"
         >
           Send

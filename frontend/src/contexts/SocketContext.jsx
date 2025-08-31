@@ -1,71 +1,77 @@
-// // src/contexts/SocketContext.jsx
-// import React, { createContext, useContext, useEffect, useRef } from "react";
-// import { io } from "socket.io-client";
-
-// const SocketContext = createContext();
-
-// export const useSocket = () => useContext(SocketContext);
-
-// export function SocketProvider({ children }) {
-//   const socketRef = useRef(null);
-
-//   useEffect(() => {
-//     const socket = io(import.meta.env.VITE_SOCKET_URL, {
-//       transports: ["websocket"],
-//     });
-//     socketRef.current = socket;
-
-//     return () => {
-//       socket.disconnect();
-//     };
-//   }, []);
-
-//   return (
-//     <SocketContext.Provider value={socketRef.current}>
-//       {children}
-//     </SocketContext.Provider>
-//   );
-// }
-
-
-
-
-import React, { createContext, useContext, useEffect, useRef } from "react";
+// src/contexts/SocketContext.jsx
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import { useAuth } from "./AuthContext";
 
-/** 최신 소켓 ref를 래핑해서 on/emit/off가 stale 되지 않도록 보장 */
 const Ctx = createContext({
   socket: null,
   emit: () => {},
   on: () => {},
   off: () => {},
+  connected: false,
 });
 
 export function SocketProvider({ children }) {
   const { token } = useAuth() || {};
-  const socketRef = useRef(null);
+  const [socket, setSocket] = useState(null);          // ← 상태로 들고와서 rerender 유도
+  const sockRef = useRef(null);
 
   useEffect(() => {
-    if (!token) return;
+    // 토큰 없으면 연결하지 않음
+    if (!token) {
+      // 기존 소켓이 있다면 정리
+      try { sockRef.current?.disconnect(); } catch {}
+      sockRef.current = null;
+      setSocket(null);
+      return;
+    }
+
+    // 안정성 옵션 강화
     const s = io(import.meta.env.VITE_SOCKET_URL, {
-      transports: ["websocket"],
-      auth: { token }, // 🔐 서버에서 JWT 검증
+      path: "/socket.io",
+      transports: ["websocket", "polling"], // websocket 우선, 실패시 polling fallback
+      auth: { token },
+      withCredentials: true,
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 10000,
+      timeout: 20000,              // 연결 타임아웃
+      autoConnect: true,
     });
-    socketRef.current = s;
+
+    // 디버깅 핸들러(필요시 콘솔 확인)
+    s.on("connect_error", (err) => {
+      // eslint-disable-next-line no-console
+      console.warn("[socket] connect_error:", err?.message);
+    });
+    s.on("reconnect_attempt", (n) => {
+      // eslint-disable-next-line no-console
+      console.log("[socket] reconnect_attempt:", n);
+    });
+    s.on("disconnect", (reason) => {
+      // eslint-disable-next-line no-console
+      console.log("[socket] disconnected:", reason);
+    });
+
+    sockRef.current = s;
+    setSocket(s);
 
     return () => {
       try { s.disconnect(); } catch {}
-      socketRef.current = null;
+      sockRef.current = null;
+      setSocket(null);
     };
   }, [token]);
 
-  const value = {
-    socket: socketRef.current,
-    emit: (event, payload) => socketRef.current?.emit?.(event, payload),
-    on: (event, handler) => socketRef.current?.on?.(event, handler),
-    off: (event, handler) => socketRef.current?.off?.(event, handler),
-  };
+  // 최신 ref를 사용해서 stale 방지
+  const value = useMemo(() => ({
+    socket,
+    connected: !!socket?.connected,
+    emit: (evt, payload) => sockRef.current?.emit?.(evt, payload),
+    on: (evt, handler) => sockRef.current?.on?.(evt, handler),
+    off: (evt, handler) => sockRef.current?.off?.(evt, handler),
+  }), [socket]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
@@ -73,6 +79,7 @@ export function SocketProvider({ children }) {
 export function useSocket() {
   return useContext(Ctx);
 }
+
 
 
 
