@@ -10,98 +10,105 @@ const Conversation = require("../models/Conversation");
 const Message = require("../models/Message");
 
 const norm = (v) => String(v || "").trim().toLowerCase();
-
 function isValidId(id) {
   return mongoose.Types.ObjectId.isValid(String(id));
 }
 
 /**
+ * helper: 공통 리소스 로딩
+ */
+async function loadTarget({ school, source, targetId, itemId }) {
+  let sellerEmail = "";
+  let resourceTitle = "";
+  let resId = null;
+
+  if (source === "market") {
+    const id = targetId || itemId;
+    if (!isValidId(id)) return { error: "Invalid itemId." };
+    const item = await MarketItem.findOne({ _id: id, school }).lean();
+    if (!item) return { error: "Item not found." };
+    sellerEmail = norm(item.seller);
+    resourceTitle = item.title || "";
+    resId = new mongoose.Types.ObjectId(id);
+    return { sellerEmail, resourceTitle, resId };
+  }
+
+  if (source === "coursehub") {
+    if (!isValidId(targetId)) return { error: "Invalid materialId." };
+    const mat = await Material.findOne({ _id: targetId, school }).lean();
+    if (!mat) return { error: "Material not found." };
+    sellerEmail = norm(mat.uploaderEmail || mat.authorEmail || "");
+    if (!sellerEmail) return { error: "Material owner email missing." };
+    resourceTitle = mat.courseTitle ? mat.courseTitle : mat.courseCode || "";
+    resId = new mongoose.Types.ObjectId(targetId);
+    return { sellerEmail, resourceTitle, resId };
+  }
+
+  return { error: "Invalid type." };
+}
+
+/**
  * POST /api/:school/request
- * body (market):   { type: "market",  targetId, message }
- * body (coursehub):{ type: "coursehub", targetId, message }
- *  - buyer email은 req.user.email
- *  - target.school 과 URL의 :school 일치
- *  - 기존 마켓 플로우는 itemId로도 계속 동작 (호환)
+ * body (market):     { type: "market",    targetId|itemId, message }
+ * body (coursehub):  { type: "coursehub", targetId,        message }
  */
 router.post("/", async (req, res) => {
   try {
     const school = norm(req.params.school);
     const buyerEmail = norm(req.user?.email);
-    const { type, targetId, itemId, message } = req.body || {};
+    let { type, targetId, itemId, message } = req.body || {};
+    type = norm(type);
 
     if (!school || !buyerEmail || !message) {
       return res.status(400).json({ message: "Missing required fields." });
     }
+    if (!type && itemId) type = "market"; // 레거시 호환
 
-    // ─────────────────────────────────────────
-    // 1) 타겟 판별
-    let source = (type || "").trim().toLowerCase();
-    let targetObject = null;
-    let sellerEmail = "";
-    let resourceTitle = "";
-    let resId = null;
+    // 1) 타겟 로드
+    const loaded = await loadTarget({ school, source: type, targetId, itemId });
+    if (loaded.error) return res.status(loaded.error === "Invalid itemId." || loaded.error === "Invalid materialId." || loaded.error === "Invalid type." ? 400 : 404).json({ message: loaded.error });
 
-    if (!source) {
-      // 레거시: itemId가 오면 market으로 간주
-      if (itemId) source = "market";
-    }
+    const { sellerEmail, resourceTitle, resId } = loaded;
+    if (buyerEmail === sellerEmail) return res.status(400).json({ message: "Cannot send request to yourself." });
 
-    if (source === "market") {
-      const id = targetId || itemId;
-      if (!isValidId(id)) return res.status(400).json({ message: "Invalid itemId." });
-      targetObject = await MarketItem.findOne({ _id: id, school }).lean();
-      if (!targetObject) return res.status(404).json({ message: "Item not found." });
-      sellerEmail = norm(targetObject.seller);
-      resourceTitle = targetObject.title || "";
-      resId = new mongoose.Types.ObjectId(id);
-    } else if (source === "coursehub") {
-      if (!isValidId(targetId)) return res.status(400).json({ message: "Invalid materialId." });
-      targetObject = await Material.findOne({ _id: targetId, school }).lean();
-      if (!targetObject) return res.status(404).json({ message: "Material not found." });
-      // uploaderEmail 이 소유자 이메일
-      sellerEmail = norm(targetObject.uploaderEmail || targetObject.authorEmail || "");
-      if (!sellerEmail) return res.status(400).json({ message: "Material owner email missing." });
-      // 리스트 표시용 스냅샷
-      resourceTitle = targetObject.courseTitle
-        ? targetObject.courseTitle
-        : targetObject.courseCode || "";
-      resId = new mongoose.Types.ObjectId(targetId);
-    } else {
-      return res.status(400).json({ message: "Invalid type." });
-    }
-
-    if (buyerEmail === sellerEmail) {
-      return res.status(400).json({ message: "Cannot send request to yourself." });
-    }
-
-    // ─────────────────────────────────────────
-    // 2) 중복 요청 방지
-    const dupFilter =
-      source === "market"
-        ? { school, source, itemId: resId, buyer: buyerEmail }
-        : { school, source, materialId: resId, buyer: buyerEmail };
+    // 2) 중복 요청 검사
+    const dupFilter = type === "market"
+      ? { school, source: "market", itemId: resId, buyer: buyerEmail }
+      : { school, source: "coursehub", materialId: resId, buyer: buyerEmail };
 
     const exists = await Request.findOne(dupFilter);
-    if (exists) return res.status(409).json({ message: "Request already sent." });
+    if (exists) {
+      // 이미 대화방도 있을 가능성 높음 → 찾아서 409과 함께 넘겨줌
+      const convo =
+        (await Conversation.findOne({ school, source: type, resourceId: resId, buyer: buyerEmail, seller: sellerEmail })) ||
+        (type === "market"
+          ? await Conversation.findOne({ school, source: "market", itemId: resId, buyer: buyerEmail, seller: sellerEmail })
+          : null);
 
-    // 저장
+      return res.status(409).json({
+        message: "Request already sent.",
+        alreadySent: true,
+        conversationId: convo?._id || null,
+      });
+    }
+
+    // 3) Request 저장
     const requestDoc = await Request.create({
       school,
-      source,
-      itemId: source === "market" ? resId : null,
-      materialId: source === "coursehub" ? resId : null,
+      source: type,
+      itemId: type === "market" ? resId : null,
+      materialId: type === "coursehub" ? resId : null,
       buyer: buyerEmail,
       seller: sellerEmail,
       message,
     });
 
-    // ─────────────────────────────────────────
-    // 3) 대화방 조회/생성 (아이템 단위로 고유)
+    // 4) 대화방 조회/생성(리소스 단위 1개)
     const convoFilter = {
       school,
       buyer: buyerEmail,
       seller: sellerEmail,
-      source,
+      source: type,
       resourceId: resId,
     };
 
@@ -109,21 +116,19 @@ router.post("/", async (req, res) => {
     if (!conversation) {
       conversation = await Conversation.create({
         ...convoFilter,
-        itemId: source === "market" ? resId : null, // 레거시 호환
+        itemId: type === "market" ? resId : null, // 레거시 호환
         resourceTitle,
         lastMessage: message,
       });
     }
 
-    // ─────────────────────────────────────────
-    // 4) 메시지 저장 + 최신화
+    // 5) 메시지 저장 + 최신화
     await Message.create({
       conversationId: conversation._id,
       sender: buyerEmail,
       content: message,
       school,
     });
-
     conversation.lastMessage = message;
     conversation.updatedAt = new Date();
     await conversation.save();
@@ -140,15 +145,58 @@ router.post("/", async (req, res) => {
 });
 
 /**
- * GET /api/:school/request/:itemId/:buyer?
- * - 레거시(마켓) 호환용: 현재는 market만 체크
+ * GET /api/:school/request/status?type=coursehub&targetId=...   (또는 type=market&itemId=...)
+ *  - 현재 로그인 사용자가 이미 요청을 보냈는지 여부 + 연결된 대화방 id 리턴
+ *  - { alreadySent: boolean, conversationId?: string }
+ */
+router.get("/status", async (req, res) => {
+  try {
+    const school = norm(req.params.school);
+    const buyerEmail = norm(req.user?.email);
+    let { type, targetId, itemId } = req.query;
+    type = norm(type);
+
+    if (!school || !buyerEmail || !type) {
+      return res.status(400).json({ message: "Missing params." });
+    }
+    if (!type && itemId) type = "market";
+
+    const loaded = await loadTarget({ school, source: type, targetId, itemId });
+    if (loaded.error) return res.status(loaded.error === "Invalid itemId." || loaded.error === "Invalid materialId." || loaded.error === "Invalid type." ? 400 : 404).json({ message: loaded.error });
+
+    const { sellerEmail, resId } = loaded;
+
+    const dupFilter = type === "market"
+      ? { school, source: "market", itemId: resId, buyer: buyerEmail }
+      : { school, source: "coursehub", materialId: resId, buyer: buyerEmail };
+
+    const exists = await Request.findOne(dupFilter);
+
+    const convo =
+      (await Conversation.findOne({ school, source: type, resourceId: resId, buyer: buyerEmail, seller: sellerEmail })) ||
+      (type === "market"
+        ? await Conversation.findOne({ school, source: "market", itemId: resId, buyer: buyerEmail, seller: sellerEmail })
+        : null);
+
+    return res.json({
+      alreadySent: !!exists,
+      conversationId: convo?._id || null,
+    });
+  } catch (err) {
+    console.error("❌ Status lookup failed:", err);
+    res.status(500).json({ message: "Server error." });
+  }
+});
+
+/**
+ * (레거시) GET /api/:school/request/:itemId/:buyer?
+ * - 기존 마켓 전용 체크 엔드포인트 그대로 유지
  */
 router.get("/:itemId/:buyer?", async (req, res) => {
   try {
     const school = norm(req.params.school);
     const buyerEmail = norm(req.user?.email);
     const objectId = new mongoose.Types.ObjectId(req.params.itemId);
-
     const exists = await Request.findOne({ school, source: "market", itemId: objectId, buyer: buyerEmail });
     res.json({ alreadySent: !!exists });
   } catch (err) {
@@ -158,6 +206,7 @@ router.get("/:itemId/:buyer?", async (req, res) => {
 });
 
 module.exports = router;
+
 
 
 

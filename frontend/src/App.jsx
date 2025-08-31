@@ -15,10 +15,8 @@ import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
 import AuthRequired from "./pages/auth/AuthRequired";
 
-// ⬇️ NEW: CourseHub 메인 리스트 화면
+// CourseHub
 import Courses from "./pages/courses/Courses.jsx";
-
-// ⬇️ 유지: 작성/상세
 import CourseWrite from "./pages/courses/CourseWrite";
 import MaterialDetail from "./pages/courses/MaterialDetail";
 
@@ -52,13 +50,13 @@ function EditToDetailRedirect() {
   return <Navigate to={`../freeboard/${id}`} replace />;
 }
 
-// ⬇️ 과거 코스별 폴더 경로 → 메인 리스트로 리다이렉트
+// 과거 코스별 폴더 경로 → 메인 리스트로 리다이렉트
 function LegacyCourseMaterialsRedirect() {
   const { school } = useParams();
   return <Navigate to={`/${school}/courses`} replace />;
 }
 
-function App() {
+export default function App() {
   return (
     <AuthGateProvider>
       <Suspense fallback={<div className="p-6 text-sm text-gray-500">Loading…</div>}>
@@ -82,7 +80,7 @@ function App() {
           <Route path="/dashboard/*" element={<NormalizeDashboard />} />
           <Route path="//dashboard/*" element={<NormalizeDashboard />} />
 
-          {/* School-scoped */}
+          {/* School-scoped (모든 학교별 페이지는 Layout 아래) */}
           <Route path="/:school" element={<Layout />}>
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard" element={<Dashboard />} />
@@ -174,7 +172,7 @@ function App() {
               }
             />
 
-            {/* Messages */}
+            {/* Messages (이미 Layout 아래) */}
             <Route
               path="messages"
               element={
@@ -211,38 +209,35 @@ function App() {
                 </RequireAuth>
               }
             />
-          </Route>
 
-          {/* Courses (scoped) */}
-          <Route
-            path="/:school/courses"
-            element={
-              <RequireAuth>
-                <Courses />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/:school/courses/write"
-            element={
-              <RequireAuth>
-                <CourseWrite />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/:school/courses/materials/:id"
-            element={
-              <RequireAuth>
-                <MaterialDetail />
-              </RequireAuth>
-            }
-          />
-          {/* 과거 코스별 폴더 경로 대응 → 메인으로 */}
-          <Route
-            path="/:school/courses/:courseId/materials"
-            element={<LegacyCourseMaterialsRedirect />}
-          />
+            {/* ✅ CourseHub — Layout 아래로 이동 */}
+            <Route
+              path="courses"
+              element={
+                <RequireAuth>
+                  <Courses />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="courses/write"
+              element={
+                <RequireAuth>
+                  <CourseWrite />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="courses/materials/:id"
+              element={
+                <RequireAuth>
+                  <MaterialDetail />
+                </RequireAuth>
+              }
+            />
+            {/* 옛날 경로 지원 */}
+            <Route path="courses/:courseId/materials" element={<LegacyCourseMaterialsRedirect />} />
+          </Route>
 
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/select-school" replace />} />
@@ -252,7 +247,6 @@ function App() {
   );
 }
 
-export default App;
 
 
 
