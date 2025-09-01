@@ -22,20 +22,19 @@ export default function CourseWrite() {
   const params = useParams();
   const [sp] = useSearchParams();
 
-  // Preselect from URL when available
   const [courseCode, setCourseCode] = useState(
     decodeURIComponent(params.courseId || "")
   );
   const [semester, setSemester] = useState(sp.get("sem") || currentSemester());
 
-  // Frame 9 fields
-  const [materialType, setMaterialType] = useState("personalMaterial"); // personalMaterial | personalNote
+  // REQUIRED: professor
+  const [professor, setProfessor] = useState("");
+
+  const [materialType, setMaterialType] = useState("personalMaterial");
   const [isFree, setIsFree] = useState(true);
   const [price, setPrice] = useState(0);
-  const [sharePreference, setSharePreference] = useState("either"); // in_person | online | either
-
-  // Legacy kind (for compatibility with listing filter)
-  const [kind, setKind] = useState("note"); // note | syllabus | exam | slide | link | other
+  const [sharePreference, setSharePreference] = useState("either");
+  const [kind, setKind] = useState("note");
 
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -67,6 +66,10 @@ export default function CourseWrite() {
 
     if (!courseCode?.trim()) return setErr("Please select a course code.");
     if (!semester) return setErr("Please select a semester.");
+
+    const prof = professor.trim();
+    if (!prof) return setErr("Please enter the professor name."); // ← 필수 검증
+
     if (!isFree && (Number.isNaN(price) || Number(price) < 1)) {
       return setErr("Please enter a valid price (≥ 1).");
     }
@@ -76,16 +79,14 @@ export default function CourseWrite() {
 
       const payload = {
         courseCode: courseCode.toUpperCase(),
-        courseTitle: "", // optional
+        courseTitle: "",
         semester,
-        // legacy kind for compatibility with list filter
         kind,
-        // Frame 9 fields
         materialType,
         isFree,
         price: Number(isFree ? 0 : price),
         sharePreference,
-        // listing only; no file/url now
+        professor: prof, // ← 필수 전송
         url: "",
         fileUrl: "",
         filePublicId: "",
@@ -95,8 +96,6 @@ export default function CourseWrite() {
         tags: [],
       };
 
-      // ✅ IMPORTANT: VITE_API_URL already ends with "/api"
-      // so DO NOT prepend another "/api" here.
       const API = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
       await postJson(`${API}/${encodeURIComponent(school)}/materials`, payload);
 
@@ -122,10 +121,24 @@ export default function CourseWrite() {
       </p>
 
       <form onSubmit={onSubmit} className="space-y-5">
-        {/* Course + Semester */}
         <div>
           <label className="mb-1 block text-sm font-medium">Course code (required)</label>
           <CourseCodePicker school={school} value={courseCode} onChange={setCourseCode} />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium">
+            Professor <span className="text-red-600">*</span>
+          </label>
+          <input
+            type="text"
+            value={professor}
+            onChange={(e) => setProfessor(e.target.value)}
+            placeholder="e.g., Jonathan Hopper"
+            maxLength={80}
+            required
+            className="w-full rounded-lg border px-3 py-2 text-sm"
+          />
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row">
@@ -160,7 +173,6 @@ export default function CourseWrite() {
           </div>
         </div>
 
-        {/* Material type */}
         <div>
           <label className="mb-1 block text-sm font-medium">What are you posting?</label>
           <div className="flex items-center gap-3">
@@ -187,7 +199,6 @@ export default function CourseWrite() {
           </div>
         </div>
 
-        {/* Price */}
         <div>
           <label className="mb-1 block text-sm font-medium">Price</label>
           <div className="flex items-center gap-4">
@@ -222,7 +233,6 @@ export default function CourseWrite() {
           </div>
         </div>
 
-        {/* Share preference */}
         <div>
           <label className="mb-1 block text-sm font-medium">How would you like to share?</label>
           <div className="flex flex-wrap items-center gap-3">
@@ -259,14 +269,12 @@ export default function CourseWrite() {
           </div>
         </div>
 
-        {/* Error */}
         {err && (
           <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
             {err}
           </div>
         )}
 
-        {/* Actions */}
         <div className="flex items-center justify-end gap-2">
           <button
             type="button"
@@ -287,6 +295,8 @@ export default function CourseWrite() {
     </div>
   );
 }
+
+
 
 
 

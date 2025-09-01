@@ -23,14 +23,8 @@ const ALLOWED_MIME = new Set([
   "image/jpeg",
   "image/webp",
 ]);
-const MAX_SIZE = 25 * 1024 * 1024; // 25MB
+const MAX_SIZE = 25 * 1024 * 1024;
 
-/**
- * NEW: school-wide recent materials for dashboard preview
- * GET /api/:school/materials/recent?limit=5
- *  - limit: 1..20 (default 5)
- * Returns latest materials (any course/semester) for the given school.
- */
 router.get("/recent", async (req, res) => {
   const school = low(req.params.school);
   const limit = Math.min(20, Math.max(1, parseInt(req.query.limit || "5", 10)));
@@ -45,6 +39,7 @@ router.get("/recent", async (req, res) => {
       id: m._id,
       courseCode: m.courseCode,
       courseTitle: m.courseTitle,
+      professor: m.professor || "",
       semester: m.semester,
       materialType: m.materialType,
       kind: m.kind,
@@ -56,18 +51,6 @@ router.get("/recent", async (req, res) => {
   });
 });
 
-/**
- * List materials for a course & semester
- * GET /api/:school/materials
- * Query:
- *   course=CS-UY%201133     (required)
- *   semester=2025-fall       (required)
- *   kind=note|syllabus|exam|slide|link|other|all (default: all)
- *   materialType=personalMaterial|personalNote|all (optional)
- *   isFree=true|false        (optional)
- *   sort=new|top|price       (default: new; price => free first, then cheapest)
- *   page=1&limit=20
- */
 router.get("/", async (req, res) => {
   const school = low(req.params.school);
   const courseCode = up(req.query.course || "");
@@ -81,9 +64,7 @@ router.get("/", async (req, res) => {
   const limit = Math.min(50, Math.max(1, parseInt(req.query.limit || "20", 10)));
 
   if (!courseCode) return res.status(400).json({ message: "course is required" });
-  if (!semester || !SEM.test(semester)) {
-    return res.status(400).json({ message: "Invalid semester (e.g., 2025-fall)" });
-  }
+  if (!semester || !SEM.test(semester)) return res.status(400).json({ message: "Invalid semester" });
 
   const filter = { school, courseCode, semester };
   if (kind !== "all") filter.kind = kind;
@@ -107,6 +88,7 @@ router.get("/", async (req, res) => {
       id: m._id,
       courseCode: m.courseCode,
       courseTitle: m.courseTitle,
+      professor: m.professor || "",
       semester: m.semester,
       kind: m.kind,
       materialType: m.materialType,
@@ -130,10 +112,6 @@ router.get("/", async (req, res) => {
   });
 });
 
-/**
- * Get a single material
- * GET /api/:school/materials/:id
- */
 router.get("/:id", async (req, res) => {
   const school = low(req.params.school);
   const id = n(req.params.id);
@@ -142,14 +120,6 @@ router.get("/:id", async (req, res) => {
   res.json(doc);
 });
 
-/**
- * Create (no attachment required)
- * POST /api/:school/materials
- * Body:
- *   { courseCode, courseTitle?, semester, kind,
- *     materialType?, isFree?, price?, sharePreference?,
- *     title?, tags?, url?, fileUrl?, filePublicId?, fileMime?, fileSize?, hash? }
- */
 router.post("/", async (req, res) => {
   const school = low(req.params.school);
   const user = req.user;
@@ -157,6 +127,7 @@ router.post("/", async (req, res) => {
 
   const courseCode = up(body.courseCode || "");
   const courseTitle = n(body.courseTitle || "");
+  const professor = n(body.professor || ""); // REQUIRED
   const semester = n(body.semester || "");
   let kind = n(body.kind || "note").toLowerCase();
 
@@ -174,6 +145,7 @@ router.post("/", async (req, res) => {
 
   if (!courseCode) return res.status(400).json({ message: "courseCode is required" });
   if (!semester || !SEM.test(semester)) return res.status(400).json({ message: "Invalid semester" });
+  if (!professor) return res.status(400).json({ message: "professor is required" }); // ← 필수 검증
 
   if (kind === "quiz") kind = "exam";
   if (!["note", "syllabus", "exam", "slide", "link", "other"].includes(kind)) {
@@ -199,6 +171,7 @@ router.post("/", async (req, res) => {
     school,
     courseCode,
     courseTitle,
+    professor, // REQUIRED 저장
     semester,
     kind,
     title: n(body.title || courseCode),
@@ -222,10 +195,6 @@ router.post("/", async (req, res) => {
   res.status(201).json({ ok: true, id: doc._id });
 });
 
-/**
- * Delete (owner or admin)
- * DELETE /api/:school/materials/:id
- */
 router.delete("/:id", async (req, res) => {
   const school = low(req.params.school);
   const id = n(req.params.id);
@@ -243,6 +212,8 @@ router.delete("/:id", async (req, res) => {
 });
 
 module.exports = router;
+
+
 
 
 

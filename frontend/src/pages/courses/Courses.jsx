@@ -6,7 +6,6 @@ import { useSchool } from "../../contexts/SchoolContext";
 import { useSchoolPath } from "../../utils/schoolPath";
 import { listRecentMaterials } from "../../api/materials";
 
-// 단순 포맷터들
 const prettyKind = (v) =>
   v === "note"
     ? "Class Note"
@@ -39,13 +38,11 @@ export default function Courses() {
   const navigate = useNavigate();
   const schoolPath = useSchoolPath();
 
-  // 화면 상태
   const [items, setItems] = useState([]);
-  const [limit, setLimit] = useState(20); // 필요 시 더보기
+  const [limit, setLimit] = useState(20);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
 
-  // 테마 감안 없이 깔끔한 기본 스타일
   const containerClass = "mx-auto max-w-5xl p-4 sm:p-6";
   const cardClass =
     "rounded-2xl border shadow-sm p-4 hover:shadow-md transition-shadow bg-white";
@@ -57,7 +54,6 @@ export default function Courses() {
       setLoading(true);
       setErr("");
       try {
-        // 학교 단위 최신 글 가져오기
         const res = await listRecentMaterials({ school, token, limit });
         const list = Array.isArray(res?.items) ? res.items : [];
         if (alive) setItems(list);
@@ -76,7 +72,6 @@ export default function Courses() {
   const onCreate = () => navigate(schoolPath("/courses/write"));
 
   const goDetail = (id) => {
-    // 디테일 화면은 쿼리 없이도 동작(없으면 뒤로가기 처리)합니다. :contentReference[oaicite:2]{index=2}
     navigate(schoolPath(`/courses/materials/${encodeURIComponent(id)}`));
   };
 
@@ -95,14 +90,10 @@ export default function Courses() {
           </button>
         </div>
 
-        {/* 리스트 */}
         {loading && (
           <div className="space-y-3">
             {Array.from({ length: 5 }).map((_, i) => (
-              <div
-                key={i}
-                className="h-[84px] animate-pulse rounded-2xl bg-gray-200"
-              />
+              <div key={i} className="h-[84px] animate-pulse rounded-2xl bg-gray-200" />
             ))}
           </div>
         )}
@@ -134,18 +125,17 @@ export default function Courses() {
                         {m.semester ? ` · ${m.semester}` : ""}
                       </div>
                       <div className="text-xs text-gray-500">
-                        {prettyKind(m.kind)}{" "}
-                        {m.materialType ? `• ${m.materialType}` : ""}{" "}
-                        {m.authorName ? `• ${m.authorName}` : ""}
+                        {prettyKind(m.kind)}
+                        {m.materialType ? ` • ${m.materialType}` : ""}
+                        {m.professor ? ` • ${m.professor}` : ""}
+                        {m.authorName ? ` • ${m.authorName}` : ""}
                       </div>
                     </div>
                     <div className="text-xs text-gray-400">{timeAgo(m.createdAt)}</div>
                   </div>
 
                   {m.title ? (
-                    <div className="mt-1 text-sm text-gray-700 line-clamp-2">
-                      {m.title}
-                    </div>
+                    <div className="mt-1 text-sm text-gray-700 line-clamp-2">{m.title}</div>
                   ) : null}
                 </button>
               </li>
@@ -153,7 +143,6 @@ export default function Courses() {
           </ul>
         )}
 
-        {/* (선택) 더보기 */}
         {!!items.length && items.length >= limit && (
           <div className="mt-4 flex justify-center">
             <button
@@ -168,4 +157,5 @@ export default function Courses() {
     </div>
   );
 }
+
 
