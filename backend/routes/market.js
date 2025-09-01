@@ -108,7 +108,7 @@ router.get("/request/:itemId/:buyerEmail", async (req, res) => {
  * - 문의 요청 + 대화/메시지 생성
  * body: { itemId, message }
  * - buyer는 토큰에서 읽음(클라 입력 무시)
- * - ✅ Request 생성/조회에 school 주입(스키마에서 required) 
+ * - ✅ Request 생성/조회에 school 주입(스키마에서 required)
  */
 router.post("/request", async (req, res) => {
   const { itemId, message } = req.body;
@@ -135,8 +135,8 @@ router.post("/request", async (req, res) => {
       return res.status(409).json({ message: "Request already sent." });
     }
 
-    // 3) Request 생성 (✅ school 필수)
-    const newRequest = await Request.create({ school, itemId, buyer, message });
+    // 3) Request 생성 (✅ seller 필드 포함)
+    const newRequest = await Request.create({ school, itemId, buyer, seller, message });
 
     // 4) 대화 찾기/생성 (school 기준)
     let conversation = await Conversation.findOne({ itemId, buyer, seller, school });
@@ -337,5 +337,6 @@ router.delete("/:id", async (req, res) => {
 });
 
 module.exports = router;
+
 
 

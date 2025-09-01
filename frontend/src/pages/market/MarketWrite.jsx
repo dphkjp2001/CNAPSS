@@ -58,14 +58,12 @@ const MarketWrite = () => {
     // sequential upload
     for (let i = 0; i < files.length; i++) {
       try {
-        // ⬇️ util returns a full JSON (secure_url, public_id, ...)
         const uploaded = await uploadToCloudinary(files[i]);
-        const finalUrl = uploaded.secure_url;   // string
-        const publicId = uploaded.public_id;    // keep for future delete
+        const finalUrl = uploaded.secure_url;
+        const publicId = uploaded.public_id;
 
         setImages((prev) => {
           const next = [...prev];
-          // replace the next "uploading" placeholder in order
           const idx = next.findIndex((x) => x.uploading);
           if (idx !== -1) {
             next[idx] = { ...next[idx], url: finalUrl, public_id: publicId, uploading: false };
@@ -77,7 +75,7 @@ const MarketWrite = () => {
         setImages((prev) => {
           const next = [...prev];
           const idx = next.findIndex((x) => x.uploading);
-          if (idx !== -1) next.splice(idx, 1); // remove failed placeholder
+          if (idx !== -1) next.splice(idx, 1);
           return next;
         });
         setErr("Failed to upload one or more images.");
@@ -110,15 +108,15 @@ const MarketWrite = () => {
       setLoading(true);
       setErr("");
 
+      // ✅ use "data" (not "payload") so API receives top-level fields
       await createItem({
         school,
         token,
-        payload: {
+        data: {
           title: title.trim(),
           description: description.trim(),
           price: parseFloat(price),
-          seller: user?.email,               // server ignores this and uses req.user.email
-          images: images.map((i) => i.url),  // <-- now guaranteed to be strings
+          images: images.map((i) => i.url),
         },
       });
 
@@ -317,6 +315,7 @@ const MarketWrite = () => {
 };
 
 export default MarketWrite;
+
 
 
 
