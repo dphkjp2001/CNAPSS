@@ -62,18 +62,20 @@ export async function deleteItem({ school, token, id }) {
   return res.json();
 }
 
-// (옵션) Request API도 여기에 래핑
+/** ===== Requests (문의) ===== **/
+
 // GET /api/:school/market/request/:itemId/:email
 export async function checkRequest({ school, token, itemId, email }) {
   const s = String(school || "").toLowerCase().trim();
-  const res = await fetch(`${API_URL}/${s}/market/request/${itemId}/${encodeURIComponent(email)}`, {
-    headers: authHeaders(token),
-  });
+  const res = await fetch(
+    `${API_URL}/${s}/market/request/${encodeURIComponent(itemId)}/${encodeURIComponent(email)}`,
+    { headers: authHeaders(token) }
+  );
   if (!res.ok) throw new Error("Failed to check request");
-  return res.json();
+  return res.json(); // { alreadySent: boolean }
 }
 
-// POST /api/:school/market/request
+// POST /api/:school/market/request  { itemId, buyer, message }
 export async function sendRequest({ school, token, itemId, buyer, message }) {
   const s = String(school || "").toLowerCase().trim();
   const res = await fetch(`${API_URL}/${s}/market/request`, {
@@ -81,6 +83,12 @@ export async function sendRequest({ school, token, itemId, buyer, message }) {
     headers: authHeaders(token),
     body: JSON.stringify({ itemId, buyer, message }),
   });
+  if (res.status === 409) {
+    // 이미 요청 보낸 경우(백엔드가 409로 주는 케이스)
+    const data = await res.json().catch(() => ({}));
+    return { alreadySent: true, ...data };
+  }
   if (!res.ok) throw new Error("Failed to send request");
-  return res.json();
+  return res.json(); // { conversationId, ... }
 }
+

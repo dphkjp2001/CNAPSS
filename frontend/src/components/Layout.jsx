@@ -1,475 +1,220 @@
-// // // 📁 src/components/Layout.jsx
-// import React, { useState, useEffect, useMemo } from "react";
-// import { Link, Outlet, useNavigate, useLocation } from "react-router-dom";
-// import { useAuth } from "../contexts/AuthContext";
-// import { useSchool } from "../contexts/SchoolContext";
-// import useNotificationsPolling from "../hooks/useNotificationsPolling";
-// import Footer from "./Footer";
-// import ChatBox from "./Chatbox";
-// import { useSocket } from "../contexts/SocketContext";
-// import { useSchoolPath } from "../utils/schoolPath";
-
-// function Layout() {
-//   const { user, logout } = useAuth();
-//   const { school } = useSchool();
-//   const socket = useSocket(); // { on, off, emit }
-//   const navigate = useNavigate();
-//   const schoolPath = useSchoolPath();
-//   const location = useLocation();
-
-//   // /:school/messages 에서는 플로팅 Chatbox 숨김
-//   const onMessagesPage = useMemo(
-//     () => /\/messages(\/|$)/.test(location.pathname),
-//     [location.pathname]
-//   );
-
-//   // 🔔 알림(낙관) 훅 — 네 기존 코드 그대로
-//   const {
-//     items: notifications,
-//     count: badgeCount,
-//     optimisticRead,
-//     dismiss,
-//     markAsRead,
-//     markAllAsRead,
-//   } = useNotificationsPolling(user?.email, 5000, 60000, 5);
-
-//   const [showModal, setShowModal] = useState(false);
-//   const [floatingChat, setFloatingChat] = useState(null);
-//   const [showScheduleDropdown, setShowScheduleDropdown] = useState(false);
-//   const onBellClick = () => setShowModal((v) => !v);
-
-//   // ✅ 어디서든 대화 생성/미리보기 이벤트 수신 → 하단 Chatbox 띄우기 (중복 오픈 방지)
-//   useEffect(() => {
-//     if (!user) return;
-
-//     const openFromNew = ({ targetEmail, conversationId }) => {
-//       if (!conversationId || onMessagesPage) return;
-//       if (targetEmail && targetEmail !== user.email) return;
-//       setFloatingChat((prev) => (prev?.conversationId === conversationId ? prev : { conversationId }));
-//     };
-
-//     const openFromPreview = ({ conversationId }) => {
-//       if (!conversationId || onMessagesPage) return;
-//       setFloatingChat((prev) => (prev?.conversationId === conversationId ? prev : { conversationId }));
-//     };
-
-//     socket.on?.("newConversation", openFromNew);
-//     socket.on?.("chat:preview", openFromPreview);
-
-//     return () => {
-//       socket.off?.("newConversation", openFromNew);
-//       socket.off?.("chat:preview", openFromPreview);
-//     };
-//   }, [user, socket, onMessagesPage]);
-
-//   // /messages 진입 시 플로팅 창 자동 닫기
-//   useEffect(() => {
-//     if (onMessagesPage && floatingChat) setFloatingChat(null);
-//   }, [onMessagesPage, floatingChat]);
-
-//   return (
-//     <div className="flex min-h-screen flex-col bg-cream font-body text-ink">
-//       {/* Header */}
-//       <header className="fixed left-0 right-0 top-0 z-50 flex h-20 items-center border-b border-sand bg-white/80 px-8 backdrop-blur-sm">
-//         <div className="mx-auto flex w-full max-w-7xl items-center justify-between">
-//           <button
-//             onClick={() => navigate(schoolPath("/dashboard"))}
-//             className="font-heading text-2xl font-bold text-ink transition hover:text-softGold"
-//           >
-//             CNAPSS
-//           </button>
-
-//           <div className="relative flex items-center gap-4 font-body text-sm font-medium">
-//             <Link to={schoolPath("/freeboard")} className="transition hover:text-softGold">
-//               Free Board
-//             </Link>
-
-//             <button
-//               onClick={() => navigate(schoolPath("/dashboard"))}
-//               className="transition hover:text-softGold"
-//             >
-//               Course Hub
-//             </button>
-
-//             <div
-//               className="relative"
-//               onMouseEnter={() => setShowScheduleDropdown(true)}
-//               onMouseLeave={() => setShowScheduleDropdown(false)}
-//             >
-//               <button className="transition hover:text-softGold">Schedule Grid ▾</button>
-//               {showScheduleDropdown && (
-//                 <div className="absolute left-0 top-6 z-50 w-48 rounded-md border border-sand bg-white shadow-lg">
-//                   <Link to={schoolPath("/personal-schedule")} className="block px-4 py-2 hover:bg-cream">
-//                     My Schedule
-//                   </Link>
-//                   <Link to={schoolPath("/group-availability")} className="block px-4 py-2 hover:bg-cream">
-//                     Group Scheduling
-//                   </Link>
-//                 </div>
-//               )}
-//             </div>
-
-//             <Link to={schoolPath("/market")} className="transition hover:text-softGold">
-//               Marketplace
-//             </Link>
-
-//             {user && (
-//               <button
-//                 onClick={onBellClick}
-//                 className="relative transition hover:text-softGold"
-//                 aria-label="Notifications"
-//               >
-//                 🔔
-//                 {badgeCount > 0 && (
-//                   <span className="absolute -right-2 -top-1 rounded-full bg-red-500 px-1 text-xs leading-none text-white">
-//                     {badgeCount}
-//                   </span>
-//                 )}
-//               </button>
-//             )}
-
-//             {user ? (
-//               <>
-//                 <span className="text-xs text-gray-500">{user.email}</span>
-//                 <button
-//                   onClick={() => {
-//                     logout();
-//                     navigate("/login");
-//                   }}
-//                   className="rounded bg-softGold px-3 py-1 font-body font-semibold text-black transition hover:opacity-90"
-//                 >
-//                   Log out
-//                 </button>
-//               </>
-//             ) : (
-//               <>
-//                 <Link to="/login" className="font-body text-sm text-ink underline">
-//                   Login
-//                 </Link>
-//                 <Link
-//                   to={school ? `/register/${school}` : "/register"}
-//                   className="font-body text-sm text-ink underline"
-//                 >
-//                   Sign Up
-//                 </Link>
-//               </>
-//             )}
-//           </div>
-//         </div>
-//       </header>
-
-//       {/* 🔔 Notifications dropdown — 네 기존과 동일 */}
-//       {user && showModal && (
-//         <div className="fixed right-8 top-24 z-50 w-80 max-h-96 overflow-y-auto rounded-lg border border-sand bg-white shadow-xl">
-//           <div className="flex items-center justify-between border-b p-4 font-bold text-softGold">
-//             <span>Notifications</span>
-//             <div className="flex items-center gap-2">
-//               <button
-//                 onClick={() => {
-//                   markAllAsRead();
-//                   setShowModal(false);
-//                 }}
-//                 disabled={notifications.length === 0}
-//                 className="text-xs text-blue-600 hover:underline disabled:opacity-40"
-//               >
-//                 Mark all read
-//               </button>
-//               <button onClick={() => setShowModal(false)} className="text-sm text-gray-500 hover:text-red-500">
-//                 ✕
-//               </button>
-//             </div>
-//           </div>
-//           <ul className="divide-y">
-//             {notifications.length === 0 ? (
-//               <li className="p-3 text-sm text-gray-500">No notifications</li>
-//             ) : (
-//               notifications.map((n) => {
-//                 const read = !!n.readAt;
-//                 return (
-//                   <li key={n._id}>
-//                     <Link
-//                       to={schoolPath(`/freeboard/${n.postId}?nid=${n._id}#comment-${n._id}`)}
-//                       onClick={async () => {
-//                         try {
-//                           optimisticRead(n._id);
-//                           dismiss(n._id);
-//                           await markAsRead(n._id);
-//                         } finally {
-//                           setShowModal(false);
-//                         }
-//                       }}
-//                       className={
-//                         "block p-3 text-sm transition " +
-//                         (read ? "text-gray-400 hover:bg-gray-100" : "text-gray-700 hover:bg-cream")
-//                       }
-//                     >
-//                       💬 <b>Somebody</b> commented on your {n.parentId ? "comment" : "post"}
-//                     </Link>
-//                   </li>
-//                 );
-//               })
-//             )}
-//           </ul>
-//         </div>
-//       )}
-
-//       {/* Content */}
-//       <main className="flex-grow pt-24 font-body">
-//         <Outlet />
-//       </main>
-
-//       <Footer />
-
-//       {/* ✅ 플로팅 Chatbox — /messages에선 숨김 */}
-//       {!onMessagesPage && floatingChat && user && (
-//         <div className="fixed bottom-4 right-4 z-50 shadow-lg">
-//           <ChatBox
-//             conversationId={floatingChat.conversationId}
-//             userEmail={user.email}
-//             onClose={() => setFloatingChat(null)}
-//           />
-//         </div>
-//       )}
-//     </div>
-//   );
-// }
-
-// export default Layout;
-
-
-import React, { useState, useEffect, useMemo } from "react";
-import { Link, Outlet, useNavigate, useLocation } from "react-router-dom";
+// src/components/Layout.jsx
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useSchool } from "../contexts/SchoolContext";
 import useNotificationsPolling from "../hooks/useNotificationsPolling";
-import Footer from "./Footer";
-import ChatBox from "./Chatbox";
-import { useSocket } from "../contexts/SocketContext";
 import { useSchoolPath } from "../utils/schoolPath";
 
-function Layout() {
+export default function Layout() {
   const { user, logout } = useAuth();
   const { school } = useSchool();
-  const socket = useSocket();
   const navigate = useNavigate();
   const schoolPath = useSchoolPath();
-  const location = useLocation();
 
-  // /:school/messages 에서는 플로팅 Chatbox 숨김
-  const onMessagesPage = useMemo(() => /\/messages(\/|$)/.test(location.pathname), [location.pathname]);
+  // 알림(읽음/배지 카운트/목록)
+  const { items, count, markAsRead, markAllAsRead } = useNotificationsPolling(
+    user?.email,
+    5000,
+    60000,
+    5
+  );
 
-  // 알림(낙관) 훅 — 기존 로직 유지
-  const {
-    items: notifications,
-    count: badgeCount,
-    optimisticRead,
-    dismiss,
-    markAsRead,
-    markAllAsRead,
-  } = useNotificationsPolling(user?.email, 5000, 60000, 5);
+  // 알림 모달 & 스케줄 메뉴
+  const [showNoti, setShowNoti] = useState(false);
+  const [showScheduleMenu, setShowScheduleMenu] = useState(false);
 
-  const [showModal, setShowModal] = useState(false);
-  const [floatingChat, setFloatingChat] = useState(null);
-  const [showScheduleDropdown, setShowScheduleDropdown] = useState(false);
-  const onBellClick = () => setShowModal((v) => !v);
-
-  // 새 대화/미리보기 → 플로팅 채팅 열기
+  // 배지 ‘뽁’ 애니메이션
+  const [bump, setBump] = useState(false);
+  const prevCountRef = useRef(count);
   useEffect(() => {
-    if (!user) return;
+    if (count > prevCountRef.current) {
+      setBump(true);
+      const t = setTimeout(() => setBump(false), 300);
+      return () => clearTimeout(t);
+    }
+    prevCountRef.current = count;
+  }, [count]);
 
-    const openFromNew = ({ targetEmail, conversationId }) => {
-      if (!conversationId || onMessagesPage) return;
-      if (targetEmail && targetEmail !== user.email) return;
-      setFloatingChat((prev) => (prev?.conversationId === conversationId ? prev : { conversationId }));
-    };
+  const linkCls =
+    "px-3 py-2 text-sm text-gray-700 hover:text-violet-700 hover:bg-violet-50 rounded-md";
+  const activeCls = "text-violet-700 font-medium bg-violet-50";
 
-    const openFromPreview = ({ conversationId }) => {
-      if (!conversationId || onMessagesPage) return;
-      setFloatingChat((prev) => (prev?.conversationId === conversationId ? prev : { conversationId }));
-    };
+  const onLogout = async () => {
+    await logout();
+    navigate("/login");
+  };
 
-    socket.on?.("newConversation", openFromNew);
-    socket.on?.("chat:preview", openFromPreview);
-    return () => {
-      socket.off?.("newConversation", openFromNew);
-      socket.off?.("chat:preview", openFromPreview);
-    };
-  }, [user, socket, onMessagesPage]);
-
-  // /messages 진입 시 플로팅 창 닫기
-  useEffect(() => {
-    if (onMessagesPage && floatingChat) setFloatingChat(null);
-  }, [onMessagesPage, floatingChat]);
+  // 스케줄 메뉴: 클릭 시 오버레이 토글
+  const openScheduleMenu = () => setShowScheduleMenu(true);
+  const closeScheduleMenu = () => setShowScheduleMenu(false);
 
   return (
-    <div className="flex min-h-screen flex-col bg-cream font-body text-ink">
-      {/* Header */}
-      <header className="fixed left-0 right-0 top-0 z-50 flex h-20 items-center border-b border-sand bg-white/80 px-8 backdrop-blur-sm">
-        <div className="mx-auto flex w-full max-w-7xl items-center justify-between">
-          <button
-            onClick={() => navigate(schoolPath("/dashboard"))}
-            className="font-heading text-2xl font-bold text-ink transition hover:text-softGold"
-          >
+    <div className="min-h-screen flex flex-col">
+      {/* Top Nav */}
+      <header className="w-full border-b bg-white">
+        <div className="mx-auto max-w-6xl px-4 h-14 flex items-center justify-between gap-3">
+          <Link to={school ? schoolPath("/dashboard") : "/"} className="font-bold text-xl">
             CNAPSS
-          </button>
+          </Link>
 
-          <div className="relative flex items-center gap-4 font-body text-sm font-medium">
-            <Link to={schoolPath("/freeboard")} className="transition hover:text-softGold">
+          <nav className="flex items-center gap-1">
+            <NavLink
+              to={schoolPath("/freeboard")}
+              className={({ isActive }) => `${linkCls} ${isActive ? activeCls : ""}`}
+            >
               Free Board
-            </Link>
+            </NavLink>
 
-            {/* ✅ Course Hub 버튼은 이제 /courses 로 이동 */}
-            <button
-              onClick={() => navigate(schoolPath("/courses"))}
-              className="transition hover:text-softGold"
+            <NavLink
+              to={schoolPath("/courses")}
+              className={({ isActive }) => `${linkCls} ${isActive ? activeCls : ""}`}
             >
               Course Hub
+            </NavLink>
+
+            {/* Schedule Menu (버튼 → 오버레이) */}
+            <button type="button" onClick={openScheduleMenu} className={linkCls}>
+              Schedule Grid
             </button>
 
-            <div
-              className="relative"
-              onMouseEnter={() => setShowScheduleDropdown(true)}
-              onMouseLeave={() => setShowScheduleDropdown(false)}
+            <NavLink
+              to={schoolPath("/market")}
+              className={({ isActive }) => `${linkCls} ${isActive ? activeCls : ""}`}
             >
-              <button className="transition hover:text-softGold">Schedule Grid ▾</button>
-              {showScheduleDropdown && (
-                <div className="absolute left-0 top-6 z-50 w-48 rounded-md border border-sand bg-white shadow-lg">
-                  <Link to={schoolPath("/personal-schedule")} className="block px-4 py-2 hover:bg-cream">
-                    My Schedule
-                  </Link>
-                  <Link to={schoolPath("/group-availability")} className="block px-4 py-2 hover:bg-cream">
-                    Group Scheduling
-                  </Link>
-                </div>
-              )}
-            </div>
-
-            <Link to={schoolPath("/market")} className="transition hover:text-softGold">
               Marketplace
-            </Link>
+            </NavLink>
 
-            {user && (
-              <button
-                onClick={onBellClick}
-                className="relative transition hover:text-softGold"
-                aria-label="Notifications"
-              >
-                🔔
-                {badgeCount > 0 && (
-                  <span className="absolute -right-2 -top-1 rounded-full bg-red-500 px-1 text-xs leading-none text-white">
-                    {badgeCount}
-                  </span>
-                )}
-              </button>
-            )}
-
-            {user ? (
-              <>
-                <span className="text-xs text-gray-500">{user.email}</span>
-                <button
-                  onClick={() => {
-                    logout();
-                    navigate("/login");
-                  }}
-                  className="rounded bg-softGold px-3 py-1 font-body font-semibold text-black transition hover:opacity-90"
+            {/* 알림 */}
+            <button
+              type="button"
+              onClick={() => {
+                setShowNoti((v) => !v);
+                if (!showNoti && count > 0) {
+                  // 열자마자 모두 읽음 처리 (선호에 따라 단건으로 바꿔도 됨)
+                  markAllAsRead();
+                }
+              }}
+              className="relative ml-1 px-3 py-2 text-sm rounded-md hover:bg-violet-50"
+              aria-label="Notifications"
+              title="Notifications"
+            >
+              <span className="i-bell">🔔</span>
+              {count > 0 && (
+                <span
+                  className={`absolute -top-1.5 -right-1.5 inline-flex items-center justify-center
+                    min-w-[18px] h-[18px] px-1 rounded-full text-[11px] text-white
+                    ${bump ? "animate-ping-once" : ""}`}
+                  style={{ backgroundColor: "#7c3aed" }}
                 >
+                  {count}
+                </span>
+              )}
+            </button>
+
+            {user?.email && (
+              <>
+                <span className="mx-1 text-sm text-gray-600 hidden sm:inline">
+                  {user.email}
+                </span>
+                <button onClick={onLogout} className={`${linkCls} text-red-600`}>
                   Log out
                 </button>
               </>
-            ) : (
-              <>
-                <Link to="/login" className="font-body text-sm text-ink underline">
-                  Login
-                </Link>
-                <Link
-                  to={school ? `/register/${school}` : "/register"}
-                  className="font-body text-sm text-ink underline"
-                >
-                  Sign Up
-                </Link>
-              </>
             )}
-          </div>
+          </nav>
         </div>
       </header>
 
-      {/* Notifications */}
-      {user && showModal && (
-        <div className="fixed right-8 top-24 z-50 w-80 max-h-96 overflow-y-auto rounded-lg border border-sand bg-white shadow-xl">
-          <div className="flex items-center justify-between border-b p-4 font-bold text-softGold">
-            <span>Notifications</span>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => {
-                  markAllAsRead();
-                  setShowModal(false);
-                }}
-                disabled={notifications.length === 0}
-                className="text-xs text-blue-600 hover:underline disabled:opacity-40"
+      {/* Schedule overlay */}
+      {showScheduleMenu && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 flex items-center justify-center"
+          onClick={closeScheduleMenu}
+        >
+          <div
+            className="bg-white rounded-xl shadow-xl p-4 w-[320px]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="text-sm text-gray-500 mb-2">Schedule</div>
+            <div className="flex flex-col gap-2">
+              <Link
+                to={schoolPath("/schedule")}
+                className="rounded-md px-3 py-2 text-sm hover:bg-violet-50"
+                onClick={closeScheduleMenu}
               >
-                Mark all read
-              </button>
-              <button onClick={() => setShowModal(false)} className="text-sm text-gray-500 hover:text-red-500">
-                ✕
-              </button>
+                My Schedule
+              </Link>
+              <Link
+                to={schoolPath("/schedule/group")}
+                className="rounded-md px-3 py-2 text-sm hover:bg-violet-50"
+                onClick={closeScheduleMenu}
+              >
+                Group Scheduling
+              </Link>
             </div>
           </div>
-          <ul className="divide-y">
-            {notifications.length === 0 ? (
-              <li className="p-3 text-sm text-gray-500">No notifications</li>
-            ) : (
-              notifications.map((n) => {
-                const read = !!n.readAt;
-                return (
-                  <li key={n._id}>
-                    <Link
-                      to={schoolPath(`/freeboard/${n.postId}?nid=${n._id}#comment-${n._id}`)}
-                      onClick={async () => {
-                        try {
-                          optimisticRead(n._id);
-                          dismiss(n._id);
-                          await markAsRead(n._id);
-                        } finally {
-                          setShowModal(false);
-                        }
-                      }}
-                      className={
-                        "block p-3 text-sm transition " +
-                        (read ? "text-gray-400 hover:bg-gray-100" : "text-gray-700 hover:bg-cream")
-                      }
-                    >
-                      💬 <b>Somebody</b> commented on your {n.parentId ? "comment" : "post"}
-                    </Link>
-                  </li>
-                );
-              })
-            )}
-          </ul>
+        </div>
+      )}
+
+      {/* Notifications modal */}
+      {showNoti && (
+        <div
+          className="fixed inset-0 z-40 bg-black/30 flex items-start justify-end p-4"
+          onClick={() => setShowNoti(false)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-xl w-full max-w-sm"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-4 py-3 border-b flex items-center justify-between">
+              <div className="font-medium">Notifications</div>
+              <button
+                className="text-sm text-violet-600 hover:underline"
+                onClick={() => {
+                  markAllAsRead();
+                  setShowNoti(false);
+                }}
+              >
+                Mark all as read
+              </button>
+            </div>
+            <div className="max-h-[60vh] overflow-auto">
+              {items.length === 0 ? (
+                <div className="p-4 text-sm text-gray-500">No notifications</div>
+              ) : (
+                items.map((n) => (
+                  <div key={n._id} className="p-4 border-b text-sm">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="font-medium">{n.title || "Notification"}</div>
+                      <button
+                        className="text-violet-600 hover:underline"
+                        onClick={() => markAsRead(n._id)}
+                      >
+                        Read
+                      </button>
+                    </div>
+                    {n.message && (
+                      <div className="mt-1 text-gray-600">{n.message}</div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
         </div>
       )}
 
       {/* Content */}
-      <main className="flex-grow pt-24 font-body">
+      <main className="flex-1">
         <Outlet />
       </main>
-
-      <Footer />
-
-      {/* Floating Chatbox — /messages에서는 숨김 */}
-      {!onMessagesPage && floatingChat && user && (
-        <div className="fixed bottom-4 right-4 z-50 shadow-lg">
-          <ChatBox
-            conversationId={floatingChat.conversationId}
-            userEmail={user.email}
-            onClose={() => setFloatingChat(null)}
-          />
-        </div>
-      )}
     </div>
   );
 }
 
-export default Layout;
+
+
 
 
 

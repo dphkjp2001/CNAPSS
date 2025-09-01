@@ -60,9 +60,10 @@ export async function listRecentMaterials({ school, token, limit = 5 }) {
     limit: String(Math.max(1, Math.min(20, limit))),
   }).toString();
 
-  const res = await apiFetch(`${API}/${encodeURIComponent(school)}/materials/recent?${qs}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const init = { headers: {} };
+  if (token) init.headers.Authorization = `Bearer ${token}`;
+
+  const res = await apiFetch(`${API}/${encodeURIComponent(school)}/materials/recent?${qs}`, init);
   if (!res.ok) throw new Error("Failed to load recent materials");
   return res.json();
 }

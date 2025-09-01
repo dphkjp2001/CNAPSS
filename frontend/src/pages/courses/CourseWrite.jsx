@@ -66,17 +66,15 @@ export default function CourseWrite() {
 
     if (!courseCode?.trim()) return setErr("Please select a course code.");
     if (!semester) return setErr("Please select a semester.");
-
     const prof = professor.trim();
-    if (!prof) return setErr("Please enter the professor name."); // ← 필수 검증
-
+    if (!prof) return setErr("Please enter the professor name.");
     if (!isFree && (Number.isNaN(price) || Number(price) < 1)) {
       return setErr("Please enter a valid price (≥ 1).");
     }
 
     try {
       setBusy(true);
-
+      const API = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
       const payload = {
         courseCode: courseCode.toUpperCase(),
         courseTitle: "",
@@ -86,7 +84,7 @@ export default function CourseWrite() {
         isFree,
         price: Number(isFree ? 0 : price),
         sharePreference,
-        professor: prof, // ← 필수 전송
+        professor: prof,
         url: "",
         fileUrl: "",
         filePublicId: "",
@@ -95,8 +93,6 @@ export default function CourseWrite() {
         title: courseCode.toUpperCase(),
         tags: [],
       };
-
-      const API = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
       await postJson(`${API}/${encodeURIComponent(school)}/materials`, payload);
 
       navigate(
@@ -121,11 +117,21 @@ export default function CourseWrite() {
       </p>
 
       <form onSubmit={onSubmit} className="space-y-5">
+        {/* Course code (required) */}
         <div>
-          <label className="mb-1 block text-sm font-medium">Course code (required)</label>
-          <CourseCodePicker school={school} value={courseCode} onChange={setCourseCode} />
+          <label htmlFor="courseCodeInput" className="mb-1 block text-sm font-medium">
+            Course code <span className="text-red-600">*</span>
+          </label>
+          <CourseCodePicker
+            id="courseCodeInput"
+            school={school}
+            value={courseCode}
+            onChange={setCourseCode}
+            required
+          />
         </div>
 
+        {/* Professor (required) */}
         <div>
           <label className="mb-1 block text-sm font-medium">
             Professor <span className="text-red-600">*</span>
@@ -141,6 +147,7 @@ export default function CourseWrite() {
           />
         </div>
 
+        {/* Semester & kind */}
         <div className="flex flex-col gap-3 sm:flex-row">
           <div className="sm:w-1/2">
             <label className="mb-1 block text-sm font-medium">Semester</label>
@@ -173,32 +180,7 @@ export default function CourseWrite() {
           </div>
         </div>
 
-        <div>
-          <label className="mb-1 block text-sm font-medium">What are you posting?</label>
-          <div className="flex items-center gap-3">
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="radio"
-                name="materialType"
-                value="personalMaterial"
-                checked={materialType === "personalMaterial"}
-                onChange={(e) => setMaterialType(e.target.value)}
-              />
-              Personal Class Material
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="radio"
-                name="materialType"
-                value="personalNote"
-                checked={materialType === "personalNote"}
-                onChange={(e) => setMaterialType(e.target.value)}
-              />
-              Personal Class Note
-            </label>
-          </div>
-        </div>
-
+        {/* Price */}
         <div>
           <label className="mb-1 block text-sm font-medium">Price</label>
           <div className="flex items-center gap-4">
@@ -222,7 +204,7 @@ export default function CourseWrite() {
             </label>
             <input
               type="number"
-              min="1"
+              min={1}
               step="1"
               disabled={isFree}
               value={isFree ? "" : price}
@@ -233,6 +215,7 @@ export default function CourseWrite() {
           </div>
         </div>
 
+        {/* Share preference */}
         <div>
           <label className="mb-1 block text-sm font-medium">How would you like to share?</label>
           <div className="flex flex-wrap items-center gap-3">
@@ -295,6 +278,7 @@ export default function CourseWrite() {
     </div>
   );
 }
+
 
 
 
