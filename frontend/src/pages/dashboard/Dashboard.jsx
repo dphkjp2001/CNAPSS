@@ -128,7 +128,7 @@ export default function Dashboard() {
                 <DashLink onClick={() => nav(schoolPath("/liked"))}>Liked</DashLink>
                 <DashLink onClick={() => nav(schoolPath("/commented"))}>Commented</DashLink>
                 <DashLink onClick={() => nav(schoolPath("/personal-schedule"))}>
-                  Schedule
+                  My Schedule
                 </DashLink>
                 <DashLink onClick={() => nav(schoolPath("/market"))}>Marketplace</DashLink>
                 <DashLink onClick={() => nav(schoolPath("/foodmap"))}>Food Map</DashLink>

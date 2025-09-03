@@ -10,22 +10,6 @@ const low = (v) => n(v).toLowerCase();
 const up = (v) => n(v).toUpperCase();
 const SEM = /^[0-9]{4}-(spring|summer|fall|winter)$/i;
 
-const ALLOWED_MIME = new Set([
-  "application/pdf",
-  "application/msword",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "application/vnd.ms-powerpoint",
-  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-  "application/vnd.ms-excel",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  "text/plain",
-  "text/markdown",
-  "image/png",
-  "image/jpeg",
-  "image/webp",
-]);
-const MAX_SIZE = 25 * 1024 * 1024; // 25MB
-
 /** -----------------------------------------------------------
  * helpers
  * ----------------------------------------------------------*/
@@ -36,28 +20,17 @@ async function attachAuthorNames(docs) {
   const missing = arr.filter((m) => !n(m.authorName));
   if (!missing.length) return Array.isArray(docs) ? docs : docs;
 
-  const emails = [
-    ...new Set(
-      missing
-        .map((m) => low(m.uploaderEmail))
-        .filter(Boolean)
-    ),
-  ];
+  const emails = [...new Set(missing.map((m) => low(m.uploaderEmail)).filter(Boolean))];
   if (!emails.length) return Array.isArray(docs) ? docs : docs;
 
   const users = await User.find({ email: { $in: emails } })
     .select("email nickname")
     .lean();
 
-  const nickMap = Object.fromEntries(
-    users.map((u) => [low(u.email), u.nickname])
-  );
+  const nickMap = Object.fromEntries(users.map((u) => [low(u.email), u.nickname]));
+  const fill = (m) => (n(m.authorName) ? m : { ...m, authorName: nickMap[low(m.uploaderEmail)] || "" });
 
-  const fill = (m) =>
-    n(m.authorName) ? m : { ...m, authorName: nickMap[low(m.uploaderEmail)] || "" };
-
-  if (Array.isArray(docs)) return docs.map(fill);
-  return fill(docs);
+  return Array.isArray(docs) ? docs.map(fill) : fill(docs);
 }
 
 /**
@@ -147,8 +120,10 @@ router.get("/", async (req, res) => {
       kind: m.kind,
       materialType: m.materialType,
       title: m.title,
+      description: m.description || "", // ✅ 추가
       tags: m.tags,
       url: m.url,
+      // 파일 필드는 응답에 남겨두되 프론트는 사용 X
       fileUrl: m.fileUrl,
       fileMime: m.fileMime,
       fileSize: m.fileSize,
@@ -193,21 +168,20 @@ router.post("/", async (req, res) => {
 
   const courseCode = up(body.courseCode || "");
   const courseTitle = n(body.courseTitle || "");
-  const professor = n(body.professor || ""); // NEW
+  const professor = n(body.professor || ""); // REQUIRED
   const semester = n(body.semester || "");
   let kind = n(body.kind || "note").toLowerCase();
 
+  // 파일 업로드는 사용하지 않음. url은 선택적으로 허용.
   const url = n(body.url || "");
-  const fileUrl = n(body.fileUrl || "");
-  const filePublicId = n(body.filePublicId || "");
-  const fileMime = n(body.fileMime || "");
-  const fileSize = Number.isFinite(body.fileSize) ? body.fileSize : 0;
-  const hash = n(body.hash || "");
 
   const materialType = n(body.materialType || "personalMaterial");
   const isFree = typeof body.isFree === "boolean" ? body.isFree : true;
   const price = Number.isFinite(body.price) ? Math.max(0, body.price) : 0;
   const sharePreference = n(body.sharePreference || "either");
+
+  // 본문 설명(선택)
+  const description = n(body.description || "");
 
   if (!courseCode) return res.status(400).json({ message: "courseCode is required" });
   if (!semester || !SEM.test(semester)) return res.status(400).json({ message: "Invalid semester" });
@@ -215,11 +189,6 @@ router.post("/", async (req, res) => {
   if (kind === "quiz") kind = "exam";
   if (!["note", "syllabus", "exam", "slide", "link", "other"].includes(kind)) {
     return res.status(400).json({ message: "invalid kind" });
-  }
-
-  if (fileUrl) {
-    if (fileSize > MAX_SIZE) return res.status(400).json({ message: "File too large" });
-    if (fileMime && !ALLOWED_MIME.has(fileMime)) return res.status(400).json({ message: "File type not allowed" });
   }
 
   if (!isFree && price < 1) return res.status(400).json({ message: "Price must be at least 1" });
@@ -243,17 +212,19 @@ router.post("/", async (req, res) => {
     school,
     courseCode,
     courseTitle,
-    professor, // NEW
+    professor,
     semester,
     kind,
     title: n(body.title || courseCode),
+    description, // ✅ 저장
     tags: Array.isArray(body.tags) ? body.tags.map(n).filter(Boolean).slice(0, 12) : [],
     url,
-    fileUrl,
-    filePublicId,
-    fileMime,
-    fileSize,
-    hash,
+    // 파일 필드는 더 이상 검증하지 않고 기본값(빈 값)만 저장
+    fileUrl: n(body.fileUrl || ""),
+    filePublicId: n(body.filePublicId || ""),
+    fileMime: n(body.fileMime || ""),
+    fileSize: Number.isFinite(body.fileSize) ? body.fileSize : 0,
+    hash: n(body.hash || ""),
     materialType,
     isFree,
     price,
@@ -288,6 +259,7 @@ router.delete("/:id", async (req, res) => {
 });
 
 module.exports = router;
+
 
 
 

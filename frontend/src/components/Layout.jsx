@@ -12,7 +12,7 @@ export default function Layout() {
   const navigate = useNavigate();
   const schoolPath = useSchoolPath();
 
-  // 알림(읽음/배지 카운트/목록)
+  // notifications
   const { items, count, markAsRead, markAllAsRead } = useNotificationsPolling(
     user?.email,
     5000,
@@ -20,11 +20,9 @@ export default function Layout() {
     5
   );
 
-  // 알림 모달 & 스케줄 메뉴
   const [showNoti, setShowNoti] = useState(false);
   const [showScheduleMenu, setShowScheduleMenu] = useState(false);
 
-  // 배지 ‘뽁’ 애니메이션
   const [bump, setBump] = useState(false);
   const prevCountRef = useRef(count);
   useEffect(() => {
@@ -45,7 +43,6 @@ export default function Layout() {
     navigate("/login");
   };
 
-  // 스케줄 메뉴: 클릭 시 오버레이 토글
   const openScheduleMenu = () => setShowScheduleMenu(true);
   const closeScheduleMenu = () => setShowScheduleMenu(false);
 
@@ -73,7 +70,7 @@ export default function Layout() {
               Course Hub
             </NavLink>
 
-            {/* Schedule Menu (버튼 → 오버레이) */}
+            {/* Schedule Menu (button → overlay) */}
             <button type="button" onClick={openScheduleMenu} className={linkCls}>
               Schedule Grid
             </button>
@@ -85,13 +82,12 @@ export default function Layout() {
               Marketplace
             </NavLink>
 
-            {/* 알림 */}
+            {/* Notifications */}
             <button
               type="button"
               onClick={() => {
                 setShowNoti((v) => !v);
                 if (!showNoti && count > 0) {
-                  // 열자마자 모두 읽음 처리 (선호에 따라 단건으로 바꿔도 됨)
                   markAllAsRead();
                 }
               }}
@@ -112,7 +108,8 @@ export default function Layout() {
               )}
             </button>
 
-            {user?.email && (
+            {/* Auth buttons */}
+            {user?.email ? (
               <>
                 <span className="mx-1 text-sm text-gray-600 hidden sm:inline">
                   {user.email}
@@ -120,6 +117,20 @@ export default function Layout() {
                 <button onClick={onLogout} className={`${linkCls} text-red-600`}>
                   Log out
                 </button>
+              </>
+            ) : (
+              <>
+                {/* ✅ 비로그인 상태에서 로그인/회원가입 노출 */}
+                <Link to="/login" className={linkCls}>
+                  Log in
+                </Link>
+                <Link
+                  to="/register"
+                  className={`${linkCls} sm:ml-1`}
+                  title="Create an account"
+                >
+                  Register
+                </Link>
               </>
             )}
           </nav>
@@ -212,6 +223,7 @@ export default function Layout() {
     </div>
   );
 }
+
 
 
 

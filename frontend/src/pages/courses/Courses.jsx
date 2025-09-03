@@ -34,7 +34,7 @@ const timeAgo = (iso) => {
 
 export default function Courses() {
   const { token } = useAuth();
-  const { school } = useSchool();
+  const { school, schoolTheme } = useSchool();
   const navigate = useNavigate();
   const schoolPath = useSchoolPath();
 
@@ -78,7 +78,10 @@ export default function Courses() {
   const empty = !loading && !items.length && !err;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div
+      className="min-h-screen"
+      style={{ backgroundColor: schoolTheme?.bg || "#f6f3ff" }}
+    >
       <div className={containerClass}>
         <div className="mb-4 flex items-center justify-between gap-3">
           <h1 className="text-xl font-semibold">CourseHub</h1>
@@ -105,7 +108,7 @@ export default function Courses() {
         )}
 
         {empty && (
-          <div className="rounded-xl border bg-white p-6 text-center text-sm text-gray-500">
+          <div className="rounded-2xl border bg-white p-6 text-center text-sm text-gray-500">
             No postings yet. Be the first to create one!
           </div>
         )}
@@ -157,5 +160,6 @@ export default function Courses() {
     </div>
   );
 }
+
 
 

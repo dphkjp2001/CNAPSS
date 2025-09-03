@@ -23,9 +23,16 @@ const materialSchema = new mongoose.Schema(
     },
 
     kind: { type: String, enum: ALLOWED_KINDS, default: "note", index: true },
+
+    // Title는 짧은 한줄 제목 용도로 유지
     title: { type: String, required: true, trim: true },
+
+    // ✅ 새로 추가: 본문 설명(선택)
+    description: { type: String, default: "", trim: true },
+
     tags: { type: [String], default: [] },
 
+    // 파일 업로드는 사용하지 않지만, 기존 데이터는 보존
     fileUrl: { type: String, default: "" },
     filePublicId: { type: String, default: "" },
     fileMime: { type: String, default: "" },
@@ -55,6 +62,7 @@ materialSchema.index({ school: 1, courseCode: 1, kind: 1 });
 materialSchema.index({ school: 1, courseCode: 1, materialType: 1, isFree: 1 });
 
 module.exports = mongoose.model("Material", materialSchema);
+
 
 
 
