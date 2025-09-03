@@ -25,6 +25,7 @@ function isValidId(id) {
  * GET /
  * - 내 학교 마켓 아이템 목록
  * - optional 쿼리: q(검색), status, minPrice, maxPrice, sort(latest|price_asc|price_desc)
+ * - ✅ 각 아이템에 sellerNickname 추가해 내려줌
  */
 router.get("/", async (req, res) => {
   try {
@@ -48,8 +49,33 @@ router.get("/", async (req, res) => {
     if (sort === "price_asc") sortSpec = { price: 1, createdAt: -1 };
     if (sort === "price_desc") sortSpec = { price: -1, createdAt: -1 };
 
-    const items = await MarketItem.find(filter).sort(sortSpec);
-    res.json(items);
+    // 원래 로직 그대로 유지 + lean() 후 닉네임 매핑만 추가
+    const items = await MarketItem.find(filter).sort(sortSpec).lean();
+
+    // 이메일 → 닉네임 맵 구성
+    const emails = [
+      ...new Set(
+        items
+          .map((i) => String(i.seller || "").toLowerCase())
+          .filter(Boolean)
+      ),
+    ];
+    let nickMap = {};
+    if (emails.length) {
+      const users = await User.find({ email: { $in: emails } })
+        .select("email nickname")
+        .lean();
+      nickMap = Object.fromEntries(
+        users.map((u) => [String(u.email).toLowerCase(), u.nickname])
+      );
+    }
+
+    const itemsWithNick = items.map((i) => ({
+      ...i,
+      sellerNickname: nickMap[String(i.seller || "").toLowerCase()] || "Unknown",
+    }));
+
+    res.json(itemsWithNick);
   } catch (err) {
     console.error("List market error:", err);
     res.status(500).json({ message: "Failed to fetch items." });
@@ -83,12 +109,18 @@ router.get("/request/:itemId/:buyerEmail", async (req, res) => {
   if (!isValidId(itemId)) {
     return res.status(400).json({ message: "Invalid item id" });
   }
-  if (req.user.role !== "superadmin" && buyerEmail.toLowerCase().trim() !== req.user.email) {
+  if (
+    req.user.role !== "superadmin" &&
+    buyerEmail.toLowerCase().trim() !== req.user.email
+  ) {
     return res.status(403).json({ message: "Forbidden" });
   }
 
   try {
-    const item = await MarketItem.findOne({ _id: itemId, school: req.user.school });
+    const item = await MarketItem.findOne({
+      _id: itemId,
+      school: req.user.school,
+    });
     if (!item) return res.status(404).json({ message: "Item not found." });
 
     const exists = await Request.findOne({
@@ -118,7 +150,10 @@ router.post("/request", async (req, res) => {
 
   try {
     // 1) 내 학교 아이템인지 확인
-    const item = await MarketItem.findOne({ _id: itemId, school: req.user.school });
+    const item = await MarketItem.findOne({
+      _id: itemId,
+      school: req.user.school,
+    });
     if (!item) return res.status(404).json({ message: "Item not found." });
 
     const buyer = req.user.email;
@@ -126,7 +161,9 @@ router.post("/request", async (req, res) => {
     const school = req.user.school;
 
     if (buyer === seller) {
-      return res.status(400).json({ message: "You cannot inquire about your own item." });
+      return res
+        .status(400)
+        .json({ message: "You cannot inquire about your own item." });
     }
 
     // 2) 중복 요청 방지 (school 포함)
@@ -136,14 +173,30 @@ router.post("/request", async (req, res) => {
     }
 
     // 3) Request 생성 (✅ seller 필드 포함)
-    const newRequest = await Request.create({ school, itemId, buyer, seller, message });
+    const newRequest = await Request.create({
+      school,
+      itemId,
+      buyer,
+      seller,
+      message,
+    });
 
     // 4) 대화 찾기/생성 (school 기준)
-    let conversation = await Conversation.findOne({ itemId, buyer, seller, school });
+    let conversation = await Conversation.findOne({
+      itemId,
+      buyer,
+      seller,
+      school,
+    });
 
     // 과거에 school 없이 만들어진 문서 호환
     if (!conversation) {
-      const old = await Conversation.findOne({ itemId, buyer, seller, school: { $exists: false } });
+      const old = await Conversation.findOne({
+        itemId,
+        buyer,
+        seller,
+        school: { $exists: false },
+      });
       if (old) {
         old.school = school;
         await old.save();
@@ -152,7 +205,12 @@ router.post("/request", async (req, res) => {
     }
 
     if (!conversation) {
-      conversation = await Conversation.create({ itemId, buyer, seller, school });
+      conversation = await Conversation.create({
+        itemId,
+        buyer,
+        seller,
+        school,
+      });
     }
 
     // 5) 메시지 저장 (school 주입)
@@ -192,7 +250,10 @@ router.get("/:id", async (req, res) => {
   }
 
   try {
-    const item = await MarketItem.findOne({ _id: id, school: req.user.school }).lean();
+    const item = await MarketItem.findOne({
+      _id: id,
+      school: req.user.school,
+    }).lean();
     if (!item) return res.status(404).json({ message: "Item not found." });
 
     const sellerUser = await User.findOne({ email: item.seller }).lean();
@@ -217,7 +278,9 @@ router.post("/", async (req, res) => {
 
     const me = await User.findOne({ email: req.user.email });
     if (!me || !me.isVerified) {
-      return res.status(403).json({ message: "Only verified users can create items." });
+      return res
+        .status(403)
+        .json({ message: "Only verified users can create items." });
     }
 
     const item = await MarketItem.create({
@@ -247,11 +310,16 @@ router.put("/:id", async (req, res) => {
   }
 
   try {
-    const item = await MarketItem.findOne({ _id: id, school: req.user.school });
+    const item = await MarketItem.findOne({
+      _id: id,
+      school: req.user.school,
+    });
     if (!item) return res.status(404).json({ message: "Item not found." });
 
     if (item.seller !== req.user.email && req.user.role !== "superadmin") {
-      return res.status(403).json({ message: "You can only edit your own items." });
+      return res
+        .status(403)
+        .json({ message: "You can only edit your own items." });
     }
 
     const { title, description, price, images } = req.body;
@@ -284,11 +352,16 @@ router.patch("/:id/status", async (req, res) => {
   }
 
   try {
-    const item = await MarketItem.findOne({ _id: id, school: req.user.school });
+    const item = await MarketItem.findOne({
+      _id: id,
+      school: req.user.school,
+    });
     if (!item) return res.status(404).json({ message: "Item not found." });
 
     if (item.seller !== req.user.email && req.user.role !== "superadmin") {
-      return res.status(403).json({ message: "You can only update your own items." });
+      return res
+        .status(403)
+        .json({ message: "You can only update your own items." });
     }
 
     item.status = status;
@@ -311,11 +384,16 @@ router.delete("/:id", async (req, res) => {
   }
 
   try {
-    const item = await MarketItem.findOne({ _id: id, school: req.user.school });
+    const item = await MarketItem.findOne({
+      _id: id,
+      school: req.user.school,
+    });
     if (!item) return res.status(404).json({ message: "Item not found." });
 
     if (item.seller !== req.user.email && req.user.role !== "superadmin") {
-      return res.status(403).json({ message: "You can only delete your own items." });
+      return res
+        .status(403)
+        .json({ message: "You can only delete your own items." });
     }
 
     if (Array.isArray(item.images) && item.images.length) {
@@ -337,6 +415,7 @@ router.delete("/:id", async (req, res) => {
 });
 
 module.exports = router;
+
 
 
 

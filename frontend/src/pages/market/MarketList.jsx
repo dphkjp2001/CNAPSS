@@ -6,7 +6,6 @@ import { useSchoolPath } from "../../utils/schoolPath";
 import { listItems } from "../../api/market";
 import { useAuth } from "../../contexts/AuthContext";
 
-
 const PAGE_SIZE = 12;
 
 const currency = new Intl.NumberFormat("en-US", {
@@ -76,7 +75,10 @@ function MarketCard({ item, schoolPath }) {
         <p className="mt-1 text-sm font-medium text-gray-800">
           {currency.format(Number(item.price) || 0)}
         </p>
-        <p className="mt-1 line-clamp-1 text-xs text-gray-500">{item.seller}</p>
+        {/* ✅ 이메일 대신 닉네임만 표시 */}
+        <p className="mt-1 line-clamp-1 text-xs text-gray-500">
+          {item.sellerNickname || "Unknown"}
+        </p>
         {item.location && (
           <div className="mt-2 inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 text-[11px] text-gray-600">
             {item.location}
@@ -105,7 +107,7 @@ const MarketList = () => {
     const fetchItems = async () => {
       try {
         setLoading(true);
-        const data = await listItems({ school, token }); // ✅ /api/:school/market + Authorization
+        const data = await listItems({ school, token }); // /api/:school/market + Authorization
         if (mounted) setItems(Array.isArray(data) ? data : []);
       } catch (e) {
         setErr("Failed to load listings.");
@@ -118,12 +120,13 @@ const MarketList = () => {
     return () => {
       mounted = false;
     };
-    }, [school, token]);
+  }, [school, token]);
 
   const processed = useMemo(() => {
     const q = query.trim().toLowerCase();
     let list = items.filter((it) => {
       if (!q) return true;
+      // 🔸 기존 동작 유지: 제목/이메일 검색 로직은 그대로 둠
       return (
         it.title?.toLowerCase().includes(q) ||
         it.seller?.toLowerCase().includes(q)
@@ -256,5 +259,6 @@ const MarketList = () => {
 };
 
 export default MarketList;
+
 
 

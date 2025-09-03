@@ -23,8 +23,12 @@ const ALLOWED_MIME = new Set([
   "image/jpeg",
   "image/webp",
 ]);
-const MAX_SIZE = 25 * 1024 * 1024;
+const MAX_SIZE = 25 * 1024 * 1024; // 25MB
 
+/**
+ * NEW: school-wide recent materials for dashboard preview
+ * GET /api/:school/materials/recent?limit=5
+ */
 router.get("/recent", async (req, res) => {
   const school = low(req.params.school);
   const limit = Math.min(20, Math.max(1, parseInt(req.query.limit || "5", 10)));
@@ -51,6 +55,10 @@ router.get("/recent", async (req, res) => {
   });
 });
 
+/**
+ * List materials for a course & semester
+ * GET /api/:school/materials
+ */
 router.get("/", async (req, res) => {
   const school = low(req.params.school);
   const courseCode = up(req.query.course || "");
@@ -64,7 +72,9 @@ router.get("/", async (req, res) => {
   const limit = Math.min(50, Math.max(1, parseInt(req.query.limit || "20", 10)));
 
   if (!courseCode) return res.status(400).json({ message: "course is required" });
-  if (!semester || !SEM.test(semester)) return res.status(400).json({ message: "Invalid semester" });
+  if (!semester || !SEM.test(semester)) {
+    return res.status(400).json({ message: "Invalid semester (e.g., 2025-fall)" });
+  }
 
   const filter = { school, courseCode, semester };
   if (kind !== "all") filter.kind = kind;
@@ -112,6 +122,10 @@ router.get("/", async (req, res) => {
   });
 });
 
+/**
+ * Get a single material
+ * GET /api/:school/materials/:id
+ */
 router.get("/:id", async (req, res) => {
   const school = low(req.params.school);
   const id = n(req.params.id);
@@ -120,6 +134,10 @@ router.get("/:id", async (req, res) => {
   res.json(doc);
 });
 
+/**
+ * Create (no attachment required)
+ * POST /api/:school/materials
+ */
 router.post("/", async (req, res) => {
   const school = low(req.params.school);
   const user = req.user;
@@ -127,7 +145,7 @@ router.post("/", async (req, res) => {
 
   const courseCode = up(body.courseCode || "");
   const courseTitle = n(body.courseTitle || "");
-  const professor = n(body.professor || ""); // REQUIRED
+  const professor = n(body.professor || ""); // NEW
   const semester = n(body.semester || "");
   let kind = n(body.kind || "note").toLowerCase();
 
@@ -145,7 +163,6 @@ router.post("/", async (req, res) => {
 
   if (!courseCode) return res.status(400).json({ message: "courseCode is required" });
   if (!semester || !SEM.test(semester)) return res.status(400).json({ message: "Invalid semester" });
-  if (!professor) return res.status(400).json({ message: "professor is required" }); // ← 필수 검증
 
   if (kind === "quiz") kind = "exam";
   if (!["note", "syllabus", "exam", "slide", "link", "other"].includes(kind)) {
@@ -171,7 +188,7 @@ router.post("/", async (req, res) => {
     school,
     courseCode,
     courseTitle,
-    professor, // REQUIRED 저장
+    professor, // NEW
     semester,
     kind,
     title: n(body.title || courseCode),
@@ -195,6 +212,10 @@ router.post("/", async (req, res) => {
   res.status(201).json({ ok: true, id: doc._id });
 });
 
+/**
+ * Delete (owner or admin)
+ * DELETE /api/:school/materials/:id
+ */
 router.delete("/:id", async (req, res) => {
   const school = low(req.params.school);
   const id = n(req.params.id);
@@ -212,7 +233,6 @@ router.delete("/:id", async (req, res) => {
 });
 
 module.exports = router;
-
 
 
 

@@ -15,7 +15,7 @@ export async function listItems(arg1, arg2 = {}) {
     opts = arg2 || {};
   } else {
     const { school: s, ...rest } = arg1 || {};
-    school = s; // ✅ fixed stray character
+    school = s; // fixed stray character
     opts = rest;
   }
   if (!school) throw new Error("school is required");
@@ -78,7 +78,7 @@ export async function createItem(a1, a2, a3) {
     const { school: s, token: t, data: d, payload: p, ...rest } = a1 || {};
     school = s;
     token = t;
-    // ✅ accept both data and payload; fall back to spread
+    // accept both data and payload; fall back to spread
     data = d ?? p ?? rest;
   }
   if (!school) throw new Error("school is required");
@@ -94,11 +94,12 @@ export async function createItem(a1, a2, a3) {
 
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body?.error || "failed to create");
-  return body;
+  return body; // { id, ... }
 }
 
 /** 아이템 수정 (payload pass-through)
  *   updateItem({ school, token, id, data })
+ *   updateItem({ school, token, id, payload })  // alias supported
  *   updateItem(school, id, data, token?)
  */
 export async function updateItem(a1, a2, a3, a4) {
@@ -109,11 +110,12 @@ export async function updateItem(a1, a2, a3, a4) {
     data = a3 || {};
     token = a4;
   } else {
-    const { school: s, id: i, token: t, data: d, ...rest } = a1 || {};
+    // ✅ support both `data` and `payload`
+    const { school: s, id: i, token: t, data: d, payload: p, ...rest } = a1 || {};
     school = s;
     id = i;
     token = t;
-    data = d ?? rest;
+    data = d ?? p ?? rest;
   }
   if (!school || !id) throw new Error("school and id are required");
 
@@ -155,7 +157,7 @@ export async function checkRequest({ school, token, itemId }) {
     { headers: { Authorization: `Bearer ${token}` } }
   );
   if (!res.ok) return { alreadySent: false };
-  return res.json();
+  return res.json(); // { alreadySent, conversationId? }
 }
 
 /** 요청 보내기 (마켓/코스헙 통합 라우트) */
@@ -178,6 +180,7 @@ export async function sendRequest({ school, token, itemId, message }) {
   if (res.status === 409) return { alreadySent: true, ...data };
   throw new Error(data?.error || "request failed");
 }
+
 
 
 

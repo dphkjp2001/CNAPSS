@@ -47,9 +47,10 @@ export async function listMaterials({
 
 // GET /api/:school/materials/:id
 export async function getMaterial({ school, token, id }) {
-  const res = await apiFetch(`${API}/${encodeURIComponent(school)}/materials/${id}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const res = await apiFetch(
+    `${API}/${encodeURIComponent(school)}/materials/${encodeURIComponent(id)}`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
   if (!res.ok) throw new Error("Failed to load material");
   return res.json();
 }
@@ -67,4 +68,44 @@ export async function listRecentMaterials({ school, token, limit = 5 }) {
   if (!res.ok) throw new Error("Failed to load recent materials");
   return res.json();
 }
+
+/* ---------------- Requests (CourseHub 전용) ---------------- */
+
+// GET /api/:school/request/status?type=coursehub&targetId=:materialId
+export async function checkMaterialRequest({ school, token, materialId }) {
+  const qs = new URLSearchParams({
+    type: "coursehub",
+    targetId: String(materialId || "").trim(),
+  }).toString();
+
+  const res = await apiFetch(
+    `${API}/${encodeURIComponent(school)}/request/status?${qs}`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  if (!res.ok) return { alreadySent: false };
+  return res.json(); // { alreadySent, conversationId? }
+}
+
+// POST /api/:school/request  (body: { type:"coursehub", targetId, message })
+export async function sendMaterialRequest({ school, token, materialId, message }) {
+  const res = await apiFetch(`${API}/${encodeURIComponent(school)}/request`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      type: "coursehub",
+      targetId: String(materialId || "").trim(),
+      message: String(message || "").trim(),
+    }),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 201 || res.status === 200) return data; // { conversationId, requestId, ... }
+  if (res.status === 409) return { alreadySent: true, ...data };
+  throw new Error(data?.message || "request failed");
+}
+
+
 

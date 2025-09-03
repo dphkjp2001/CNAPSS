@@ -15,7 +15,7 @@ import * as chatApi from "../../api/chat";
 export default function Messages() {
   const { user, token } = useAuth() || {};
   const { school: schoolParam } = useParams();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { on, off } = useSocket();
 
   const school = useMemo(
@@ -26,6 +26,9 @@ export default function Messages() {
   const [convos, setConvos] = useState([]);
   const [selected, setSelected] = useState(null);
   const [filter, setFilter] = useState("all"); // all | market | coursehub
+
+  // ✅ conversation 파라미터는 '초기 1회만' 반영
+  const [initialParam, setInitialParam] = useState(() => searchParams.get("conversation") || null);
 
   /* ---------------- helpers (UI only) ---------------- */
   const myEmail = (user?.email || "").toLowerCase();
@@ -52,7 +55,6 @@ export default function Messages() {
     if (t === "market") return "🛒 Market";
     if (t === "coursehub") return "🎓 CourseHub";
     return "💬 DM";
-    // DM은 지금은 거의 안 쓰겠지만 안전 폴백
   };
 
   const titleOf = (c) => c?.resourceTitle?.trim() || otherNick(c);
@@ -75,17 +77,24 @@ export default function Messages() {
       const list = Array.isArray(data) ? data : [];
       setConvos(list);
 
-      const paramId = searchParams.get("conversation");
-      if (paramId) {
-        const found = list.find((c) => c._id === paramId);
+      // ✅ 초기 진입시에만 URL 파라미터 반영 후 즉시 제거
+      if (initialParam) {
+        const found = list.find((c) => c._id === initialParam);
         if (found) setSelected(found);
+        else if (!selected && list.length > 0) setSelected(list[0]);
+
+        const next = new URLSearchParams(searchParams);
+        next.delete("conversation");
+        setSearchParams(next, { replace: true });
+        setInitialParam(null);
       } else if (!selected && list.length > 0) {
         setSelected(list[0]);
       }
     } catch {
       setConvos([]);
     }
-  }, [token, school, searchParams, selected]);
+  // ⛔ selected/searchParams 의존성 제거 (클릭시 재선택 방지)
+  }, [token, school, initialParam, selected, searchParams, setSearchParams]);
 
   useEffect(() => {
     refresh();
@@ -175,8 +184,8 @@ export default function Messages() {
           <ChatBox
             conversationId={selected._id}
             userEmail={user?.email}
-            otherEmail={otherEmail(selected)}
-            otherNickname={titleOf(selected)} // 헤더 표시도 동일 타이틀 폴백
+            otherEmail={(selected?.buyer || "").toLowerCase() === (user?.email || "").toLowerCase() ? selected?.seller : selected?.buyer}
+            otherNickname={selected?.resourceTitle?.trim() || ""} // 헤더 표시
             fullSize
           />
         ) : (
@@ -186,6 +195,7 @@ export default function Messages() {
     </div>
   );
 }
+
 
 
 
