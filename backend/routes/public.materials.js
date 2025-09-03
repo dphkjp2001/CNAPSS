@@ -1,0 +1,81 @@
+// backend/routes/public.materials.js
+const express = require("express");
+const router = express.Router({ mergeParams: true });
+const Material = require("../models/Material");
+const User = require("../models/User");
+
+// Free Board 공개 API와 동일한 허용 스쿨 화이트리스트
+const ALLOWED_SCHOOLS = ["nyu", "columbia", "boston"];
+
+const n = (v) => String(v || "").trim();
+const low = (v) => n(v).toLowerCase();
+
+// authorName 비어 있으면 uploaderEmail → User.nickname 조인해서 채워주기
+async function attachAuthorNames(docs) {
+  const arr = Array.isArray(docs) ? docs : [docs];
+  const missing = arr.filter((m) => !n(m.authorName));
+  if (!missing.length) return Array.isArray(docs) ? docs : docs;
+
+  const emails = [
+    ...new Set(missing.map((m) => low(m.uploaderEmail)).filter(Boolean)),
+  ];
+  if (!emails.length) return Array.isArray(docs) ? docs : docs;
+
+  const users = await User.find({ email: { $in: emails } })
+    .select("email nickname")
+    .lean();
+
+  const nickMap = Object.fromEntries(
+    users.map((u) => [low(u.email), u.nickname])
+  );
+
+  const fill = (m) =>
+    n(m.authorName) ? m : { ...m, authorName: nickMap[low(m.uploaderEmail)] || "" };
+
+  return Array.isArray(docs) ? docs.map(fill) : fill(docs);
+}
+
+/**
+ * GET /api/public/:school/materials/recent?limit=5
+ * - 인증 없이 최근 자료 5개(최대 20)만 최소 필드로 반환
+ * - 안전한 필드만 노출
+ */
+router.get("/recent", async (req, res) => {
+  try {
+    const school = low(req.params.school);
+    if (!ALLOWED_SCHOOLS.includes(school)) {
+      return res.status(400).json({ message: "Invalid school." });
+    }
+    const limit = Math.min(20, Math.max(1, parseInt(req.query.limit || "5", 10)));
+
+    let items = await Material.find({
+      school,
+      status: { $ne: "archived" },
+    })
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .lean();
+
+    items = await attachAuthorNames(items);
+
+    res.json({
+      items: items.map((m) => ({
+        id: m._id,
+        courseCode: m.courseCode,
+        courseTitle: m.courseTitle,
+        professor: m.professor || "",
+        semester: m.semester,
+        materialType: m.materialType,
+        kind: m.kind,
+        title: m.title,
+        authorName: m.authorName || "",
+        createdAt: m.createdAt,
+      })),
+    });
+  } catch (err) {
+    console.error("Public materials recent error:", err);
+    res.status(500).json({ message: "Failed to load public materials." });
+  }
+});
+
+module.exports = router;

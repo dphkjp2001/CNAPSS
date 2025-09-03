@@ -18,6 +18,7 @@ const schoolGuard = require("./middleware/schoolGuard");
 const courseHubRoutes = require("./routes/courses");
 const materialsRoutes = require("./routes/materials");
 const publicPostsRouter = require("./routes/public.posts");
+const publicMaterialsRouter = require("./routes/public.materials"); // ✅ 추가
 
 dotenv.config({
   path: process.env.NODE_ENV === "production" ? ".env.production" : ".env.development",
@@ -53,7 +54,11 @@ app.use(express.json());
 
 // 라우트
 app.use("/api/auth", authRoutes);
+
+// ✅ 공개 라우트(로그인 불필요)
 app.use("/api/public/:school/posts", publicPostsRouter);
+app.use("/api/public/:school/materials", publicMaterialsRouter);
+
 app.use("/api/:school/posts", postsRoutes);
 app.use("/api/:school/comments", commentRoutes);
 app.use("/api/:school/market", marketRoutes);
@@ -69,6 +74,7 @@ app.use("/api/:school/places", requireAuth, schoolGuard, placesRouter);
 app.get("/", (req, res) => res.send("✅ API server healthy"));
 
 module.exports = app;
+
 
 
 

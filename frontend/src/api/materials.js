@@ -55,16 +55,18 @@ export async function getMaterial({ school, token, id }) {
   return res.json();
 }
 
-// GET /api/:school/materials/recent?limit=
+// GET /api/:school/materials/recent  (로그인 O)  /api/public/:school/materials/recent (로그인 X)
 export async function listRecentMaterials({ school, token, limit = 5 }) {
   const qs = new URLSearchParams({
     limit: String(Math.max(1, Math.min(20, limit))),
   }).toString();
 
-  const init = { headers: {} };
-  if (token) init.headers.Authorization = `Bearer ${token}`;
+  const base = token
+    ? `${API}/${encodeURIComponent(school)}/materials/recent`
+    : `${API}/public/${encodeURIComponent(school)}/materials/recent`;
 
-  const res = await apiFetch(`${API}/${encodeURIComponent(school)}/materials/recent?${qs}`, init);
+  const init = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+  const res = await apiFetch(`${base}?${qs}`, init);
   if (!res.ok) throw new Error("Failed to load recent materials");
   return res.json();
 }
@@ -106,6 +108,7 @@ export async function sendMaterialRequest({ school, token, materialId, message }
   if (res.status === 409) return { alreadySent: true, ...data };
   throw new Error(data?.message || "request failed");
 }
+
 
 
 
