@@ -70,10 +70,8 @@ export default function Courses() {
   }, [school, token, limit]);
 
   const onCreate = () => navigate(schoolPath("/courses/write"));
-
-  const goDetail = (id) => {
+  const goDetail = (id) =>
     navigate(schoolPath(`/courses/materials/${encodeURIComponent(id)}`));
-  };
 
   const empty = !loading && !items.length && !err;
 
@@ -134,11 +132,15 @@ export default function Courses() {
                         {m.authorName ? ` • ${m.authorName}` : ""}
                       </div>
                     </div>
-                    <div className="text-xs text-gray-400">{timeAgo(m.createdAt)}</div>
+                    <div className="text-xs text-gray-400">
+                      {timeAgo(m.createdAt)}
+                    </div>
                   </div>
 
                   {m.title ? (
-                    <div className="mt-1 text-sm text-gray-700 line-clamp-2">{m.title}</div>
+                    <div className="mt-1 text-sm text-gray-700 line-clamp-2">
+                      {m.title}
+                    </div>
                   ) : null}
                 </button>
               </li>
@@ -160,6 +162,7 @@ export default function Courses() {
     </div>
   );
 }
+
 
 
 

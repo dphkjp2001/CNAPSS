@@ -185,42 +185,16 @@ export default function MaterialDetail() {
 
           {/* Body */}
           <div className="grid grid-cols-1 gap-6 p-5 sm:grid-cols-3 sm:p-6">
-            {/* Left */}
+            {/* Left – info / guidelines */}
             <div className="sm:col-span-2 space-y-4">
               <div className="rounded-xl border border-gray-200 p-4 text-sm text-gray-800">
-                <div className="font-medium text-gray-900">Description</div>
-                <div className="mt-1 whitespace-pre-wrap">
-                  {mat.tags?.length ? `#${mat.tags.join(" #")}` : "No tags"}
-                </div>
+                <div className="mb-1 font-medium text-gray-900">Before you trade</div>
+                <ul className="list-disc pl-5 text-gray-700 space-y-1">
+                  <li>Only personal class notes/materials are allowed.</li>
+                  <li>Do not share or sell copyrighted materials (e.g., full syllabus PDFs).</li>
+                  <li>Discuss delivery (in person / online) via chat after sending a request.</li>
+                </ul>
               </div>
-
-              {(mat.fileUrl || mat.url) && (
-                <div className="rounded-xl border border-gray-200 p-4">
-                  <div className="mb-2 text-sm font-medium text-gray-900">Resources</div>
-                  <div className="flex flex-wrap gap-2">
-                    {mat.fileUrl && (
-                      <a
-                        href={mat.fileUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="rounded-lg border px-3 py-1.5 text-sm hover:bg-gray-50"
-                      >
-                        Open file
-                      </a>
-                    )}
-                    {mat.url && (
-                      <a
-                        href={mat.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="rounded-lg border px-3 py-1.5 text-sm hover:bg-gray-50"
-                      >
-                        Open link
-                      </a>
-                    )}
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* Right */}
@@ -230,7 +204,6 @@ export default function MaterialDetail() {
                 <div className="mt-0.5 font-medium text-gray-900">
                   {mat.authorName || "Unknown"}
                 </div>
-                {/* Email intentionally hidden per requirement */}
                 <div className="mt-2 text-xs text-gray-400">
                   {new Date(mat.createdAt).toLocaleString()}
                 </div>
@@ -291,6 +264,7 @@ export default function MaterialDetail() {
     </div>
   );
 }
+
 
 
 

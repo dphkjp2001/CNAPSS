@@ -3,18 +3,14 @@ const express = require("express");
 const router = express.Router({ mergeParams: true });
 const Material = require("../models/Material");
 const CourseCatalog = require("../models/CourseCatalog");
-const User = require("../models/User"); // ✅ for nickname lookup
+const User = require("../models/User"); // for nickname lookup
 
 const n = (v) => String(v || "").trim();
 const low = (v) => n(v).toLowerCase();
 const up = (v) => n(v).toUpperCase();
 const SEM = /^[0-9]{4}-(spring|summer|fall|winter)$/i;
 
-/** -----------------------------------------------------------
- * helpers
- * ----------------------------------------------------------*/
-
-// attach authorName if missing by joining uploaderEmail -> User.nickname
+/* helpers */
 async function attachAuthorNames(docs) {
   const arr = Array.isArray(docs) ? docs : [docs];
   const missing = arr.filter((m) => !n(m.authorName));
@@ -33,10 +29,7 @@ async function attachAuthorNames(docs) {
   return Array.isArray(docs) ? docs.map(fill) : fill(docs);
 }
 
-/**
- * NEW: school-wide recent materials for dashboard preview
- * GET /api/:school/materials/recent?limit=5
- */
+/** recent list for school (dashboard / list) */
 router.get("/recent", async (req, res) => {
   const school = low(req.params.school);
   const limit = Math.min(20, Math.max(1, parseInt(req.query.limit || "5", 10)));
@@ -46,7 +39,6 @@ router.get("/recent", async (req, res) => {
     .limit(limit)
     .lean();
 
-  // ✅ fill authorName if empty
   items = await attachAuthorNames(items);
 
   res.json({
@@ -59,17 +51,14 @@ router.get("/recent", async (req, res) => {
       materialType: m.materialType,
       kind: m.kind,
       title: m.title,
-      authorName: m.authorName, // already filled
-      uploaderEmail: m.uploaderEmail, // kept for internal use; not for UI
+      authorName: m.authorName,
+      uploaderEmail: m.uploaderEmail, // internal use only in FE
       createdAt: m.createdAt,
     })),
   });
 });
 
-/**
- * List materials for a course & semester
- * GET /api/:school/materials
- */
+/** list by course+semester */
 router.get("/", async (req, res) => {
   const school = low(req.params.school);
   const courseCode = up(req.query.course || "");
@@ -102,9 +91,7 @@ router.get("/", async (req, res) => {
     .limit(limit)
     .lean();
 
-  // ✅ fill authorName if empty
   items = await attachAuthorNames(items);
-
   const total = await Material.countDocuments(filter);
 
   res.json({
@@ -120,47 +107,33 @@ router.get("/", async (req, res) => {
       kind: m.kind,
       materialType: m.materialType,
       title: m.title,
-      description: m.description || "", // ✅ 추가
-      tags: m.tags,
+      // description/tags intentionally omitted from API surface
       url: m.url,
-      // 파일 필드는 응답에 남겨두되 프론트는 사용 X
-      fileUrl: m.fileUrl,
-      fileMime: m.fileMime,
-      fileSize: m.fileSize,
       isFree: m.isFree,
       price: m.price,
       sharePreference: m.sharePreference,
       status: m.status,
       likeCount: m.likeCount,
       viewCount: m.viewCount,
-      authorName: m.authorName, // already filled
-      uploaderEmail: m.uploaderEmail, // kept
+      authorName: m.authorName,
+      uploaderEmail: m.uploaderEmail,
       createdAt: m.createdAt,
       updatedAt: m.updatedAt,
     })),
   });
 });
 
-/**
- * Get a single material
- * GET /api/:school/materials/:id
- */
+/** get one */
 router.get("/:id", async (req, res) => {
   const school = low(req.params.school);
   const id = n(req.params.id);
   let doc = await Material.findOne({ _id: id, school }).lean();
   if (!doc) return res.status(404).json({ message: "Not found" });
-
-  // ✅ fill authorName if empty
   doc = (await attachAuthorNames(doc)) || doc;
-
   res.json(doc);
 });
 
-/**
- * Create (no attachment required)
- * POST /api/:school/materials
- */
+/** create */
 router.post("/", async (req, res) => {
   const school = low(req.params.school);
   const user = req.user;
@@ -170,25 +143,22 @@ router.post("/", async (req, res) => {
   const courseTitle = n(body.courseTitle || "");
   const professor = n(body.professor || ""); // REQUIRED
   const semester = n(body.semester || "");
-  let kind = n(body.kind || "note").toLowerCase();
-
-  // 파일 업로드는 사용하지 않음. url은 선택적으로 허용.
-  const url = n(body.url || "");
-
+  let kind = n(body.kind || "").toLowerCase();
   const materialType = n(body.materialType || "personalMaterial");
   const isFree = typeof body.isFree === "boolean" ? body.isFree : true;
   const price = Number.isFinite(body.price) ? Math.max(0, body.price) : 0;
   const sharePreference = n(body.sharePreference || "either");
-
-  // 본문 설명(선택)
-  const description = n(body.description || "");
+  const url = n(body.url || "");
 
   if (!courseCode) return res.status(400).json({ message: "courseCode is required" });
   if (!semester || !SEM.test(semester)) return res.status(400).json({ message: "Invalid semester" });
 
-  if (kind === "quiz") kind = "exam";
-  if (!["note", "syllabus", "exam", "slide", "link", "other"].includes(kind)) {
-    return res.status(400).json({ message: "invalid kind" });
+  // policy: personalNote -> kind=note, personalMaterial -> note not allowed
+  if (materialType === "personalNote") {
+    kind = "note";
+  } else {
+    const allowed = ["syllabus", "exam", "slide", "link", "other"];
+    if (!allowed.includes(kind)) kind = "other";
   }
 
   if (!isFree && price < 1) return res.status(400).json({ message: "Price must be at least 1" });
@@ -201,7 +171,7 @@ router.post("/", async (req, res) => {
     );
   }
 
-  // ✅ robust authorName: use JWT nickname if present; otherwise DB lookup by email
+  // author nickname
   let authorName = n(user?.nickname || user?.name || "");
   if (!authorName && user?.email) {
     const u = await User.findOne({ email: low(user.email) }).select("nickname").lean();
@@ -216,15 +186,14 @@ router.post("/", async (req, res) => {
     semester,
     kind,
     title: n(body.title || courseCode),
-    description, // ✅ 저장
-    tags: Array.isArray(body.tags) ? body.tags.map(n).filter(Boolean).slice(0, 12) : [],
+    description: "", // ignore any incoming description
+    tags: [], // ignore any incoming tags
     url,
-    // 파일 필드는 더 이상 검증하지 않고 기본값(빈 값)만 저장
-    fileUrl: n(body.fileUrl || ""),
-    filePublicId: n(body.filePublicId || ""),
-    fileMime: n(body.fileMime || ""),
-    fileSize: Number.isFinite(body.fileSize) ? body.fileSize : 0,
-    hash: n(body.hash || ""),
+    fileUrl: "",
+    filePublicId: "",
+    fileMime: "",
+    fileSize: 0,
+    hash: "",
     materialType,
     isFree,
     price,
@@ -232,16 +201,13 @@ router.post("/", async (req, res) => {
     status: "active",
     uploaderId: user?._id,
     uploaderEmail: low(user?.email || ""),
-    authorName, // ✅ ensured
+    authorName,
   });
 
   res.status(201).json({ ok: true, id: doc._id });
 });
 
-/**
- * Delete (owner or admin)
- * DELETE /api/:school/materials/:id
- */
+/** delete (owner or admin) */
 router.delete("/:id", async (req, res) => {
   const school = low(req.params.school);
   const id = n(req.params.id);
@@ -259,6 +225,7 @@ router.delete("/:id", async (req, res) => {
 });
 
 module.exports = router;
+
 
 
 

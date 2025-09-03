@@ -27,24 +27,14 @@ export default function CourseWrite() {
   );
   const [semester, setSemester] = useState(sp.get("sem") || currentSemester());
 
-  // REQUIRED: professor
+  // REQUIRED
   const [professor, setProfessor] = useState("");
 
-  const [materialType, setMaterialType] = useState("personalMaterial");
-  const [isFree, setIsFree] = useState(true);
-  const [price, setPrice] = useState(0);
-  const [sharePreference, setSharePreference] = useState("either");
-  const [kind, setKind] = useState("note");
-
-  // ✅ Description 추가
-  const [description, setDescription] = useState("");
-
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState("");
-
-  const kindOptions = useMemo(
+  // 1) What are you offering?
+  const [materialType, setMaterialType] = useState("personalMaterial"); // personalNote | personalMaterial
+  // 2) Regarding (only for personalMaterial)
+  const materialKindOptions = useMemo(
     () => [
-      { ui: "class notes", value: "note" },
       { ui: "syllabus", value: "syllabus" },
       { ui: "exam", value: "exam" },
       { ui: "slide", value: "slide" },
@@ -53,12 +43,27 @@ export default function CourseWrite() {
     ],
     []
   );
+  const [kind, setKind] = useState("note"); // auto-forced to "note" when personalNote
+
+  // Price & share
+  const [isFree, setIsFree] = useState(true);
+  const [price, setPrice] = useState(0);
+  const [sharePreference, setSharePreference] = useState("either");
+
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
 
   const semesterOptions = useMemo(() => {
     const now = new Date();
     const y = now.getFullYear();
     return Array.from(
-      new Set([`${y - 1}-fall`, `${y}-spring`, `${y}-summer`, `${y}-fall`, `${y + 1}-spring`])
+      new Set([
+        `${y - 1}-fall`,
+        `${y}-spring`,
+        `${y}-summer`,
+        `${y}-fall`,
+        `${y + 1}-spring`,
+      ])
     );
   }, []);
 
@@ -75,6 +80,10 @@ export default function CourseWrite() {
       return setErr("Please enter a valid price (≥ 1).");
     }
 
+    // enforce kind policy on client as well
+    const _kind =
+      materialType === "personalNote" ? "note" : (kind || "other");
+
     try {
       setBusy(true);
       const API = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
@@ -82,21 +91,20 @@ export default function CourseWrite() {
         courseCode: courseCode.toUpperCase(),
         courseTitle: "",
         semester,
-        kind,
+        kind: _kind,
         materialType,
         isFree,
         price: Number(isFree ? 0 : price),
         sharePreference,
         professor: prof,
-        // 업로드는 사용 안 함. url도 기본은 빈 값
         url: "",
-        // ✅ 본문
-        description: description.trim(),
-        // 제목은 일단 코드로 채움(리스트에 간단히 보이도록)
+        // description, tags intentionally omitted
         title: courseCode.toUpperCase(),
-        tags: [],
       };
-      await postJson(`${API}/${encodeURIComponent(school)}/materials`, payload);
+      await postJson(
+        `${API}/${encodeURIComponent(school)}/materials`,
+        payload
+      );
 
       navigate(
         schoolPath(
@@ -123,7 +131,10 @@ export default function CourseWrite() {
           This posting does not require a file. You can share details later through messages.
         </p>
 
-        <form onSubmit={onSubmit} className="space-y-5 rounded-2xl border bg-white p-5 shadow-sm">
+        <form
+          onSubmit={onSubmit}
+          className="space-y-5 rounded-2xl border bg-white p-5 shadow-sm"
+        >
           {/* Course code (required) */}
           <div>
             <label htmlFor="courseCodeInput" className="mb-1 block text-sm font-medium">
@@ -154,7 +165,7 @@ export default function CourseWrite() {
             />
           </div>
 
-          {/* Semester & kind */}
+          {/* Semester & Offering type */}
           <div className="flex flex-col gap-3 sm:flex-row">
             <div className="sm:w-1/2">
               <label className="mb-1 block text-sm font-medium">Semester</label>
@@ -172,20 +183,60 @@ export default function CourseWrite() {
             </div>
 
             <div className="sm:w-1/2">
-              <label className="mb-1 block text-sm font-medium">Legacy type</label>
+              <label className="mb-1 block text-sm font-medium">
+                What are you offering?
+              </label>
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name="offerType"
+                    checked={materialType === "personalNote"}
+                    onChange={() => {
+                      setMaterialType("personalNote");
+                      setKind("note");
+                    }}
+                  />
+                  Personal Class Note
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name="offerType"
+                    checked={materialType === "personalMaterial"}
+                    onChange={() => {
+                      setMaterialType("personalMaterial");
+                      // default to 'other' for material
+                      setKind("other");
+                    }}
+                  />
+                  Personal Class Material
+                </label>
+              </div>
+            </div>
+          </div>
+
+          {/* Regarding (kind) – only for personalMaterial */}
+          {materialType === "personalMaterial" ? (
+            <div>
+              <label className="mb-1 block text-sm font-medium">Regarding…</label>
               <select
                 value={kind}
                 onChange={(e) => setKind(e.target.value)}
                 className="w-full rounded-lg border px-3 py-2 text-sm"
               >
-                {kindOptions.map((k) => (
+                {materialKindOptions.map((k) => (
                   <option key={k.value} value={k.value}>
                     {k.ui}
                   </option>
                 ))}
               </select>
             </div>
-          </div>
+          ) : (
+            <div className="rounded-lg border bg-gray-50 px-3 py-2 text-xs text-gray-600">
+              Kind is fixed to <b>note</b> for Personal Class Note.
+            </div>
+          )}
 
           {/* Price */}
           <div>
@@ -224,7 +275,9 @@ export default function CourseWrite() {
 
           {/* Share preference */}
           <div>
-            <label className="mb-1 block text-sm font-medium">How would you like to share?</label>
+            <label className="mb-1 block text-sm font-medium">
+              How would you like to share?
+            </label>
             <div className="flex flex-wrap items-center gap-3">
               <label className="flex items-center gap-2 text-sm">
                 <input
@@ -259,21 +312,6 @@ export default function CourseWrite() {
             </div>
           </div>
 
-          {/* ✅ Description */}
-          <div>
-            <label className="mb-1 block text-sm font-medium">Description</label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Add any helpful details here…"
-              rows={5}
-              className="w-full resize-y rounded-lg border px-3 py-2 text-sm"
-            />
-            <div className="mt-1 text-xs text-gray-500">
-              Tip: Clear descriptions help the uploader and buyer communicate faster.
-            </div>
-          </div>
-
           {err && (
             <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
               {err}
@@ -301,6 +339,7 @@ export default function CourseWrite() {
     </div>
   );
 }
+
 
 
 

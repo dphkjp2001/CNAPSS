@@ -4,13 +4,12 @@ const router = express.Router({ mergeParams: true });
 const Material = require("../models/Material");
 const User = require("../models/User");
 
-// Free Board 공개 API와 동일한 허용 스쿨 화이트리스트
+// same allowed schools as other public endpoints
 const ALLOWED_SCHOOLS = ["nyu", "columbia", "boston"];
 
 const n = (v) => String(v || "").trim();
 const low = (v) => n(v).toLowerCase();
 
-// authorName 비어 있으면 uploaderEmail → User.nickname 조인해서 채워주기
 async function attachAuthorNames(docs) {
   const arr = Array.isArray(docs) ? docs : [docs];
   const missing = arr.filter((m) => !n(m.authorName));
@@ -37,8 +36,7 @@ async function attachAuthorNames(docs) {
 
 /**
  * GET /api/public/:school/materials/recent?limit=5
- * - 인증 없이 최근 자료 5개(최대 20)만 최소 필드로 반환
- * - 안전한 필드만 노출
+ * - minimal safe fields only (no description/tags/resources)
  */
 router.get("/recent", async (req, res) => {
   try {
@@ -79,3 +77,4 @@ router.get("/recent", async (req, res) => {
 });
 
 module.exports = router;
+
