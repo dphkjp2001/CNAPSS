@@ -3,6 +3,7 @@ const express = require("express");
 const router = express.Router({ mergeParams: true });
 const Material = require("../models/Material");
 const CourseCatalog = require("../models/CourseCatalog");
+const User = require("../models/User"); // ✅ for nickname lookup
 
 const n = (v) => String(v || "").trim();
 const low = (v) => n(v).toLowerCase();
@@ -25,6 +26,40 @@ const ALLOWED_MIME = new Set([
 ]);
 const MAX_SIZE = 25 * 1024 * 1024; // 25MB
 
+/** -----------------------------------------------------------
+ * helpers
+ * ----------------------------------------------------------*/
+
+// attach authorName if missing by joining uploaderEmail -> User.nickname
+async function attachAuthorNames(docs) {
+  const arr = Array.isArray(docs) ? docs : [docs];
+  const missing = arr.filter((m) => !n(m.authorName));
+  if (!missing.length) return Array.isArray(docs) ? docs : docs;
+
+  const emails = [
+    ...new Set(
+      missing
+        .map((m) => low(m.uploaderEmail))
+        .filter(Boolean)
+    ),
+  ];
+  if (!emails.length) return Array.isArray(docs) ? docs : docs;
+
+  const users = await User.find({ email: { $in: emails } })
+    .select("email nickname")
+    .lean();
+
+  const nickMap = Object.fromEntries(
+    users.map((u) => [low(u.email), u.nickname])
+  );
+
+  const fill = (m) =>
+    n(m.authorName) ? m : { ...m, authorName: nickMap[low(m.uploaderEmail)] || "" };
+
+  if (Array.isArray(docs)) return docs.map(fill);
+  return fill(docs);
+}
+
 /**
  * NEW: school-wide recent materials for dashboard preview
  * GET /api/:school/materials/recent?limit=5
@@ -33,10 +68,13 @@ router.get("/recent", async (req, res) => {
   const school = low(req.params.school);
   const limit = Math.min(20, Math.max(1, parseInt(req.query.limit || "5", 10)));
 
-  const items = await Material.find({ school, status: { $ne: "archived" } })
+  let items = await Material.find({ school, status: { $ne: "archived" } })
     .sort({ createdAt: -1 })
     .limit(limit)
     .lean();
+
+  // ✅ fill authorName if empty
+  items = await attachAuthorNames(items);
 
   res.json({
     items: items.map((m) => ({
@@ -48,8 +86,8 @@ router.get("/recent", async (req, res) => {
       materialType: m.materialType,
       kind: m.kind,
       title: m.title,
-      authorName: m.authorName,
-      uploaderEmail: m.uploaderEmail,
+      authorName: m.authorName, // already filled
+      uploaderEmail: m.uploaderEmail, // kept for internal use; not for UI
       createdAt: m.createdAt,
     })),
   });
@@ -85,10 +123,16 @@ router.get("/", async (req, res) => {
   if (sort === "top") sortObj = { likeCount: -1, createdAt: -1 };
   if (sort === "price") sortObj = { isFree: -1, price: 1, createdAt: -1 };
 
-  const [items, total] = await Promise.all([
-    Material.find(filter).sort(sortObj).skip((page - 1) * limit).limit(limit).lean(),
-    Material.countDocuments(filter),
-  ]);
+  let items = await Material.find(filter)
+    .sort(sortObj)
+    .skip((page - 1) * limit)
+    .limit(limit)
+    .lean();
+
+  // ✅ fill authorName if empty
+  items = await attachAuthorNames(items);
+
+  const total = await Material.countDocuments(filter);
 
   res.json({
     page,
@@ -114,8 +158,8 @@ router.get("/", async (req, res) => {
       status: m.status,
       likeCount: m.likeCount,
       viewCount: m.viewCount,
-      authorName: m.authorName,
-      uploaderEmail: m.uploaderEmail,
+      authorName: m.authorName, // already filled
+      uploaderEmail: m.uploaderEmail, // kept
       createdAt: m.createdAt,
       updatedAt: m.updatedAt,
     })),
@@ -129,8 +173,12 @@ router.get("/", async (req, res) => {
 router.get("/:id", async (req, res) => {
   const school = low(req.params.school);
   const id = n(req.params.id);
-  const doc = await Material.findOne({ _id: id, school }).lean();
+  let doc = await Material.findOne({ _id: id, school }).lean();
   if (!doc) return res.status(404).json({ message: "Not found" });
+
+  // ✅ fill authorName if empty
+  doc = (await attachAuthorNames(doc)) || doc;
+
   res.json(doc);
 });
 
@@ -184,6 +232,13 @@ router.post("/", async (req, res) => {
     );
   }
 
+  // ✅ robust authorName: use JWT nickname if present; otherwise DB lookup by email
+  let authorName = n(user?.nickname || user?.name || "");
+  if (!authorName && user?.email) {
+    const u = await User.findOne({ email: low(user.email) }).select("nickname").lean();
+    authorName = n(u?.nickname || "");
+  }
+
   const doc = await Material.create({
     school,
     courseCode,
@@ -205,8 +260,8 @@ router.post("/", async (req, res) => {
     sharePreference,
     status: "active",
     uploaderId: user?._id,
-    uploaderEmail: (user?.email || "").toLowerCase(),
-    authorName: user?.nickname || user?.name || "",
+    uploaderEmail: low(user?.email || ""),
+    authorName, // ✅ ensured
   });
 
   res.status(201).json({ ok: true, id: doc._id });
@@ -233,6 +288,7 @@ router.delete("/:id", async (req, res) => {
 });
 
 module.exports = router;
+
 
 
 
