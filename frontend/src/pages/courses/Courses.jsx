@@ -43,6 +43,22 @@ export default function Courses() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
 
+  // search UI
+  const [q, setQ] = useState("");       // course code or title
+  const [prof, setProf] = useState(""); // professor
+  const [qDeb, setQDeb] = useState("");
+  const [profDeb, setProfDeb] = useState("");
+
+  // debounce 350ms
+  useEffect(() => {
+    const t = setTimeout(() => setQDeb(q.trim()), 350);
+    return () => clearTimeout(t);
+  }, [q]);
+  useEffect(() => {
+    const t = setTimeout(() => setProfDeb(prof.trim()), 350);
+    return () => clearTimeout(t);
+  }, [prof]);
+
   const containerClass = "mx-auto max-w-5xl p-4 sm:p-6";
   const cardClass =
     "rounded-2xl border shadow-sm p-4 hover:shadow-md transition-shadow bg-white";
@@ -54,10 +70,16 @@ export default function Courses() {
       setLoading(true);
       setErr("");
       try {
-        const res = await listRecentMaterials({ school, token, limit });
+        const res = await listRecentMaterials({
+          school,
+          token,
+          limit,
+          q: qDeb,
+          prof: profDeb,
+        });
         const list = Array.isArray(res?.items) ? res.items : [];
         if (alive) setItems(list);
-      } catch (e) {
+      } catch {
         if (alive) setErr("Failed to load postings.");
       } finally {
         if (alive) setLoading(false);
@@ -67,7 +89,7 @@ export default function Courses() {
     return () => {
       alive = false;
     };
-  }, [school, token, limit]);
+  }, [school, token, limit, qDeb, profDeb]);
 
   const onCreate = () => navigate(schoolPath("/courses/write"));
   const goDetail = (id) =>
@@ -81,8 +103,35 @@ export default function Courses() {
       style={{ backgroundColor: schoolTheme?.bg || "#f6f3ff" }}
     >
       <div className={containerClass}>
-        <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h1 className="text-xl font-semibold">CourseHub</h1>
+
+          <div className="flex w-full max-w-xl items-center gap-2 sm:order-none order-last">
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search by course code or title"
+              className="w-full rounded-xl border px-3 py-2 text-sm bg-white"
+            />
+            <input
+              value={prof}
+              onChange={(e) => setProf(e.target.value)}
+              placeholder="Professor"
+              className="w-40 rounded-xl border px-3 py-2 text-sm bg-white"
+            />
+            {(q || prof) && (
+              <button
+                onClick={() => {
+                  setQ("");
+                  setProf("");
+                }}
+                className="rounded-xl border px-3 py-2 text-sm hover:bg-gray-50"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+
           <button
             onClick={onCreate}
             className="rounded-xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700"
@@ -107,7 +156,7 @@ export default function Courses() {
 
         {empty && (
           <div className="rounded-2xl border bg-white p-6 text-center text-sm text-gray-500">
-            No postings yet. Be the first to create one!
+            No postings found.
           </div>
         )}
 
@@ -162,6 +211,7 @@ export default function Courses() {
     </div>
   );
 }
+
 
 
 

@@ -10,6 +10,9 @@ const low = (v) => n(v).toLowerCase();
 const up = (v) => n(v).toUpperCase();
 const SEM = /^[0-9]{4}-(spring|summer|fall|winter)$/i;
 
+// safe regex
+const escapeRe = (s) => n(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 /* helpers */
 async function attachAuthorNames(docs) {
   const arr = Array.isArray(docs) ? docs : [docs];
@@ -33,8 +36,19 @@ async function attachAuthorNames(docs) {
 router.get("/recent", async (req, res) => {
   const school = low(req.params.school);
   const limit = Math.min(20, Math.max(1, parseInt(req.query.limit || "5", 10)));
+  const q = n(req.query.q || "");
+  const prof = n(req.query.prof || "");
 
-  let items = await Material.find({ school, status: { $ne: "archived" } })
+  const filter = { school, status: { $ne: "archived" } };
+  if (q) {
+    const r = new RegExp(escapeRe(q), "i");
+    filter.$or = [{ courseCode: r }, { courseTitle: r }];
+  }
+  if (prof) {
+    filter.professor = new RegExp(escapeRe(prof), "i");
+  }
+
+  let items = await Material.find(filter)
     .sort({ createdAt: -1 })
     .limit(limit)
     .lean();
@@ -107,7 +121,6 @@ router.get("/", async (req, res) => {
       kind: m.kind,
       materialType: m.materialType,
       title: m.title,
-      // description/tags intentionally omitted from API surface
       url: m.url,
       isFree: m.isFree,
       price: m.price,
@@ -153,7 +166,6 @@ router.post("/", async (req, res) => {
   if (!courseCode) return res.status(400).json({ message: "courseCode is required" });
   if (!semester || !SEM.test(semester)) return res.status(400).json({ message: "Invalid semester" });
 
-  // policy: personalNote -> kind=note, personalMaterial -> note not allowed
   if (materialType === "personalNote") {
     kind = "note";
   } else {
@@ -186,8 +198,8 @@ router.post("/", async (req, res) => {
     semester,
     kind,
     title: n(body.title || courseCode),
-    description: "", // ignore any incoming description
-    tags: [], // ignore any incoming tags
+    description: "",
+    tags: [],
     url,
     fileUrl: "",
     filePublicId: "",
@@ -225,6 +237,7 @@ router.delete("/:id", async (req, res) => {
 });
 
 module.exports = router;
+
 
 
 
