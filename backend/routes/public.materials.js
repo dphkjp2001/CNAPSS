@@ -67,6 +67,7 @@ router.get("/recent", async (req, res) => {
         kind: m.kind,
         title: m.title,
         authorName: m.authorName || "",
+        listingType: m.listingType || "sale", // ✅
         createdAt: m.createdAt,
       })),
     });
@@ -77,4 +78,5 @@ router.get("/recent", async (req, res) => {
 });
 
 module.exports = router;
+
 

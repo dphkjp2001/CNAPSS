@@ -37,6 +37,8 @@ export default function MaterialDetail() {
     [user, mat]
   );
 
+  const isWanted = (mat?.listingType || "sale") === "wanted"; // ✅
+
   // load detail
   useEffect(() => {
     let alive = true;
@@ -70,6 +72,7 @@ export default function MaterialDetail() {
           school,
           token,
           materialId: id,
+          reqType: isWanted ? "coursehub_wtb" : "coursehub", // ✅
         });
         if (!alive) return;
         setAlreadySent(!!s?.alreadySent);
@@ -83,7 +86,7 @@ export default function MaterialDetail() {
     return () => {
       alive = false;
     };
-  }, [mat, isOwner, school, token, id]);
+  }, [mat, isOwner, school, token, id, isWanted]);
 
   const handleSend = async () => {
     const text = String(message || "").trim();
@@ -95,6 +98,7 @@ export default function MaterialDetail() {
         token,
         materialId: id,
         message: text,
+        reqType: isWanted ? "coursehub_wtb" : "coursehub", // ✅
       });
       setAlreadySent(true);
       setConversationId(res?.conversationId || null);
@@ -139,6 +143,7 @@ export default function MaterialDetail() {
     .join(" • ");
 
   const meta2 = [
+    (mat.listingType ? (mat.listingType === "wanted" ? "Wanted" : "For Sale") : null), // ✅ 표시
     mat.kind ? `${mat.kind}` : null,
     mat.materialType ? `${mat.materialType}` : null,
     mat.sharePreference ? `${mat.sharePreference}` : null,
@@ -192,7 +197,7 @@ export default function MaterialDetail() {
                 <ul className="list-disc pl-5 text-gray-700 space-y-1">
                   <li>Only personal class notes/materials are allowed.</li>
                   <li>Do not share or sell copyrighted materials (e.g., full syllabus PDFs).</li>
-                  <li>Discuss delivery (in person / online) via chat after sending a request.</li>
+                  <li>Discuss delivery (in person / online) via chat after {isWanted ? "fulfilling this request" : "sending a request"}.</li>
                 </ul>
               </div>
             </div>
@@ -212,12 +217,16 @@ export default function MaterialDetail() {
               {/* Contact box (only non-owner) */}
               {!isOwner && (
                 <div className="rounded-xl border border-gray-200 p-4 text-sm">
-                  <div className="mb-2 font-medium text-gray-900">Contact the uploader</div>
+                  <div className="mb-2 font-medium text-gray-900">
+                    {isWanted ? "Fulfill this request" : "Contact the uploader"}
+                  </div>
 
                   {/* Already sent */}
                   {alreadySent ? (
                     <div className="flex items-center justify-between gap-2">
-                      <div className="text-xs text-green-700">Request already sent.</div>
+                      <div className="text-xs text-green-700">
+                        {isWanted ? "You have already offered." : "Request already sent."}
+                      </div>
                       {conversationId && (
                         <button
                           onClick={() =>
@@ -237,7 +246,7 @@ export default function MaterialDetail() {
                       <input
                         value={message}
                         onChange={(e) => setMessage(e.target.value)}
-                        placeholder="Say hello and ask about the material…"
+                        placeholder={isWanted ? "Offer your note/material…" : "Say hello and ask about the material…"}
                         className="mb-2 w-full rounded-lg border px-3 py-2 text-sm"
                         disabled={checking || sending}
                       />
@@ -248,10 +257,12 @@ export default function MaterialDetail() {
                           "w-full rounded-lg px-3 py-2 text-sm font-semibold text-white " +
                           (checking || sending || !message.trim()
                             ? "bg-gray-400"
+                            : isWanted
+                            ? "bg-emerald-600 hover:bg-emerald-700"
                             : "bg-purple-600 hover:bg-purple-700")
                         }
                       >
-                        {sending ? "Sending…" : "Send"}
+                        {sending ? (isWanted ? "Offering…" : "Sending…") : (isWanted ? "Fulfill" : "Send")}
                       </button>
                     </>
                   )}
@@ -264,6 +275,7 @@ export default function MaterialDetail() {
     </div>
   );
 }
+
 
 
 

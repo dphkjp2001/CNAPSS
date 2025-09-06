@@ -1,7 +1,6 @@
 // frontend/src/api/materials.js
 import { apiFetch } from "./http";
 
-// VITE_API_URL already includes "/api", e.g. https://api.cnapss.com/api
 const API = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
 
 // POST /api/:school/materials
@@ -18,7 +17,7 @@ export async function createMaterial({ school, token, payload }) {
   return res.json();
 }
 
-// GET /api/:school/materials?course=&semester=&kind=&sort=&page=&limit=
+// GET /api/:school/materials?...
 export async function listMaterials({
   school,
   token,
@@ -28,6 +27,7 @@ export async function listMaterials({
   sort = "new",
   page = 1,
   limit = 50,
+  type = "all", // ✅ sale|wanted|all
 }) {
   const qs = new URLSearchParams({
     course: course || "",
@@ -36,9 +36,10 @@ export async function listMaterials({
     sort,
     page: String(page),
     limit: String(limit),
-  }).toString();
+  });
+  if (type && type !== "all") qs.set("type", type);
 
-  const res = await apiFetch(`${API}/${encodeURIComponent(school)}/materials?${qs}`, {
+  const res = await apiFetch(`${API}/${encodeURIComponent(school)}/materials?${qs.toString()}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error("Failed to load materials");
@@ -55,13 +56,14 @@ export async function getMaterial({ school, token, id }) {
   return res.json();
 }
 
-// GET /api/:school/materials/recent  (로그인 O)  /api/public/:school/materials/recent (로그인 X)
-export async function listRecentMaterials({ school, token, limit = 5, q = "", prof = "" }) {
+// GET /materials/recent  (로그인 O)  /public/materials/recent (로그인 X)
+export async function listRecentMaterials({ school, token, limit = 5, q = "", prof = "", type = "all" }) {
   const params = new URLSearchParams({
     limit: String(Math.max(1, Math.min(20, limit))),
   });
   if (q) params.set("q", q);
   if (prof) params.set("prof", prof);
+  if (type && type !== "all") params.set("type", type); // ✅
 
   const base = token
     ? `${API}/${encodeURIComponent(school)}/materials/recent`
@@ -75,9 +77,9 @@ export async function listRecentMaterials({ school, token, limit = 5, q = "", pr
 
 /* ---------------- Requests (CourseHub 전용) ---------------- */
 
-export async function checkMaterialRequest({ school, token, materialId }) {
+export async function checkMaterialRequest({ school, token, materialId, reqType = "coursehub" }) {
   const qs = new URLSearchParams({
-    type: "coursehub",
+    type: String(reqType || "coursehub"),
     targetId: String(materialId || "").trim(),
   }).toString();
 
@@ -89,7 +91,7 @@ export async function checkMaterialRequest({ school, token, materialId }) {
   return res.json(); // { alreadySent, conversationId? }
 }
 
-export async function sendMaterialRequest({ school, token, materialId, message }) {
+export async function sendMaterialRequest({ school, token, materialId, message, reqType = "coursehub" }) {
   const res = await apiFetch(`${API}/${encodeURIComponent(school)}/request`, {
     method: "POST",
     headers: {
@@ -97,7 +99,7 @@ export async function sendMaterialRequest({ school, token, materialId, message }
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify({
-      type: "coursehub",
+      type: String(reqType || "coursehub"),
       targetId: String(materialId || "").trim(),
       message: String(message || "").trim(),
     }),
@@ -108,6 +110,7 @@ export async function sendMaterialRequest({ school, token, materialId, message }
   if (res.status === 409) return { alreadySent: true, ...data };
   throw new Error(data?.message || "request failed");
 }
+
 
 
 

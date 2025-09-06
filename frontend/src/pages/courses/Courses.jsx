@@ -40,12 +40,17 @@ export default function Courses() {
 
   const [items, setItems] = useState([]);
   const [limit, setLimit] = useState(20);
+
+  // loading flags
   const [loading, setLoading] = useState(true);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+
   const [err, setErr] = useState("");
 
   // search UI
-  const [q, setQ] = useState("");       // course code or title
-  const [prof, setProf] = useState(""); // professor
+  const [q, setQ] = useState("");
+  const [prof, setProf] = useState("");
   const [qDeb, setQDeb] = useState("");
   const [profDeb, setProfDeb] = useState("");
 
@@ -67,8 +72,11 @@ export default function Courses() {
     let alive = true;
     async function run() {
       if (!school || !token) return;
-      setLoading(true);
       setErr("");
+
+      if (!hasLoadedOnce) setLoading(true);
+      else setIsSearching(true);
+
       try {
         const res = await listRecentMaterials({
           school,
@@ -82,20 +90,24 @@ export default function Courses() {
       } catch {
         if (alive) setErr("Failed to load postings.");
       } finally {
-        if (alive) setLoading(false);
+        if (!alive) return;
+        if (!hasLoadedOnce) setHasLoadedOnce(true);
+        setLoading(false);
+        setIsSearching(false);
       }
     }
     run();
     return () => {
       alive = false;
     };
-  }, [school, token, limit, qDeb, profDeb]);
+  }, [school, token, limit, qDeb, profDeb, hasLoadedOnce]);
 
   const onCreate = () => navigate(schoolPath("/courses/write"));
   const goDetail = (id) =>
     navigate(schoolPath(`/courses/materials/${encodeURIComponent(id)}`));
 
-  const empty = !loading && !items.length && !err;
+  const showSkeleton = loading && !hasLoadedOnce;
+  const empty = !showSkeleton && !isSearching && !items.length && !err;
 
   return (
     <div
@@ -130,6 +142,9 @@ export default function Courses() {
                 Clear
               </button>
             )}
+            {isSearching && (
+              <span className="text-xs text-gray-500">Searching…</span>
+            )}
           </div>
 
           <button
@@ -140,7 +155,7 @@ export default function Courses() {
           </button>
         </div>
 
-        {loading && (
+        {showSkeleton && (
           <div className="space-y-3">
             {Array.from({ length: 5 }).map((_, i) => (
               <div key={i} className="h-[84px] animate-pulse rounded-2xl bg-gray-200" />
@@ -162,38 +177,54 @@ export default function Courses() {
 
         {!!items.length && (
           <ul className="space-y-3">
-            {items.map((m) => (
-              <li key={m.id || m._id}>
-                <button
-                  className={cardClass + " w-full text-left"}
-                  onClick={() => goDetail(m.id || m._id)}
-                >
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <div className="text-sm font-semibold">
-                        {m.courseCode || "Unknown course"}
-                        {m.semester ? ` · ${m.semester}` : ""}
+            {items.map((m) => {
+              const isWanted = (m.listingType || "sale") === "wanted";
+              return (
+                <li key={m.id || m._id}>
+                  <button
+                    className={cardClass + " w-full text-left"}
+                    onClick={() => goDetail(m.id || m._id)}
+                  >
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          {/* ✅ Listing 타입 뱃지 */}
+                          <span
+                            className={
+                              "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold " +
+                              (isWanted
+                                ? "bg-rose-100 text-rose-700"
+                                : "bg-emerald-100 text-emerald-700")
+                            }
+                          >
+                            {isWanted ? "Wanted" : "For Sale"}
+                          </span>
+                          <div className="text-sm font-semibold">
+                            {m.courseCode || "Unknown course"}
+                            {m.semester ? ` · ${m.semester}` : ""}
+                          </div>
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {prettyKind(m.kind)}
+                          {m.materialType ? ` • ${m.materialType}` : ""}
+                          {m.professor ? ` • ${m.professor}` : ""}
+                          {m.authorName ? ` • ${m.authorName}` : ""}
+                        </div>
                       </div>
-                      <div className="text-xs text-gray-500">
-                        {prettyKind(m.kind)}
-                        {m.materialType ? ` • ${m.materialType}` : ""}
-                        {m.professor ? ` • ${m.professor}` : ""}
-                        {m.authorName ? ` • ${m.authorName}` : ""}
+                      <div className="text-xs text-gray-400">
+                        {timeAgo(m.createdAt)}
                       </div>
                     </div>
-                    <div className="text-xs text-gray-400">
-                      {timeAgo(m.createdAt)}
-                    </div>
-                  </div>
 
-                  {m.title ? (
-                    <div className="mt-1 text-sm text-gray-700 line-clamp-2">
-                      {m.title}
-                    </div>
-                  ) : null}
-                </button>
-              </li>
-            ))}
+                    {m.title ? (
+                      <div className="mt-1 text-sm text-gray-700 line-clamp-2">
+                        {m.title}
+                      </div>
+                    ) : null}
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         )}
 
@@ -211,6 +242,8 @@ export default function Courses() {
     </div>
   );
 }
+
+
 
 
 

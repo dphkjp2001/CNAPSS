@@ -19,6 +19,7 @@ function isValidId(id) {
  */
 async function loadTarget({ school, source, targetId, itemId }) {
   let sellerEmail = "";
+  let buyerEmail = "";
   let resourceTitle = "";
   let resId = null;
 
@@ -44,41 +45,74 @@ async function loadTarget({ school, source, targetId, itemId }) {
     return { sellerEmail, resourceTitle, resId };
   }
 
+  // ✅ Wanted(구합니다) : 업로더가 '구매자', 클릭한 현재 유저가 '판매자'
+  if (source === "coursehub_wtb") {
+    if (!isValidId(targetId)) return { error: "Invalid materialId." };
+    const mat = await Material.findOne({ _id: targetId, school }).lean();
+    if (!mat) return { error: "Material not found." };
+    buyerEmail = norm(mat.uploaderEmail || mat.authorEmail || "");
+    if (!buyerEmail) return { error: "WTB owner email missing." };
+    resourceTitle = mat.courseTitle ? mat.courseTitle : mat.courseCode || "";
+    resId = new mongoose.Types.ObjectId(targetId);
+    return { buyerEmail, resourceTitle, resId };
+  }
+
   return { error: "Invalid type." };
 }
 
 /**
  * POST /api/:school/request
- * body (market):     { type: "market",    targetId|itemId, message }
- * body (coursehub):  { type: "coursehub", targetId,        message }
+ * body (market):        { type: "market",          targetId|itemId, message }
+ * body (coursehub):     { type: "coursehub",       targetId,        message }
+ * body (coursehub_wtb): { type: "coursehub_wtb",  targetId,        message }
  */
 router.post("/", async (req, res) => {
   try {
     const school = norm(req.params.school);
-    const buyerEmail = norm(req.user?.email);
+    const requester = norm(req.user?.email); // 현재 요청 보낸 사람
     let { type, targetId, itemId, message } = req.body || {};
     type = norm(type);
 
-    if (!school || !buyerEmail || !message) {
+    if (!school || !requester || !message) {
       return res.status(400).json({ message: "Missing required fields." });
     }
     if (!type && itemId) type = "market"; // 레거시 호환
 
     // 1) 타겟 로드
     const loaded = await loadTarget({ school, source: type, targetId, itemId });
-    if (loaded.error) return res.status(loaded.error === "Invalid itemId." || loaded.error === "Invalid materialId." || loaded.error === "Invalid type." ? 400 : 404).json({ message: loaded.error });
+    if (loaded.error) {
+      const code = ["Invalid itemId.", "Invalid materialId.", "Invalid type."].includes(loaded.error) ? 400 : 404;
+      return res.status(code).json({ message: loaded.error });
+    }
 
-    const { sellerEmail, resourceTitle, resId } = loaded;
-    if (buyerEmail === sellerEmail) return res.status(400).json({ message: "Cannot send request to yourself." });
+    // 2) 역할 매핑
+    let buyerEmail = "";
+    let sellerEmail = "";
+    if (type === "market" || type === "coursehub") {
+      buyerEmail = requester;
+      sellerEmail = loaded.sellerEmail;
+    } else if (type === "coursehub_wtb") {
+      buyerEmail = loaded.buyerEmail; // WTB 업로더(요청자)
+      sellerEmail = requester;        // 지금 제안하는 사람
+    }
 
-    // 2) 중복 요청 검사
-    const dupFilter = type === "market"
-      ? { school, source: "market", itemId: resId, buyer: buyerEmail }
-      : { school, source: "coursehub", materialId: resId, buyer: buyerEmail };
+    if (!buyerEmail || !sellerEmail) {
+      return res.status(400).json({ message: "Party resolution failed." });
+    }
+    if (buyerEmail === sellerEmail) {
+      return res.status(400).json({ message: "Cannot send request to yourself." });
+    }
+
+    const { resId, resourceTitle } = loaded;
+
+    // 3) 중복 요청 검사
+    const dupFilter =
+      type === "market"
+        ? { school, source: "market", itemId: resId, buyer: buyerEmail }
+        : { school, source: type, materialId: resId, buyer: buyerEmail };
 
     const exists = await Request.findOne(dupFilter);
     if (exists) {
-      // 이미 대화방도 있을 가능성 높음 → 찾아서 409과 함께 넘겨줌
       const convo =
         (await Conversation.findOne({ school, source: type, resourceId: resId, buyer: buyerEmail, seller: sellerEmail })) ||
         (type === "market"
@@ -92,18 +126,18 @@ router.post("/", async (req, res) => {
       });
     }
 
-    // 3) Request 저장
+    // 4) Request 저장
     const requestDoc = await Request.create({
       school,
       source: type,
       itemId: type === "market" ? resId : null,
-      materialId: type === "coursehub" ? resId : null,
+      materialId: type !== "market" ? resId : null,
       buyer: buyerEmail,
       seller: sellerEmail,
       message,
     });
 
-    // 4) 대화방 조회/생성(리소스 단위 1개)
+    // 5) 대화방 조회/생성(리소스 단위 1개)
     const convoFilter = {
       school,
       buyer: buyerEmail,
@@ -122,10 +156,10 @@ router.post("/", async (req, res) => {
       });
     }
 
-    // 5) 메시지 저장 + 최신화
+    // 6) 메시지 저장 + 최신화
     await Message.create({
       conversationId: conversation._id,
-      sender: buyerEmail,
+      sender: requester, // 실제 발신자(현재 유저)
       content: message,
       school,
     });
@@ -145,30 +179,45 @@ router.post("/", async (req, res) => {
 });
 
 /**
- * GET /api/:school/request/status?type=coursehub&targetId=...   (또는 type=market&itemId=...)
- *  - 현재 로그인 사용자가 이미 요청을 보냈는지 여부 + 연결된 대화방 id 리턴
+ * GET /api/:school/request/status?type=coursehub&targetId=...
  *  - { alreadySent: boolean, conversationId?: string }
+ *  - type=market|coursehub|coursehub_wtb
  */
 router.get("/status", async (req, res) => {
   try {
     const school = norm(req.params.school);
-    const buyerEmail = norm(req.user?.email);
+    const requester = norm(req.user?.email);
     let { type, targetId, itemId } = req.query;
     type = norm(type);
 
-    if (!school || !buyerEmail || !type) {
+    if (!school || !requester || !type) {
       return res.status(400).json({ message: "Missing params." });
     }
     if (!type && itemId) type = "market";
 
     const loaded = await loadTarget({ school, source: type, targetId, itemId });
-    if (loaded.error) return res.status(loaded.error === "Invalid itemId." || loaded.error === "Invalid materialId." || loaded.error === "Invalid type." ? 400 : 404).json({ message: loaded.error });
+    if (loaded.error) {
+      const code = ["Invalid itemId.", "Invalid materialId.", "Invalid type."].includes(loaded.error) ? 400 : 404;
+      return res.status(code).json({ message: loaded.error });
+    }
 
-    const { sellerEmail, resId } = loaded;
+    // 역할 매핑
+    let buyerEmail = "";
+    let sellerEmail = "";
+    if (type === "market" || type === "coursehub") {
+      buyerEmail = requester;
+      sellerEmail = loaded.sellerEmail;
+    } else if (type === "coursehub_wtb") {
+      buyerEmail = loaded.buyerEmail;
+      sellerEmail = requester;
+    }
 
-    const dupFilter = type === "market"
-      ? { school, source: "market", itemId: resId, buyer: buyerEmail }
-      : { school, source: "coursehub", materialId: resId, buyer: buyerEmail };
+    const { resId } = loaded;
+
+    const dupFilter =
+      type === "market"
+        ? { school, source: "market", itemId: resId, buyer: buyerEmail }
+        : { school, source: type, materialId: resId, buyer: buyerEmail };
 
     const exists = await Request.findOne(dupFilter);
 
@@ -206,6 +255,7 @@ router.get("/:itemId/:buyer?", async (req, res) => {
 });
 
 module.exports = router;
+
 
 
 

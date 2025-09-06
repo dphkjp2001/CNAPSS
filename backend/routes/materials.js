@@ -38,6 +38,7 @@ router.get("/recent", async (req, res) => {
   const limit = Math.min(20, Math.max(1, parseInt(req.query.limit || "5", 10)));
   const q = n(req.query.q || "");
   const prof = n(req.query.prof || "");
+  const type = n(req.query.type || "all").toLowerCase(); // ✅ sale|wanted|all
 
   const filter = { school, status: { $ne: "archived" } };
   if (q) {
@@ -46,6 +47,9 @@ router.get("/recent", async (req, res) => {
   }
   if (prof) {
     filter.professor = new RegExp(escapeRe(prof), "i");
+  }
+  if (type === "sale" || type === "wanted") {
+    filter.listingType = type; // ✅
   }
 
   let items = await Material.find(filter)
@@ -67,6 +71,7 @@ router.get("/recent", async (req, res) => {
       title: m.title,
       authorName: m.authorName,
       uploaderEmail: m.uploaderEmail, // internal use only in FE
+      listingType: m.listingType || "sale", // ✅
       createdAt: m.createdAt,
     })),
   });
@@ -82,6 +87,7 @@ router.get("/", async (req, res) => {
   const hasIsFree = typeof req.query.isFree !== "undefined";
   const isFree = String(req.query.isFree || "").toLowerCase() === "true";
   const sort = n(req.query.sort || "new").toLowerCase();
+  const type = n(req.query.type || "all").toLowerCase(); // ✅ sale|wanted|all
   const page = Math.max(1, parseInt(req.query.page || "1", 10));
   const limit = Math.min(50, Math.max(1, parseInt(req.query.limit || "20", 10)));
 
@@ -94,6 +100,7 @@ router.get("/", async (req, res) => {
   if (kind !== "all") filter.kind = kind;
   if (materialType !== "all") filter.materialType = materialType;
   if (hasIsFree) filter.isFree = isFree;
+  if (type === "sale" || type === "wanted") filter.listingType = type; // ✅
 
   let sortObj = { createdAt: -1 };
   if (sort === "top") sortObj = { likeCount: -1, createdAt: -1 };
@@ -130,6 +137,7 @@ router.get("/", async (req, res) => {
       viewCount: m.viewCount,
       authorName: m.authorName,
       uploaderEmail: m.uploaderEmail,
+      listingType: m.listingType || "sale", // ✅
       createdAt: m.createdAt,
       updatedAt: m.updatedAt,
     })),
@@ -143,7 +151,7 @@ router.get("/:id", async (req, res) => {
   let doc = await Material.findOne({ _id: id, school }).lean();
   if (!doc) return res.status(404).json({ message: "Not found" });
   doc = (await attachAuthorNames(doc)) || doc;
-  res.json(doc);
+  res.json(doc); // listingType 포함 그대로 전달
 });
 
 /** create */
@@ -162,6 +170,9 @@ router.post("/", async (req, res) => {
   const price = Number.isFinite(body.price) ? Math.max(0, body.price) : 0;
   const sharePreference = n(body.sharePreference || "either");
   const url = n(body.url || "");
+  const listingType = ["sale", "wanted"].includes(n(body.listingType || "").toLowerCase())
+    ? n(body.listingType).toLowerCase()
+    : "sale"; // ✅ 기본 sale
 
   if (!courseCode) return res.status(400).json({ message: "courseCode is required" });
   if (!semester || !SEM.test(semester)) return res.status(400).json({ message: "Invalid semester" });
@@ -211,6 +222,7 @@ router.post("/", async (req, res) => {
     price,
     sharePreference,
     status: "active",
+    listingType, // ✅
     uploaderId: user?._id,
     uploaderEmail: low(user?.email || ""),
     authorName,
@@ -237,6 +249,7 @@ router.delete("/:id", async (req, res) => {
 });
 
 module.exports = router;
+
 
 
 
