@@ -30,6 +30,9 @@ export default function CourseWrite() {
   // REQUIRED
   const [professor, setProfessor] = useState("");
 
+  // Listing type: For Sale / Wanted  ✅ 추가
+  const [listingType, setListingType] = useState("sale"); // 'sale' | 'wanted'
+
   // 1) What are you offering?
   const [materialType, setMaterialType] = useState("personalMaterial"); // personalNote | personalMaterial
   // 2) Regarding (only for personalMaterial)
@@ -76,7 +79,11 @@ export default function CourseWrite() {
     if (!semester) return setErr("Please select a semester.");
     const prof = professor.trim();
     if (!prof) return setErr("Please enter the professor name.");
-    if (!isFree && (Number.isNaN(price) || Number(price) < 1)) {
+    if (
+      listingType === "sale" &&
+      !isFree &&
+      (Number.isNaN(price) || Number(price) < 1)
+    ) {
       return setErr("Please enter a valid price (≥ 1).");
     }
 
@@ -93,8 +100,12 @@ export default function CourseWrite() {
         semester,
         kind: _kind,
         materialType,
-        isFree,
-        price: Number(isFree ? 0 : price),
+        // ✅ listingType 포함
+        listingType, // 'sale' | 'wanted'
+        // Wanted일 땐 무조건 무료로 처리
+        isFree: listingType === "wanted" ? true : isFree,
+        price:
+          listingType === "wanted" ? 0 : Number(isFree ? 0 : price),
         sharePreference,
         professor: prof,
         url: "",
@@ -165,7 +176,7 @@ export default function CourseWrite() {
             />
           </div>
 
-          {/* Semester & Offering type */}
+          {/* Semester & Listing type */}
           <div className="flex flex-col gap-3 sm:flex-row">
             <div className="sm:w-1/2">
               <label className="mb-1 block text-sm font-medium">Semester</label>
@@ -182,37 +193,63 @@ export default function CourseWrite() {
               </select>
             </div>
 
+            {/* ✅ Listing type */}
             <div className="sm:w-1/2">
-              <label className="mb-1 block text-sm font-medium">
-                What are you offering?
-              </label>
+              <label className="mb-1 block text-sm font-medium">Listing type</label>
               <div className="flex flex-wrap items-center gap-3">
                 <label className="flex items-center gap-2 text-sm">
                   <input
                     type="radio"
-                    name="offerType"
-                    checked={materialType === "personalNote"}
-                    onChange={() => {
-                      setMaterialType("personalNote");
-                      setKind("note");
-                    }}
+                    name="listingType"
+                    checked={listingType === "sale"}
+                    onChange={() => setListingType("sale")}
                   />
-                  Personal Class Note
+                  For Sale
                 </label>
                 <label className="flex items-center gap-2 text-sm">
                   <input
                     type="radio"
-                    name="offerType"
-                    checked={materialType === "personalMaterial"}
-                    onChange={() => {
-                      setMaterialType("personalMaterial");
-                      // default to 'other' for material
-                      setKind("other");
-                    }}
+                    name="listingType"
+                    checked={listingType === "wanted"}
+                    onChange={() => setListingType("wanted")}
                   />
-                  Personal Class Material
+                  Wanted
                 </label>
               </div>
+            </div>
+          </div>
+
+          {/* What are you offering? */}
+          <div>
+            <label className="mb-1 block text-sm font-medium">
+              What are you offering?
+            </label>
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="radio"
+                  name="offerType"
+                  checked={materialType === "personalNote"}
+                  onChange={() => {
+                    setMaterialType("personalNote");
+                    setKind("note");
+                  }}
+                />
+                Personal Class Note
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="radio"
+                  name="offerType"
+                  checked={materialType === "personalMaterial"}
+                  onChange={() => {
+                    setMaterialType("personalMaterial");
+                    // default to 'other' for material
+                    setKind("other");
+                  }}
+                />
+                Personal Class Material
+              </label>
             </div>
           </div>
 
@@ -238,39 +275,45 @@ export default function CourseWrite() {
             </div>
           )}
 
-          {/* Price */}
+          {/* Price (Wanted일 땐 비활성/숨김) */}
           <div>
             <label className="mb-1 block text-sm font-medium">Price</label>
-            <div className="flex items-center gap-4">
-              <label className="flex items-center gap-2 text-sm">
+            {listingType === "wanted" ? (
+              <div className="rounded-lg border bg-gray-50 px-3 py-2 text-xs text-gray-600">
+                This is a <b>Wanted</b> post. Price is not required.
+              </div>
+            ) : (
+              <div className="flex items-center gap-4">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name="priceType"
+                    checked={isFree}
+                    onChange={() => setIsFree(true)}
+                  />
+                  Free
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name="priceType"
+                    checked={!isFree}
+                    onChange={() => setIsFree(false)}
+                  />
+                  Paid
+                </label>
                 <input
-                  type="radio"
-                  name="priceType"
-                  checked={isFree}
-                  onChange={() => setIsFree(true)}
+                  type="number"
+                  min={1}
+                  step="1"
+                  disabled={isFree}
+                  value={isFree ? "" : price}
+                  onChange={(e) => setPrice(Number(e.target.value))}
+                  placeholder="Amount"
+                  className="w-28 rounded-lg border px-3 py-2 text-sm disabled:bg-gray-100"
                 />
-                Free
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="radio"
-                  name="priceType"
-                  checked={!isFree}
-                  onChange={() => setIsFree(false)}
-                />
-                Paid
-              </label>
-              <input
-                type="number"
-                min={1}
-                step="1"
-                disabled={isFree}
-                value={isFree ? "" : price}
-                onChange={(e) => setPrice(Number(e.target.value))}
-                placeholder="Amount"
-                className="w-28 rounded-lg border px-3 py-2 text-sm disabled:bg-gray-100"
-              />
-            </div>
+              </div>
+            )}
           </div>
 
           {/* Share preference */}
@@ -339,6 +382,7 @@ export default function CourseWrite() {
     </div>
   );
 }
+
 
 
 

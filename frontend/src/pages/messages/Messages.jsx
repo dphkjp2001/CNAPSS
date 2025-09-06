@@ -1,3 +1,4 @@
+// frontend/src/pages/messages/Messages.jsx
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import ChatBox from "../../components/Chatbox";
@@ -6,195 +7,240 @@ import { useSocket } from "../../contexts/SocketContext";
 import * as chatApi from "../../api/chat";
 
 /**
- * 기능/데이터 흐름은 그대로 두고, 표시만 개선:
- * - 타입 배지 (Market/CourseHub/DM)
- * - resourceTitle 우선 타이틀
- * - 닉네임 → 이메일 로컬 → "Unknown" 폴백
- * - 상단 필터칩(All/Market/CourseHub) — 클라이언트 사이드 필터
+ * 변경 요약
+ * - 필터칩: All / Marketplace / CourseHub – For Sale / CourseHub – Wanted
+ * - coursehub_wtb 소스 정식 분리
+ * - ?conversation=... 로 진입 시 해당 소스 탭 자동 전환
+ * - 나머지 데이터/흐름/ChatBox 사용은 그대로
  */
 export default function Messages() {
   const { user, token } = useAuth() || {};
   const { school: schoolParam } = useParams();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const { on, off } = useSocket();
+  const [sp, setSp] = useSearchParams();
+  const { on: onSocket } = useSocket() || {};
 
-  const school = useMemo(
-    () => String(schoolParam || localStorage.getItem("selectedSchool") || "").toLowerCase(),
-    [schoolParam]
-  );
+  const [list, setList] = useState([]); // conversations
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState(null); // selected conversation
 
-  const [convos, setConvos] = useState([]);
-  const [selected, setSelected] = useState(null);
-  const [filter, setFilter] = useState("all"); // all | market | coursehub
+  // 필터 상태: all | market | coursehub | coursehub_wtb
+  const [filter, setFilter] = useState("all");
 
-  // ✅ conversation 파라미터는 '초기 1회만' 반영
-  const [initialParam, setInitialParam] = useState(() => searchParams.get("conversation") || null);
+  const school = (schoolParam || "").toLowerCase();
 
-  /* ---------------- helpers (UI only) ---------------- */
-  const myEmail = (user?.email || "").toLowerCase();
-  const emailLocal = (v) => (String(v || "").split("@")[0] || "").trim();
+  const myEmail = useMemo(() => (user?.email || "").toLowerCase(), [user]);
 
-  const otherNick = (c) => {
-    const iAmBuyer = (c?.buyer || "").toLowerCase() === myEmail;
-    const nick = iAmBuyer ? c?.sellerNickname : c?.buyerNickname;
-    const other = iAmBuyer ? c?.seller : c?.buyer;
-    return (nick && nick !== "Unknown" ? nick : emailLocal(other)) || "Unknown";
-  };
+  const fetchConversations = useCallback(async () => {
+    if (!token || !school) return;
+    setLoading(true);
+    try {
+      const rows = await chatApi.getConversations({ school, token });
+      const arr = Array.isArray(rows) ? rows : Array.isArray(rows?.items) ? rows.items : [];
+      setList(arr);
+      return arr;
+    } finally {
+      setLoading(false);
+    }
+  }, [school, token]);
 
+  // 최초 로딩
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const arr = await fetchConversations();
+      if (!alive) return;
+
+      // URL로 진입 시 해당 대화 선택 + 탭 자동 전환
+      const qId = sp.get("conversation");
+      if (qId && Array.isArray(arr)) {
+        const found = arr.find((c) => String(c._id) === String(qId));
+        if (found) {
+          setSelected(found);
+          setFilter(mapSourceToFilter(found?.source, found?.itemId));
+        }
+      }
+    })();
+
+    // 소켓으로 새 메시지 오면 목록 갱신 (간단 refresh)
+    const off = onSocket?.("chat:new-message", () => {
+      fetchConversations();
+    });
+
+    return () => {
+      alive = false;
+      if (typeof off === "function") off();
+    };
+  }, [fetchConversations, onSocket, sp]);
+
+  // 타입 분류
   const typeOf = (c) => {
-    const src = (c?.source || "").toLowerCase();
+    const src = String(c?.source || "").toLowerCase();
     if (src === "market") return "market";
+    if (src === "coursehub_wtb") return "coursehub_wtb";
     if (src === "coursehub") return "coursehub";
-    // 레거시 폴백: itemId 있으면 market로 취급
+    // 레거시 폴백: itemId 있으면 market 취급
     if (c?.itemId) return "market";
     return "dm";
+  };
+
+  // 소스 → 필터 매핑
+  const mapSourceToFilter = (src, itemId) => {
+    const s = String(src || "").toLowerCase();
+    if (s === "market") return "market";
+    if (s === "coursehub_wtb") return "coursehub_wtb";
+    if (s === "coursehub") return "coursehub";
+    if (itemId) return "market";
+    return "all";
   };
 
   const typeBadge = (c) => {
     const t = typeOf(c);
     if (t === "market") return "🛒 Market";
-    if (t === "coursehub") return "🎓 CourseHub";
+    if (t === "coursehub_wtb") return "🎓 CourseHub — Wanted";
+    if (t === "coursehub") return "🎓 CourseHub — For Sale";
     return "💬 DM";
   };
 
-  const titleOf = (c) => c?.resourceTitle?.trim() || otherNick(c);
-
+  // 상대 이메일/표시명
   const otherEmail = (c) => {
-    const iAmBuyer = (c?.buyer || "").toLowerCase() === myEmail;
-    return (iAmBuyer ? c?.seller : c?.buyer) || "";
+    const b = String(c?.buyer || "").toLowerCase();
+    const s = String(c?.seller || "").toLowerCase();
+    return b === myEmail ? s : b;
+  };
+  const displayNameFromEmail = (email) =>
+    email ? String(email).split("@")[0] : "Unknown";
+
+  const titleOf = (c) => {
+    // resourceTitle > 상대 닉/이메일 로컬
+    const t = c?.resourceTitle;
+    if (t && t.trim()) return t;
+    return displayNameFromEmail(otherEmail(c));
   };
 
-  const unreadCount = (c) =>
-    (c?.messages || []).filter(
-      (m) => (m.sender || "").toLowerCase() !== myEmail && !(m.readBy || []).includes(myEmail)
-    ).length;
-
-  /* ---------------- data load ---------------- */
-  const refresh = useCallback(async () => {
-    if (!token || !school) return;
-    try {
-      const data = await chatApi.getConversations({ school, token }); // 최신순 반환 가정
-      const list = Array.isArray(data) ? data : [];
-      setConvos(list);
-
-      // ✅ 초기 진입시에만 URL 파라미터 반영 후 즉시 제거
-      if (initialParam) {
-        const found = list.find((c) => c._id === initialParam);
-        if (found) setSelected(found);
-        else if (!selected && list.length > 0) setSelected(list[0]);
-
-        const next = new URLSearchParams(searchParams);
-        next.delete("conversation");
-        setSearchParams(next, { replace: true });
-        setInitialParam(null);
-      } else if (!selected && list.length > 0) {
-        setSelected(list[0]);
-      }
-    } catch {
-      setConvos([]);
-    }
-  // ⛔ selected/searchParams 의존성 제거 (클릭시 재선택 방지)
-  }, [token, school, initialParam, selected, searchParams, setSearchParams]);
-
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
-
-  /* ---------------- live preview reorder ---------------- */
-  useEffect(() => {
-    const handlePreview = ({ conversationId, lastMessage, updatedAt }) => {
-      setConvos((prev) => {
-        const next = prev.map((c) => (c._id === conversationId ? { ...c, lastMessage, updatedAt } : c));
-        next.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
-        return next;
-      });
-    };
-    on?.("chat:preview", handlePreview);
-    return () => off?.("chat:preview", handlePreview);
-  }, [on, off]);
-
-  /* ---------------- filtered view ---------------- */
+  // 필터링된 목록
   const filtered = useMemo(() => {
-    if (filter === "all") return convos;
-    return convos.filter((c) => typeOf(c) === filter);
-  }, [convos, filter]);
+    if (filter === "all") return list;
+    return list.filter((c) => typeOf(c) === filter);
+  }, [list, filter]);
+
+  // 선택 시 URL 동기화
+  useEffect(() => {
+    const id = selected?._id ? String(selected._id) : null;
+    const next = new URLSearchParams(sp.toString());
+    if (id) next.set("conversation", id);
+    else next.delete("conversation");
+    setSp(next, { replace: true });
+  }, [selected]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className="flex h-[calc(100vh-80px)]">
-      {/* Left: list */}
-      <div className="w-80 border-r p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-bold">💬 Messages</h2>
+    <div className="mx-auto flex h-[calc(100vh-120px)] max-w-6xl gap-4 p-4">
+      {/* 좌측: 대화 리스트 */}
+      <div className="flex w-[340px] shrink-0 flex-col rounded-2xl border bg-white">
+        {/* 필터칩 */}
+        <div className="flex flex-wrap gap-2 p-3">
+          <Chip active={filter === "all"} onClick={() => setFilter("all")}>
+            All
+          </Chip>
+          <Chip active={filter === "market"} onClick={() => setFilter("market")}>
+            Marketplace
+          </Chip>
+          <Chip
+            active={filter === "coursehub"}
+            onClick={() => setFilter("coursehub")}
+          >
+            CourseHub – For Sale
+          </Chip>
+          <Chip
+            active={filter === "coursehub_wtb"}
+            onClick={() => setFilter("coursehub_wtb")}
+          >
+            CourseHub – Wanted
+          </Chip>
         </div>
 
-        {/* filter chips */}
-        <div className="mb-3 flex gap-2">
-          {[
-            { key: "all", label: "All" },
-            { key: "market", label: "Market" },
-            { key: "coursehub", label: "CourseHub" },
-          ].map((f) => (
-            <button
-              key={f.key}
-              onClick={() => setFilter(f.key)}
-              className={
-                "rounded-full border px-3 py-1 text-xs " +
-                (filter === f.key ? "border-blue-600 bg-blue-50 text-blue-700" : "border-gray-300 text-gray-700")
-              }
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-
-        <div className="space-y-2">
-          {filtered.length === 0 && (
-            <p className="text-sm text-gray-500">해당 필터에 대화가 없습니다.</p>
+        {/* 목록 */}
+        <div className="min-h-0 grow overflow-y-auto">
+          {loading ? (
+            <div className="p-3 text-sm text-gray-500">Loading…</div>
+          ) : !filtered?.length ? (
+            <div className="p-3 text-sm text-gray-500">No conversations.</div>
+          ) : (
+            <ul className="divide-y">
+              {filtered.map((c) => {
+                const isSel = selected?._id === c._id;
+                return (
+                  <li key={c._id}>
+                    <button
+                      onClick={() => {
+                        setSelected(c);
+                        // 탭 자동 전환(수동 탭 변경 시에도 일관 유지)
+                        setFilter(mapSourceToFilter(c?.source, c?.itemId));
+                      }}
+                      className={
+                        "flex w-full items-center justify-between gap-2 px-3 py-3 text-left hover:bg-gray-50 " +
+                        (isSel ? "bg-violet-50" : "")
+                      }
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="whitespace-nowrap rounded-full bg-gray-800 px-2 py-0.5 text-[11px] font-semibold text-white">
+                            {typeBadge(c)}
+                          </span>
+                          <span className="truncate text-sm font-semibold text-gray-900">
+                            {titleOf(c)}
+                          </span>
+                        </div>
+                        {c.lastMessage ? (
+                          <div className="truncate text-xs text-gray-500">
+                            {c.lastMessage}
+                          </div>
+                        ) : null}
+                      </div>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
           )}
-
-          {filtered.map((c) => (
-            <button
-              key={c._id}
-              onClick={() => setSelected(c)}
-              className={`relative w-full text-left rounded-lg p-3 transition ${
-                selected?._id === c._id ? "bg-blue-100" : "hover:bg-gray-100"
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <p className="max-w-[10rem] truncate font-medium">{titleOf(c)}</p>
-                <span className="ml-2 shrink-0 rounded-full bg-gray-200 px-2 py-0.5 text-xs text-gray-700">
-                  {typeBadge(c)}
-                </span>
-              </div>
-              <p className="mt-0.5 truncate text-sm text-gray-500">{c.lastMessage || "(메시지 없음)"}</p>
-
-              {unreadCount(c) > 0 && (
-                <span className="absolute right-2 top-2 rounded-full bg-red-500 px-1.5 py-0.5 text-xs text-white">
-                  {unreadCount(c)}
-                </span>
-              )}
-            </button>
-          ))}
         </div>
       </div>
 
-      {/* Right: chat */}
-      <div className="flex-1 p-4">
+      {/* 우측: 채팅창 */}
+      <div className="min-w-0 grow rounded-2xl border bg-white">
         {selected ? (
           <ChatBox
             conversationId={selected._id}
             userEmail={user?.email}
-            otherEmail={(selected?.buyer || "").toLowerCase() === (user?.email || "").toLowerCase() ? selected?.seller : selected?.buyer}
-            otherNickname={selected?.resourceTitle?.trim() || ""} // 헤더 표시
+            otherEmail={otherEmail(selected)}
+            otherNickname={titleOf(selected)}
             fullSize
           />
         ) : (
-          <div className="mt-20 text-center text-gray-400">🧭 왼쪽에서 채팅을 선택하세요.</div>
+          <div className="mt-20 text-center text-gray-400">
+            🧭 왼쪽에서 채팅을 선택하세요.
+          </div>
         )}
       </div>
     </div>
   );
 }
+
+function Chip({ active, children, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      className={
+        "rounded-full px-3 py-1 text-xs font-semibold " +
+        (active
+          ? "bg-violet-600 text-white"
+          : "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50")
+      }
+    >
+      {children}
+    </button>
+  );
+}
+
 
 
 

@@ -1,4 +1,6 @@
 // frontend/src/pages/dashboard/Dashboard.jsx
+// ✅ 변경점: CourseHub 미리보기 카드에 listingType 뱃지 추가 (Wanted / For Sale)
+// 나머지 로직/스타일/동작은 기존 그대로 유지
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import dayjs from "dayjs";
@@ -246,6 +248,7 @@ export default function Dashboard() {
                     const code = (m.courseCode || m.course || "").toUpperCase();
                     const prof = m.professor || "Unknown";
                     const type = materialTypeLabel(m.materialType);
+                    const isWanted = (m.listingType || "sale") === "wanted"; // ✅
                     return (
                       <li key={id} className="rounded-xl border p-3 hover:bg-gray-50">
                         <button
@@ -253,7 +256,18 @@ export default function Dashboard() {
                           className="flex w-full items-center justify-between text-left"
                         >
                           <div className="min-w-0">
-                            <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              {/* ✅ ListingType 배지 */}
+                              <span
+                                className={
+                                  "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold " +
+                                  (isWanted
+                                    ? "bg-rose-100 text-rose-700"
+                                    : "bg-emerald-100 text-emerald-700")
+                                }
+                              >
+                                {isWanted ? "Wanted" : "For Sale"}
+                              </span>
                               <span className="truncate text-sm font-semibold text-gray-900 sm:text-base">
                                 {code || "UNKNOWN"}
                               </span>
@@ -276,7 +290,7 @@ export default function Dashboard() {
               )}
             </section>
 
-            {/* Food CTA (원래 오른쪽이었지만 모바일/태블릿에서 자연스럽게 이어지도록 본문 마지막에 노출) */}
+            {/* Food CTA */}
             <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
               <div
                 onClick={() => nav(schoolPath("/foodmap"))}
@@ -308,6 +322,7 @@ function DashLink({ children, onClick }) {
     </button>
   );
 }
+
 
 
 
