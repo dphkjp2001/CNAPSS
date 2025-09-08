@@ -1,6 +1,6 @@
 // frontend/src/pages/courses/Courses.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { useSchool } from "../../contexts/SchoolContext";
 import { useSchoolPath } from "../../utils/schoolPath";
@@ -37,6 +37,11 @@ export default function Courses() {
   const { school, schoolTheme } = useSchool();
   const navigate = useNavigate();
   const schoolPath = useSchoolPath();
+  const [sp, setSp] = useSearchParams();
+
+  // ✅ sale|wanted 토글 (URL 쿼리 type과 동기화, 기본값: sale)
+  const initialType = sp.get("type") === "wanted" ? "wanted" : "sale";
+  const [type, setType] = useState(initialType);
 
   const [items, setItems] = useState([]);
   const [limit, setLimit] = useState(20);
@@ -64,6 +69,15 @@ export default function Courses() {
     return () => clearTimeout(t);
   }, [prof]);
 
+  // ✅ type 바뀌면 URL 쿼리 동기화
+  useEffect(() => {
+    const next = new URLSearchParams(sp);
+    if (type === "sale") next.delete("type");
+    else next.set("type", "wanted");
+    setSp(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [type]);
+
   const containerClass = "mx-auto max-w-5xl p-4 sm:p-6";
   const cardClass =
     "rounded-2xl border shadow-sm p-4 hover:shadow-md transition-shadow bg-white";
@@ -84,6 +98,7 @@ export default function Courses() {
           limit,
           q: qDeb,
           prof: profDeb,
+          type, // ✅ sale|wanted 필터 적용
         });
         const list = Array.isArray(res?.items) ? res.items : [];
         if (alive) setItems(list);
@@ -100,7 +115,7 @@ export default function Courses() {
     return () => {
       alive = false;
     };
-  }, [school, token, limit, qDeb, profDeb, hasLoadedOnce]);
+  }, [school, token, limit, qDeb, profDeb, hasLoadedOnce, type]);
 
   const onCreate = () => navigate(schoolPath("/courses/write"));
   const goDetail = (id) =>
@@ -109,6 +124,22 @@ export default function Courses() {
   const showSkeleton = loading && !hasLoadedOnce;
   const empty = !showSkeleton && !isSearching && !items.length && !err;
 
+  // ✅ 세그먼트 토글 스타일
+  const SegBtn = ({ active, children, onClick }) => (
+    <button
+      onClick={onClick}
+      className={
+        "rounded-full px-3 py-1.5 text-xs font-semibold transition " +
+        (active
+          ? "bg-white shadow text-gray-900"
+          : "text-gray-600 hover:text-gray-800")
+      }
+      style={active ? {} : {}}
+    >
+      {children}
+    </button>
+  );
+
   return (
     <div
       className="min-h-screen"
@@ -116,7 +147,21 @@ export default function Courses() {
     >
       <div className={containerClass}>
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h1 className="text-xl font-semibold">CourseHub</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-xl font-semibold">CourseHub</h1>
+            {/* ✅ For sale / Wanted Segment */}
+            <div className="rounded-full bg-gray-100 p-1">
+              <SegBtn active={type === "sale"} onClick={() => setType("sale")}>
+                For sale
+              </SegBtn>
+              <SegBtn
+                active={type === "wanted"}
+                onClick={() => setType("wanted")}
+              >
+                Wanted
+              </SegBtn>
+            </div>
+          </div>
 
           <div className="flex w-full max-w-xl items-center gap-2 sm:order-none order-last">
             <input
@@ -242,6 +287,7 @@ export default function Courses() {
     </div>
   );
 }
+
 
 
 

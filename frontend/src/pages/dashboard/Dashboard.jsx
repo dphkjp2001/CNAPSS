@@ -1,7 +1,5 @@
-// src/pages/dashboard/Dashboard.jsx
-// - 왼쪽 프로필 카드 섹션 제거 (헤더 드롭다운으로 이동)
-// - 나머지 Free Board / CourseHub 프리뷰는 그대로 유지
-import React, { useEffect, useMemo, useState } from "react";
+// frontend/src/pages/dashboard/Dashboard.jsx
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
@@ -14,6 +12,7 @@ import { useLoginGate } from "../../hooks/useLoginGate";
 
 import { listPosts, getPublicPosts } from "../../api/posts";
 import { listRecentMaterials } from "../../api/materials";
+import { listItems as listMarketItems } from "../../api/market";
 
 dayjs.extend(relativeTime);
 dayjs.locale("en");
@@ -29,6 +28,12 @@ const materialTypeLabel = (t) => {
   }
 };
 
+const currency = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  maximumFractionDigits: 0,
+});
+
 export default function Dashboard() {
   const { user, token } = useAuth();
   const { school, schoolTheme } = useSchool();
@@ -36,7 +41,7 @@ export default function Dashboard() {
   const nav = useNavigate();
   const schoolPath = useSchoolPath();
 
-  // ===== Free Board =====
+  /* ================= Free Board (list view) ================= */
   const [posts, setPosts] = useState([]);
   const [loadingPosts, setLoadingPosts] = useState(true);
   const [errorPosts, setErrorPosts] = useState("");
@@ -52,7 +57,7 @@ export default function Dashboard() {
         if (token) data = await listPosts({ school, token });
         else data = await getPublicPosts({ school, page: 1, limit: 10 });
         const rows = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : [];
-        if (alive) setPosts(rows.slice(0, 5));
+        if (alive) setPosts(rows.slice(0, 5)); // ← 리스트니까 5개만
       } catch {
         if (alive) setErrorPosts("Failed to load posts.");
       } finally {
@@ -64,25 +69,63 @@ export default function Dashboard() {
     };
   }, [school, token]);
 
-  // ===== CourseHub 최근 5개 =====
-  const [recent, setRecent] = useState([]);
-  const [loadingRecent, setLoadingRecent] = useState(true);
-  const [errorRecent, setErrorRecent] = useState("");
+  /* ================= CourseHub (For Sale / Wanted) ================= */
+  const [recentSale, setRecentSale] = useState([]);
+  const [recentWanted, setRecentWanted] = useState([]);
+  const [loadingCH, setLoadingCH] = useState(true);
+  const [errorCH, setErrorCH] = useState("");
 
   useEffect(() => {
     let alive = true;
     if (!school) return;
     (async () => {
-      setLoadingRecent(true);
-      setErrorRecent("");
+      setLoadingCH(true);
+      setErrorCH("");
       try {
-        const res = await listRecentMaterials({ school, token, limit: 5 });
-        const rows = Array.isArray(res?.items) ? res.items : Array.isArray(res) ? res : [];
-        if (alive) setRecent(rows);
+        const sale = await listRecentMaterials({ school, token, limit: 5, type: "sale" });
+        const saleRows = Array.isArray(sale?.items) ? sale.items : Array.isArray(sale) ? sale : [];
+        const wanted = await listRecentMaterials({ school, token, limit: 5, type: "wanted" });
+        const wantedRows = Array.isArray(wanted?.items) ? wanted.items : Array.isArray(wanted) ? wanted : [];
+        if (!alive) return;
+        setRecentSale(saleRows);
+        setRecentWanted(wantedRows);
       } catch {
-        if (alive) setErrorRecent("Failed to load CourseHub items.");
+        if (alive) setErrorCH("Failed to load CourseHub items.");
       } finally {
-        if (alive) setLoadingRecent(false);
+        if (alive) setLoadingCH(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [school, token]);
+
+  /* ================= Marketplace (latest 3 with thumbnails) ================= */
+  const [mktItems, setMktItems] = useState([]);
+  const [loadingMkt, setLoadingMkt] = useState(true);
+  const [errorMkt, setErrorMkt] = useState("");
+
+  useEffect(() => {
+    let alive = true;
+    if (!school || !token) {
+      setLoadingMkt(false);
+      return;
+    }
+    (async () => {
+      setLoadingMkt(true);
+      setErrorMkt("");
+      try {
+        const list = await listMarketItems({ school, token });
+        if (!alive) return;
+        const rows = Array.isArray(list) ? list : [];
+        const sorted = [...rows].sort((a, b) =>
+          String(b.createdAt ?? b._id ?? "").localeCompare(String(a.createdAt ?? a._id ?? ""))
+        );
+        setMktItems(sorted.slice(0, 3));
+      } catch (e) {
+        if (alive) setErrorMkt("Failed to load marketplace items.");
+      } finally {
+        if (alive) setLoadingMkt(false);
       }
     })();
     return () => {
@@ -99,7 +142,151 @@ export default function Dashboard() {
       style={{ backgroundColor: schoolTheme?.bg || "#f6f3ff" }}
     >
       <div className="mx-auto w-full max-w-6xl space-y-6">
-        {/* Free Board */}
+        {/* ===== CourseHub (2 columns) ===== */}
+        <section className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <h2
+              onClick={() => nav(schoolPath("/courses"))}
+              className="cursor-pointer text-lg font-semibold sm:text-xl hover:underline"
+              style={headerColor}
+            >
+              CourseHub
+            </h2>
+
+            <div className="flex w-full gap-2 sm:w-auto">
+              <button
+                onClick={() => ensureAuth(() => nav(schoolPath("/courses/write")))}
+                className="flex-1 rounded-xl border px-4 py-2 text-sm font-medium hover:bg-gray-50 sm:flex-none"
+              >
+                Upload note
+              </button>
+              <button
+                onClick={() => nav(schoolPath("/courses"))}
+                className="flex-1 rounded-xl px-4 py-2 text-sm font-semibold text-white shadow sm:flex-none"
+                style={primaryBtn}
+              >
+                Open Course Hub
+              </button>
+            </div>
+          </div>
+
+          {loadingCH ? (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {Array.from({ length: 2 }).map((_, i) => (
+                <div key={i} className="rounded-xl border p-4">
+                  <div className="mb-3 h-5 w-24 animate-pulse rounded bg-gray-100" />
+                  <ul className="space-y-2">
+                    {Array.from({ length: 5 }).map((__, j) => (
+                      <li key={j} className="flex items-center justify-between">
+                        <div className="h-4 w-2/3 animate-pulse rounded bg-gray-100" />
+                        <div className="h-3 w-16 animate-pulse rounded bg-gray-100" />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          ) : errorCH ? (
+            <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{errorCH}</div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <CourseHubList
+                title="For Sale"
+                items={recentSale}
+                badgeClass="bg-emerald-100 text-emerald-700"
+                onOpen={(id) => nav(schoolPath(`/courses/materials/${id}`))}
+              />
+              <CourseHubList
+                title="Wanted"
+                items={recentWanted}
+                badgeClass="bg-rose-100 text-rose-700"
+                onOpen={(id) => nav(schoolPath(`/courses/materials/${id}`))}
+              />
+            </div>
+          )}
+        </section>
+
+        {/* ===== Marketplace preview (latest 3 with thumbnails) ===== */}
+        <section className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <h2
+              onClick={() => nav(schoolPath("/market"))}
+              className="cursor-pointer text-lg font-semibold sm:text-xl hover:underline"
+              style={headerColor}
+            >
+              Marketplace
+            </h2>
+
+            <button
+              onClick={() => nav(schoolPath("/market"))}
+              className="w-full rounded-xl px-4 py-2 text-sm font-semibold text-white shadow sm:w-auto"
+              style={primaryBtn}
+            >
+              Open Marketplace
+            </button>
+          </div>
+
+          {!token ? (
+            <div className="rounded-lg border border-dashed border-gray-300 p-6 text-center text-sm text-gray-600">
+              Log in to see the latest listings.
+            </div>
+          ) : loadingMkt ? (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="animate-pulse rounded-2xl border border-gray-200/60 bg-white shadow-sm">
+                  <div className="aspect-[4/3] w-full rounded-t-2xl bg-gray-100" />
+                  <div className="p-4 space-y-3">
+                    <div className="h-4 w-3/5 rounded bg-gray-100" />
+                    <div className="h-4 w-2/5 rounded bg-gray-100" />
+                    <div className="h-3 w-1/2 rounded bg-gray-100" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : errorMkt ? (
+            <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{errorMkt}</div>
+          ) : mktItems.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-gray-300 p-6 text-center text-sm text-gray-600">
+              No listings yet.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              {mktItems.map((item) => (
+                <button
+                  key={item._id}
+                  onClick={() => nav(schoolPath(`/market/${item._id}`))}
+                  className="group block overflow-hidden rounded-2xl border border-gray-200/60 bg-white text-left shadow-sm transition hover:shadow-md focus:outline-none focus:ring-2 focus:ring-gray-900/20"
+                >
+                  <div className="relative aspect-[4/3] w-full overflow-hidden bg-gray-50">
+                    {item?.images?.[0] ? (
+                      <img
+                        src={item.images[0]}
+                        alt={item.title}
+                        className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-4xl">🖼️</div>
+                    )}
+                  </div>
+                  <div className="p-4">
+                    <h3 className="line-clamp-1 text-base font-semibold text-gray-900">
+                      {item.title}
+                    </h3>
+                    <p className="mt-1 text-sm font-medium text-gray-800">
+                      {currency.format(Number(item.price) || 0)}
+                    </p>
+                    <p className="mt-1 line-clamp-1 text-xs text-gray-500">
+                      {item.sellerNickname || "Unknown"}
+                    </p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* ===== Free Board (LIST view) ===== */}
         <section className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2
@@ -154,117 +341,60 @@ export default function Dashboard() {
             </ul>
           )}
         </section>
-
-        {/* CourseHub preview (최근 5개) */}
-        <section className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
-          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <h2
-              onClick={() => nav(schoolPath("/courses"))}
-              className="cursor-pointer text-lg font-semibold sm:text-xl hover:underline"
-              style={headerColor}
-            >
-              CourseHub
-            </h2>
-
-            <div className="flex w-full gap-2 sm:w-auto">
-              <button
-                onClick={() => ensureAuth(() => nav(schoolPath("/courses/write")))}
-                className="flex-1 rounded-xl border px-4 py-2 text-sm font-medium hover:bg-gray-50 sm:flex-none"
-              >
-                Upload note
-              </button>
-              <button
-                onClick={() => nav(schoolPath("/courses"))}
-                className="flex-1 rounded-xl px-4 py-2 text-sm font-semibold text-white shadow sm:flex-none"
-                style={primaryBtn}
-              >
-                Open Course Hub
-              </button>
-            </div>
-          </div>
-
-          {loadingRecent ? (
-            <ul className="space-y-3">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <li key={i} className="flex items-center justify-between py-2">
-                  <div className="h-4 w-2/3 animate-pulse rounded bg-gray-100" />
-                  <div className="h-3 w-16 animate-pulse rounded bg-gray-100" />
-                </li>
-              ))}
-            </ul>
-          ) : errorRecent ? (
-            <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{errorRecent}</div>
-          ) : recent.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-gray-300 p-6 text-center text-sm text-gray-600">
-              No postings yet.
-            </div>
-          ) : (
-            <ul className="space-y-2">
-              {recent.map((m) => {
-                const id = m._id || m.id;
-                const code = (m.courseCode || m.course || "").toUpperCase();
-                const prof = m.professor || "Unknown";
-                const type = materialTypeLabel(m.materialType);
-                const isWanted = (m.listingType || "sale") === "wanted";
-                return (
-                  <li key={id} className="rounded-xl border p-3 hover:bg-gray-50">
-                    <button
-                      onClick={() => nav(schoolPath(`/courses/materials/${id}`))}
-                      className="flex w-full items-center justify-between text-left"
-                    >
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span
-                            className={
-                              "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold " +
-                              (isWanted
-                                ? "bg-rose-100 text-rose-700"
-                                : "bg-emerald-100 text-emerald-700")
-                            }
-                          >
-                            {isWanted ? "Wanted" : "For Sale"}
-                          </span>
-                          <span className="truncate text-sm font-semibold text-gray-900 sm:text-base">
-                            {code || "UNKNOWN"}
-                          </span>
-                          <span className="truncate text-xs font-medium text-gray-700 sm:text-sm">
-                            {prof}
-                          </span>
-                          <span className="truncate text-[11px] text-gray-500 sm:text-xs">
-                            {type}
-                          </span>
-                        </div>
-                      </div>
-                      <span className="ml-3 shrink-0 text-xs text-gray-400">
-                        {m.createdAt ? dayjs(m.createdAt).fromNow() : ""}
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </section>
-
-        {/* Food CTA */}
-        <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <div
-            onClick={() => nav(schoolPath("/foodmap"))}
-            className="mb-2 cursor-pointer text-sm font-semibold text-gray-900 hover:underline"
-          >
-            🍱 Explore Nearby Food
-          </div>
-          <p className="text-xs text-gray-600">
-            Discover top-rated restaurants and cafes near campus.
-          </p>
-          <div className="mt-3 h-48 w-full overflow-hidden rounded-lg bg-gray-100">
-            <div className="h-full w-full animate-pulse" />
-          </div>
-        </section>
       </div>
     </div>
   );
 }
+
+/* ====== helpers ====== */
+function CourseHubList({ title, items, badgeClass, onOpen }) {
+  return (
+    <div className="rounded-xl border p-4">
+      <div className="mb-2 text-sm font-semibold text-gray-900">{title}</div>
+      {(!items || items.length === 0) ? (
+        <div className="rounded-lg border border-dashed border-gray-300 p-6 text-center text-sm text-gray-600">
+          No postings yet.
+        </div>
+      ) : (
+        <ul className="space-y-2">
+          {items.map((m) => {
+            const id = m._id || m.id;
+            const code = (m.courseCode || m.course || "").toUpperCase();
+            const prof = m.professor || "Unknown";
+            const type = materialTypeLabel(m.materialType);
+            const created = m.createdAt ? dayjs(m.createdAt).fromNow() : "";
+            return (
+              <li key={id} className="rounded-xl border p-3 hover:bg-gray-50">
+                <button onClick={() => onOpen(id)} className="flex w-full items-center justify-between text-left">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${badgeClass}`}>
+                        {title}
+                      </span>
+                      <span className="truncate text-sm font-semibold text-gray-900 sm:text-base">
+                        {code || "UNKNOWN"}
+                      </span>
+                      <span className="truncate text-xs font-medium text-gray-700 sm:text-sm">
+                        {prof}
+                      </span>
+                      <span className="truncate text-[11px] text-gray-500 sm:text-xs">
+                        {type}
+                      </span>
+                    </div>
+                  </div>
+                  <span className="ml-3 shrink-0 text-xs text-gray-400">{created}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+
+
 
 
 

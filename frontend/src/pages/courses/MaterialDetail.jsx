@@ -12,6 +12,13 @@ const currency = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 0,
 });
 
+const OFFERING_LABEL = {
+  syllabus: "Syllabus",
+  exam: "Exams",
+  general: "General course content",
+  other: "Others",
+};
+
 export default function MaterialDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -37,7 +44,7 @@ export default function MaterialDetail() {
     [user, mat]
   );
 
-  const isWanted = (mat?.listingType || "sale") === "wanted"; // ✅
+  const isWanted = (mat?.listingType || "sale") === "wanted";
 
   // load detail
   useEffect(() => {
@@ -47,8 +54,7 @@ export default function MaterialDetail() {
         const data = await getMaterial({ school, token, id });
         if (!alive) return;
         setMat(data);
-      } catch (e) {
-        console.error(e);
+      } catch {
         if (alive) setErr("Failed to load the listing.");
       } finally {
         if (alive) setLoading(false);
@@ -72,13 +78,13 @@ export default function MaterialDetail() {
           school,
           token,
           materialId: id,
-          reqType: isWanted ? "coursehub_wtb" : "coursehub", // ✅
+          reqType: isWanted ? "coursehub_wtb" : "coursehub",
         });
         if (!alive) return;
         setAlreadySent(!!s?.alreadySent);
         setConversationId(s?.conversationId || null);
-      } catch (e) {
-        console.warn("request status check failed:", e);
+      } catch {
+        // ignore
       } finally {
         if (alive) setChecking(false);
       }
@@ -98,7 +104,7 @@ export default function MaterialDetail() {
         token,
         materialId: id,
         message: text,
-        reqType: isWanted ? "coursehub_wtb" : "coursehub", // ✅
+        reqType: isWanted ? "coursehub_wtb" : "coursehub",
       });
       setAlreadySent(true);
       setConversationId(res?.conversationId || null);
@@ -143,13 +149,15 @@ export default function MaterialDetail() {
     .join(" • ");
 
   const meta2 = [
-    (mat.listingType ? (mat.listingType === "wanted" ? "Wanted" : "For Sale") : null), // ✅ 표시
+    (mat.listingType ? (mat.listingType === "wanted" ? "Wanted" : "For Sale") : null),
     mat.kind ? `${mat.kind}` : null,
     mat.materialType ? `${mat.materialType}` : null,
     mat.sharePreference ? `${mat.sharePreference}` : null,
   ]
     .filter(Boolean)
     .join(" • ");
+
+  const hasOfferings = Array.isArray(mat.offerings) && mat.offerings.length > 0;
 
   return (
     <div
@@ -181,6 +189,27 @@ export default function MaterialDetail() {
                 </h1>
                 <div className="mt-1 text-sm text-gray-600">{meta1}</div>
                 {meta2 && <div className="mt-1 text-xs text-gray-500">{meta2}</div>}
+
+                {/* ✅ Regarding */}
+                {mat.regarding && (
+                  <div className="mt-2 text-sm text-gray-800">
+                    <span className="font-medium">Regarding:</span> {mat.regarding}
+                  </div>
+                )}
+
+                {/* ✅ Offerings badges */}
+                {hasOfferings && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {mat.offerings.map((o) => (
+                      <span
+                        key={o}
+                        className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700"
+                      >
+                        {OFFERING_LABEL[o] || o}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="shrink-0 rounded-xl bg-gray-900 px-3 py-1.5 text-sm font-semibold text-white">
                 {priceText}
@@ -275,6 +304,7 @@ export default function MaterialDetail() {
     </div>
   );
 }
+
 
 
 

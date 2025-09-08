@@ -36,19 +36,24 @@ export default function CourseWrite() {
   // Always personalMaterial
   const materialType = "personalMaterial";
 
-  // Regarding (kind)
-  const materialKindOptions = useMemo(
-    () => [
-      { ui: "class notes", value: "note" },       // ✅ 추가
-      { ui: "syllabus", value: "syllabus" },
-      { ui: "exam", value: "exam" },
-      { ui: "slide", value: "slide" },
-      { ui: "link", value: "link" },
-      { ui: "other", value: "other" },
-    ],
-    []
-  );
-  const [kind, setKind] = useState("note");
+  // ✅ offerings (multi check)
+  const OFFERING_OPTIONS = [
+    { value: "syllabus", label: "Syllabus" },
+    { value: "exam", label: "Exams" },
+    { value: "general", label: "General course content" },
+    { value: "other", label: "Others" },
+  ];
+  const [offerings, setOfferings] = useState([]);
+  const toggleOffering = (v) =>
+    setOfferings((prev) =>
+      prev.includes(v) ? prev.filter((x) => x !== v) : [...prev, v]
+    );
+
+  // ✅ regarding (one-line text)
+  const [regarding, setRegarding] = useState("");
+
+  // kind은 내부 분류용 → 개인노트 기본
+  const [kind] = useState("note");
 
   // Price & share
   const [isFree, setIsFree] = useState(true);
@@ -81,11 +86,7 @@ export default function CourseWrite() {
     if (!semester) return setErr("Please select a semester.");
     const prof = professor.trim();
     if (!prof) return setErr("Please enter the professor name.");
-    if (
-      listingType === "sale" &&
-      !isFree &&
-      (Number.isNaN(price) || Number(price) < 1)
-    ) {
+    if (listingType === "sale" && !isFree && (Number.isNaN(price) || Number(price) < 1)) {
       return setErr("Please enter a valid price (≥ 1).");
     }
 
@@ -96,16 +97,19 @@ export default function CourseWrite() {
         courseCode: courseCode.toUpperCase(),
         courseTitle: "",
         semester,
-        kind,                            // 선택된 kind 그대로 전송
-        materialType,                    // 항상 "personalMaterial"
+        kind,                            // internal category
+        materialType,                    // always "personalMaterial"
         listingType,                     // 'sale' | 'wanted'
         isFree: listingType === "wanted" ? true : isFree,
         price: listingType === "wanted" ? 0 : Number(isFree ? 0 : price),
         sharePreference,
         professor: prof,
         url: "",
-        // description, tags 생략
         title: courseCode.toUpperCase(),
+
+        // ✅ NEW
+        offerings,
+        regarding: regarding.trim(),
       };
       await postJson(`${API}/${encodeURIComponent(school)}/materials`, payload);
 
@@ -138,7 +142,7 @@ export default function CourseWrite() {
           onSubmit={onSubmit}
           className="space-y-5 rounded-2xl border bg-white p-5 shadow-sm"
         >
-          {/* ✅ Listing type 맨 위로 이동 */}
+          {/* Listing type */}
           <div>
             <label className="mb-1 block text-sm font-medium">Listing type</label>
             <div className="flex flex-wrap items-center gap-3">
@@ -163,7 +167,7 @@ export default function CourseWrite() {
             </div>
           </div>
 
-          {/* Course code (required) */}
+          {/* Course code */}
           <div>
             <label htmlFor="courseCodeInput" className="mb-1 block text-sm font-medium">
               Course code <span className="text-red-600">*</span>
@@ -177,7 +181,7 @@ export default function CourseWrite() {
             />
           </div>
 
-          {/* Professor (required) */}
+          {/* Professor */}
           <div>
             <label className="mb-1 block text-sm font-medium">
               Professor <span className="text-red-600">*</span>
@@ -209,31 +213,37 @@ export default function CourseWrite() {
             </select>
           </div>
 
-          {/* What are you offering? -> 단일 옵션 */}
+          {/* I'm offering my personal class notes about,  ← 다중 체크 */}
           <div>
-            <label className="mb-1 block text-sm font-medium">What are you offering?</label>
-            <div className="rounded-lg border px-3 py-2 text-sm">
-              <span className="font-semibold">Personal Class Material</span>
+            <div className="mb-1 text-sm font-medium">What are you offering?</div>
+            <div className="mb-1 text-sm text-gray-700">I’m offering my personal class notes about,</div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {OFFERING_OPTIONS.map((opt) => (
+                <label key={opt.value} className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={offerings.includes(opt.value)}
+                    onChange={() => toggleOffering(opt.value)}
+                  />
+                  {opt.label}
+                </label>
+              ))}
             </div>
           </div>
 
-          {/* Regarding (kind) */}
+          {/* Regarding… */}
           <div>
             <label className="mb-1 block text-sm font-medium">Regarding…</label>
-            <select
-              value={kind}
-              onChange={(e) => setKind(e.target.value)}
+            <input
+              type="text"
+              value={regarding}
+              onChange={(e) => setRegarding(e.target.value)}
+              placeholder="class notes (topic/summary)"
               className="w-full rounded-lg border px-3 py-2 text-sm"
-            >
-              {materialKindOptions.map((k) => (
-                <option key={k.value} value={k.value}>
-                  {k.ui}
-                </option>
-              ))}
-            </select>
+            />
           </div>
 
-          {/* Price (Wanted일 땐 안내문으로 대체) */}
+          {/* Price */}
           <div>
             <label className="mb-1 block text-sm font-medium">Price</label>
             {listingType === "wanted" ? (
@@ -274,7 +284,7 @@ export default function CourseWrite() {
             )}
           </div>
 
-          {/* Share preference */}
+          {/* Share preference (single) */}
           <div>
             <label className="mb-1 block text-sm font-medium">
               How would you like to share?
@@ -340,6 +350,7 @@ export default function CourseWrite() {
     </div>
   );
 }
+
 
 
 
