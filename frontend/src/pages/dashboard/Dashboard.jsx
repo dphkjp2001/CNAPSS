@@ -57,7 +57,7 @@ export default function Dashboard() {
         if (token) data = await listPosts({ school, token });
         else data = await getPublicPosts({ school, page: 1, limit: 10 });
         const rows = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : [];
-        if (alive) setPosts(rows.slice(0, 5)); // ← 리스트니까 5개만
+        if (alive) setPosts(rows.slice(0, 5));
       } catch {
         if (alive) setErrorPosts("Failed to load posts.");
       } finally {
@@ -153,19 +153,14 @@ export default function Dashboard() {
               CourseHub
             </h2>
 
-            <div className="flex w-full gap-2 sm:w-auto">
+            {/* ✅ Open 버튼 제거, 작성 버튼만 유지 */}
+            <div className="flex w-full justify-end sm:w-auto">
               <button
                 onClick={() => ensureAuth(() => nav(schoolPath("/courses/write")))}
-                className="flex-1 rounded-xl border px-4 py-2 text-sm font-medium hover:bg-gray-50 sm:flex-none"
-              >
-                Upload note
-              </button>
-              <button
-                onClick={() => nav(schoolPath("/courses"))}
-                className="flex-1 rounded-xl px-4 py-2 text-sm font-semibold text-white shadow sm:flex-none"
+                className="rounded-xl px-4 py-2 text-sm font-semibold text-white shadow"
                 style={primaryBtn}
               >
-                Open Course Hub
+                + Upload Post
               </button>
             </div>
           </div>
@@ -217,13 +212,16 @@ export default function Dashboard() {
               Marketplace
             </h2>
 
-            <button
-              onClick={() => nav(schoolPath("/market"))}
-              className="w-full rounded-xl px-4 py-2 text-sm font-semibold text-white shadow sm:w-auto"
-              style={primaryBtn}
-            >
-              Open Marketplace
-            </button>
+            {/* ✅ Open 버튼 제거 → 작성 버튼만 */}
+            <div className="flex w-full justify-end sm:w-auto">
+              <button
+                onClick={() => ensureAuth(() => nav(schoolPath("/market/write")))}
+                className="w-full rounded-xl px-4 py-2 text-sm font-semibold text-white shadow sm:w-auto"
+                style={primaryBtn}
+              >
+                + Post an item
+              </button>
+            </div>
           </div>
 
           {!token ? (
@@ -392,6 +390,7 @@ function CourseHubList({ title, items, badgeClass, onOpen }) {
     </div>
   );
 }
+
 
 
 

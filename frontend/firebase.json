@@ -1,28 +1,28 @@
 {
   "hosting": {
-    "site": "cnapss-3da82",  
+    "site": "cnapss-3da82",
     "public": "dist",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
     "headers": [
       {
         "source": "/api/**",
         "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "no-cache"
-          }
+          { "key": "Cache-Control", "value": "no-cache" }
         ]
       }
     ],
-    "rewrites": [
+    "redirects": [
       {
-        "source": "/api/**",
-        "destination": "https://nyueta.onrender.com/api/:**"
-      },
-      {
-        "source": "**",
-        "destination": "/index.html"
+        "source": "/select-school",
+        "destination": "/",
+        "type": 301
       }
+    ],
+    "rewrites": [
+      { "source": "/api/**", "destination": "https://nyueta.onrender.com/api/:**" },
+      { "source": "**", "destination": "/index.html" }
     ]
   }
 }
+
+

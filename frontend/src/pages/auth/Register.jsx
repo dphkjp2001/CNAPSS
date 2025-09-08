@@ -3,10 +3,11 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useLocation } from "react-router-dom";
 import AsyncButton from "../../components/AsyncButton";
 import { useAuth } from "../../contexts/AuthContext";
-import { useSchool } from "../../contexts/SchoolContext";
+
+const ENABLED_SCHOOLS = new Set(["nyu"]);
 
 // keep in sync with backend
-const ALLOWED_SCHOOLS = [
+const ALL_SCHOOLS = [
   { value: "nyu", label: "NYU" },
   { value: "columbia", label: "Columbia" },
   { value: "boston", label: "Boston" },
@@ -17,15 +18,6 @@ function Register() {
   const location = useLocation();
   const { school: schoolParam } = useParams();
   const { login } = useAuth();
-  const { schoolTheme } = useSchool();
-  const theme = useMemo(
-    () => ({
-      bg: schoolTheme?.bg || "#f6f3ff",
-      primary: schoolTheme?.primary || "#6b46c1",
-      text: schoolTheme?.text || "#111827",
-    }),
-    [schoolTheme?.bg, schoolTheme?.primary, schoolTheme?.text]
-  );
 
   const [email, setEmail] = useState("");
   const [nickname, setNickname] = useState("");
@@ -41,13 +33,12 @@ function Register() {
 
   const baseURL = import.meta.env.VITE_API_URL;
 
-  // prefill school from URL/state/localStorage
+  // prefill school from URL/state/localStorage, but only allow enabled ones
   useEffect(() => {
     const fromState = location?.state?.prefillSchool;
     const fromStorage = localStorage.getItem("lastVisitedSchool") || "";
     const candidate = (schoolParam || fromState || fromStorage || "").toLowerCase();
-    const valid = ALLOWED_SCHOOLS.some((s) => s.value === candidate);
-    setSchool(valid ? candidate : "");
+    setSchool(ENABLED_SCHOOLS.has(candidate) ? candidate : "");
   }, [schoolParam, location?.state?.prefillSchool]);
 
   useEffect(() => {
@@ -101,6 +92,10 @@ function Register() {
 
   const handleRegister = async () => {
     if (!emailVerified || !school || busy) return;
+    if (!ENABLED_SCHOOLS.has(school)) {
+      alert("This school is coming soon 🚧");
+      return;
+    }
     setError("");
     try {
       setBusy(true);
@@ -128,8 +123,9 @@ function Register() {
         try {
           login({ user: data.user, token: data.token });
         } catch {}
+
         const from = location.state?.from;
-        const bad = ["/auth-required", "/login", "/register"];
+        const bad = ["/", "/select-school", "/auth-required", "/login", "/register"];
         const fallback = `/${data.user.school}/dashboard`;
         const dest = bad.includes(from) ? fallback : from || fallback;
         alert("Registration complete! Welcome 👋");
@@ -149,22 +145,20 @@ function Register() {
 
   const schoolOptions = useMemo(
     () =>
-      ALLOWED_SCHOOLS.map((s) => (
-        <option key={s.value} value={s.value}>
-          {s.label}
+      ALL_SCHOOLS.map((s) => (
+        <option key={s.value} value={s.value} disabled={!ENABLED_SCHOOLS.has(s.value)}>
+          {ENABLED_SCHOOLS.has(s.value) ? s.label : `${s.label} (coming soon)`}
         </option>
       )),
     []
   );
 
   return (
-    <div className="min-h-[calc(100vh-64px)]" style={{ backgroundColor: theme.bg }}>
+    <div className="min-h-[calc(100vh-64px)] bg-gray-50">
       <div className="mx-auto flex max-w-4xl items-center justify-center px-4 py-12">
         <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-lg">
           <div className="mb-6 text-center">
-            <h1 className="text-2xl font-bold" style={{ color: theme.text }}>
-              Sign Up
-            </h1>
+            <h1 className="text-2xl font-bold text-gray-900">Sign Up</h1>
             <p className="mt-1 text-sm text-gray-600">
               Create your CNAPSS account to join your campus community.
             </p>
@@ -258,8 +252,7 @@ function Register() {
                 <AsyncButton
                   onClick={verifyCode}
                   disabled={!email || !code || emailVerified || busy}
-                  className="rounded-xl px-3 py-2 text-sm text-white"
-                  style={{ backgroundColor: theme.text }}
+                  className="rounded-xl bg-gray-900 px-3 py-2 text-sm text-white"
                   loadingText="Verifying..."
                 >
                   {emailVerified ? "Verified" : "Verify"}
@@ -270,8 +263,7 @@ function Register() {
             <AsyncButton
               onClick={handleRegister}
               loadingText="Signing up..."
-              className="mt-2 w-full rounded-xl px-4 py-2 font-semibold text-white shadow hover:opacity-95 disabled:opacity-60"
-              style={{ backgroundColor: theme.primary }}
+              className="mt-2 w-full rounded-xl bg-indigo-600 px-4 py-2 font-semibold text-white shadow hover:bg-indigo-700 disabled:opacity-60"
               disabled={!emailVerified || !school || busy}
             >
               Sign Up
@@ -280,12 +272,7 @@ function Register() {
 
           <div className="mt-6 text-center text-sm text-gray-600">
             Already have an account?{" "}
-            <Link
-              to="/login"
-              state={{ from: location.state?.from }}
-              className="font-semibold hover:underline"
-              style={{ color: theme.primary }}
-            >
+            <Link to="/login" state={{ from: location.state?.from }} className="font-semibold text-indigo-600 hover:underline">
               Log In
             </Link>
           </div>
@@ -296,6 +283,8 @@ function Register() {
 }
 
 export default Register;
+
+
 
 
 

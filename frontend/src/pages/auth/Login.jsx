@@ -1,21 +1,11 @@
 // src/pages/auth/Login.jsx
-import React, { useState, useMemo } from "react";
+import React, { useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
-import { useSchool } from "../../contexts/SchoolContext";
 import AsyncButton from "../../components/AsyncButton";
 
 function Login() {
   const { login } = useAuth();
-  const { schoolTheme } = useSchool(); // { bg, primary, text } expected
-  const theme = useMemo(
-    () => ({
-      bg: schoolTheme?.bg || "#f6f3ff",
-      primary: schoolTheme?.primary || "#6b46c1",
-      text: schoolTheme?.text || "#111827",
-    }),
-    [schoolTheme?.bg, schoolTheme?.primary, schoolTheme?.text]
-  );
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -47,29 +37,29 @@ function Login() {
         } else {
           setError(data?.message || "Login failed. Please try again.");
         }
-        throw new Error(data?.message || "login failed");
+        return;
       }
 
-      login(data);
+      // save auth
+      login(data); // expects { user, token }
 
-      const bad = ["/auth-required", "/login", "/register"];
+      // ✅ 항상 학교 대시보드 우선. 루트/선택/인증경로 등은 무시
       const school = data?.user?.school;
       const fallback = school ? `/${school}/dashboard` : "/";
+      const bad = ["/", "/select-school", "/auth-required", "/login", "/register"];
       const dest = bad.includes(from) ? fallback : from || fallback;
       navigate(dest, { replace: true });
     } catch {
-      /* handled above */
+      setError("Unexpected error. Please try again.");
     }
   };
 
   return (
-    <div className="min-h-[calc(100vh-64px)]" style={{ backgroundColor: theme.bg }}>
+    <div className="min-h-[calc(100vh-64px)] bg-gray-50">
       <div className="mx-auto flex max-w-4xl items-center justify-center px-4 py-12">
         <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-lg">
           <div className="mb-6 text-center">
-            <h1 className="text-2xl font-bold" style={{ color: theme.text }}>
-              Log In
-            </h1>
+            <h1 className="text-2xl font-bold text-gray-900">Log In</h1>
             <p className="mt-1 text-sm text-gray-600">
               Welcome back to CNAPSS. Please sign in to continue.
             </p>
@@ -94,7 +84,6 @@ function Login() {
                 type="email"
                 placeholder="your.email@school.edu"
                 className="w-full rounded-xl border px-3 py-2 outline-none focus:ring-2"
-                style={{ boxShadow: "none" }}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -127,8 +116,7 @@ function Login() {
             <AsyncButton
               onClick={handleLogin}
               loadingText="Logging in..."
-              className="mt-2 w-full rounded-xl px-4 py-2 font-semibold text-white shadow hover:opacity-95"
-              style={{ backgroundColor: theme.primary }}
+              className="mt-2 w-full rounded-xl bg-indigo-600 px-4 py-2 font-semibold text-white shadow hover:bg-indigo-700 disabled:opacity-60"
             >
               Log In
             </AsyncButton>
@@ -136,12 +124,7 @@ function Login() {
 
           <div className="mt-6 text-center text-sm text-gray-600">
             Don’t have an account?{" "}
-            <Link
-              to="/register"
-              state={{ from }}
-              className="font-semibold hover:underline"
-              style={{ color: theme.primary }}
-            >
+            <Link to="/register" state={{ from }} className="font-semibold text-indigo-600 hover:underline">
               Sign Up
             </Link>
           </div>
@@ -152,6 +135,7 @@ function Login() {
 }
 
 export default Login;
+
 
 
 

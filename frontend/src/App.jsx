@@ -8,7 +8,6 @@ import RequireAuth from "./components/RequireAuth";
 import { useAuth } from "./contexts/AuthContext";
 import AuthGateProvider from "./contexts/AuthGateProvider";
 
-import Splash from "./pages/Splash";
 import SchoolSelect from "./pages/SchoolSelect";
 import About from "./pages/About";
 import Login from "./pages/auth/Login";
@@ -39,10 +38,12 @@ const PersonalSchedule = lazy(() => import("./pages/schedule/PersonalSchedule"))
 const GroupAvailability = lazy(() => import("./pages/schedule/GroupAvailability"));
 const FoodMap = lazy(() => import("./pages/food/FoodMap"));
 
+const ENABLED_SCHOOLS = new Set(["nyu"]);
+
 function NormalizeDashboard() {
   const { user } = useAuth();
   if (user?.school) return <Navigate to={`/${user.school}/dashboard`} replace />;
-  return <Navigate to="/select-school" replace />;
+  return <Navigate to="/" replace />;
 }
 
 function EditToDetailRedirect() {
@@ -50,10 +51,40 @@ function EditToDetailRedirect() {
   return <Navigate to={`../freeboard/${id}`} replace />;
 }
 
-// 과거 코스별 폴더 경로 → 메인 리스트로 리다이렉트
 function LegacyCourseMaterialsRedirect() {
   const { school } = useParams();
   return <Navigate to={`/${school}/courses`} replace />;
+}
+
+/** 로그인/회원가입 라우트 가드: 이미 로그인 → 자신의 대시보드로 */
+function LoginRoute() {
+  const { user } = useAuth();
+  return user?.school ? <Navigate to={`/${user.school}/dashboard`} replace /> : <Login />;
+}
+function RegisterRoute() {
+  const { user } = useAuth();
+  return user?.school ? <Navigate to={`/${user.school}/dashboard`} replace /> : <Register />;
+}
+
+/** ✅ School whitelist gate (NYU only) */
+function SchoolGate({ children }) {
+  const { school } = useParams();
+  if (!ENABLED_SCHOOLS.has((school || "").toLowerCase())) {
+    const label =
+      school?.toLowerCase() === "columbia"
+        ? "Columbia"
+        : school?.toLowerCase() === "boston"
+        ? "Boston"
+        : school;
+    return (
+      <Navigate
+        to="/"
+        replace
+        state={{ flash: { type: "info", message: `${label || "This school"} is coming soon 🚧` } }}
+      />
+    );
+  }
+  return children;
 }
 
 export default function App() {
@@ -61,27 +92,31 @@ export default function App() {
     <AuthGateProvider>
       <Suspense fallback={<div className="p-6 text-sm text-gray-500">Loading…</div>}>
         <Routes>
-          {/* Public */}
+          {/* Public (no auth) */}
           <Route element={<PublicLayout />}>
-            <Route path="/" element={<Splash />} />
-            <Route path="/select-school" element={<SchoolSelect />} />
+            <Route path="/" element={<SchoolSelect />} />
+            <Route path="/select-school" element={<Navigate to="/" replace />} />
             <Route path="/about" element={<About />} />
-          </Route>
 
-          {/* Auth (unscoped) */}
-          <Route element={<Layout />}>
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/register/:school" element={<Register />} />
+            {/* Auth (public look) */}
+            <Route path="/login" element={<LoginRoute />} />
+            <Route path="/register" element={<RegisterRoute />} />
+            <Route path="/register/:school" element={<RegisterRoute />} />
             <Route path="/auth-required" element={<AuthRequired />} />
           </Route>
 
           {/* Normalize */}
           <Route path="/dashboard/*" element={<NormalizeDashboard />} />
-          <Route path="//dashboard/*" element={<NormalizeDashboard />} />
 
-          {/* School-scoped (모든 학교별 페이지는 Layout 아래) */}
-          <Route path="/:school" element={<Layout />}>
+          {/* School-scoped (NYU only) */}
+          <Route
+            path="/:school"
+            element={
+              <SchoolGate>
+                <Layout />
+              </SchoolGate>
+            }
+          >
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard" element={<Dashboard />} />
 
@@ -172,7 +207,7 @@ export default function App() {
               }
             />
 
-            {/* Messages (이미 Layout 아래) */}
+            {/* Messages */}
             <Route
               path="messages"
               element={
@@ -210,7 +245,7 @@ export default function App() {
               }
             />
 
-            {/* ✅ CourseHub — Layout 아래로 이동 */}
+            {/* CourseHub */}
             <Route
               path="courses"
               element={
@@ -235,17 +270,20 @@ export default function App() {
                 </RequireAuth>
               }
             />
-            {/* 옛날 경로 지원 */}
             <Route path="courses/:courseId/materials" element={<LegacyCourseMaterialsRedirect />} />
           </Route>
 
           {/* Fallback */}
-          <Route path="*" element={<Navigate to="/select-school" replace />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
     </AuthGateProvider>
   );
 }
+
+
+
+
 
 
 

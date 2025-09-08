@@ -1,24 +1,39 @@
-// src/components/PublicLayout.jsx
-import React from "react";
-import { Outlet, Link } from "react-router-dom";
+// frontend/src/components/PublicLayout.jsx
+import React, { useEffect, useState } from "react";
+import { Outlet, Link, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 
 export default function PublicLayout() {
   const { user, logout } = useAuth();
+  const location = useLocation();
+  const [flash, setFlash] = useState(null);
+
+  useEffect(() => {
+    const f = location.state?.flash;
+    if (f) {
+      setFlash(f);
+      // drop history state (so it doesn't reappear on back/forward)
+      try {
+        const { pathname, search, hash } = window.location;
+        window.history.replaceState({}, "", pathname + search + hash);
+      } catch {}
+      const t = setTimeout(() => setFlash(null), 3500);
+      return () => clearTimeout(t);
+    }
+  }, [location.state]);
 
   return (
     <div className="min-h-screen flex flex-col bg-white">
-      {/* Top (simple) */}
-      <header className="w-full border-b bg-white">
+      {/* Top */}
+      <header className="w-full bg-white border-b">
         <div className="mx-auto max-w-6xl px-4 h-14 flex items-center justify-between gap-3">
-          <Link to="/" className="font-bold text-xl">
+          <Link to="/" className="font-extrabold text-xl tracking-tight text-gray-900">
             CNAPSS
           </Link>
 
           <nav className="flex items-center gap-1">
             {user?.email ? (
               <>
-                {/* 로그인 상태: 대시보드로 바로 이동 + 로그아웃 */}
                 <Link
                   to={`/${encodeURIComponent(user.school || "")}/dashboard`}
                   className="px-3 py-2 text-sm text-gray-700 hover:text-violet-700 hover:bg-violet-50 rounded-md"
@@ -34,7 +49,6 @@ export default function PublicLayout() {
               </>
             ) : (
               <>
-                {/* 비로그인: 로그인/회원가입 노출 */}
                 <Link
                   to="/login"
                   className="px-3 py-2 text-sm text-gray-700 hover:text-violet-700 hover:bg-violet-50 rounded-md"
@@ -51,20 +65,30 @@ export default function PublicLayout() {
             )}
           </nav>
         </div>
+
+        {/* 🔔 flash banner */}
+        {flash && (
+          <div className="border-t bg-amber-50 text-amber-900">
+            <div className="mx-auto max-w-6xl px-4 py-2 text-sm">{flash.message}</div>
+          </div>
+        )}
       </header>
 
-      {/* Content */}
       <main className="flex-1">
         <Outlet />
       </main>
 
-      {/* Footer */}
-      <footer className="px-6 py-4 text-center text-sm text-gray-500 border-t">
-        <Link to="/about" className="mr-4 underline">
+      <footer className="px-6 py-6 text-center text-sm text-gray-500">
+        <Link to="/about" className="underline">
           About
         </Link>
       </footer>
     </div>
   );
 }
+
+
+
+
+
 

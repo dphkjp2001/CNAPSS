@@ -30,13 +30,13 @@ export default function CourseWrite() {
   // REQUIRED
   const [professor, setProfessor] = useState("");
 
-  // Listing type at TOP: 'sale' | 'wanted'
+  // Listing type: 'sale' | 'wanted'
   const [listingType, setListingType] = useState("sale");
 
   // Always personalMaterial
   const materialType = "personalMaterial";
 
-  // ✅ offerings (multi check)
+  // offerings (multi check)
   const OFFERING_OPTIONS = [
     { value: "syllabus", label: "Syllabus" },
     { value: "exam", label: "Exams" },
@@ -49,15 +49,12 @@ export default function CourseWrite() {
       prev.includes(v) ? prev.filter((x) => x !== v) : [...prev, v]
     );
 
-  // ✅ regarding (one-line text)
-  const [regarding, setRegarding] = useState("");
-
   // kind은 내부 분류용 → 개인노트 기본
   const [kind] = useState("note");
 
   // Price & share
-  const [isFree, setIsFree] = useState(true);
-  const [price, setPrice] = useState(0);
+  // Free 제거 → For Sale일 때만 가격을 입력(빈 문자열로 시작)
+  const [priceStr, setPriceStr] = useState(""); // "" → 바로 숫자 입력 가능
   const [sharePreference, setSharePreference] = useState("either");
 
   const [busy, setBusy] = useState(false);
@@ -86,8 +83,22 @@ export default function CourseWrite() {
     if (!semester) return setErr("Please select a semester.");
     const prof = professor.trim();
     if (!prof) return setErr("Please enter the professor name.");
-    if (listingType === "sale" && !isFree && (Number.isNaN(price) || Number(price) < 1)) {
-      return setErr("Please enter a valid price (≥ 1).");
+
+    // For Sale → price required and >= 1
+    let price = 0;
+    let isFree = true;
+    if (listingType === "sale") {
+      if (!priceStr.trim()) return setErr("Please enter a price.");
+      const n = Number(priceStr);
+      if (!Number.isFinite(n) || n < 1) {
+        return setErr("Please enter a valid price (≥ 1).");
+      }
+      price = Math.floor(n);
+      isFree = false;
+    } else {
+      // wanted
+      price = 0;
+      isFree = true;
     }
 
     try {
@@ -97,19 +108,16 @@ export default function CourseWrite() {
         courseCode: courseCode.toUpperCase(),
         courseTitle: "",
         semester,
-        kind,                            // internal category
-        materialType,                    // always "personalMaterial"
-        listingType,                     // 'sale' | 'wanted'
-        isFree: listingType === "wanted" ? true : isFree,
-        price: listingType === "wanted" ? 0 : Number(isFree ? 0 : price),
+        kind,                 // internal category
+        materialType,         // always "personalMaterial"
+        listingType,          // 'sale' | 'wanted'
+        isFree,
+        price,
         sharePreference,
         professor: prof,
         url: "",
         title: courseCode.toUpperCase(),
-
-        // ✅ NEW
         offerings,
-        regarding: regarding.trim(),
       };
       await postJson(`${API}/${encodeURIComponent(school)}/materials`, payload);
 
@@ -126,6 +134,19 @@ export default function CourseWrite() {
       setBusy(false);
     }
   }
+
+  // price 입력 핸들러: 숫자만 허용
+  const onPriceChange = (e) => {
+    const v = e.target.value;
+    const cleaned = v.replace(/[^\d]/g, ""); // 숫자 외 제거
+    setPriceStr(cleaned);
+  };
+
+  // listingType 바꾸면 가격 입력 초기화
+  const onChangeListing = (t) => {
+    setListingType(t);
+    setPriceStr("");
+  };
 
   return (
     <div
@@ -144,14 +165,14 @@ export default function CourseWrite() {
         >
           {/* Listing type */}
           <div>
-            <label className="mb-1 block text-sm font-medium">Listing type</label>
+            <label className="mb-1 block text-sm font-semibold">Listing type</label>
             <div className="flex flex-wrap items-center gap-3">
               <label className="flex items-center gap-2 text-sm">
                 <input
                   type="radio"
                   name="listingType"
                   checked={listingType === "sale"}
-                  onChange={() => setListingType("sale")}
+                  onChange={() => onChangeListing("sale")}
                 />
                 For Sale
               </label>
@@ -160,7 +181,7 @@ export default function CourseWrite() {
                   type="radio"
                   name="listingType"
                   checked={listingType === "wanted"}
-                  onChange={() => setListingType("wanted")}
+                  onChange={() => onChangeListing("wanted")}
                 />
                 Wanted
               </label>
@@ -169,7 +190,7 @@ export default function CourseWrite() {
 
           {/* Course code */}
           <div>
-            <label htmlFor="courseCodeInput" className="mb-1 block text-sm font-medium">
+            <label htmlFor="courseCodeInput" className="mb-1 block text-sm font-semibold">
               Course code <span className="text-red-600">*</span>
             </label>
             <CourseCodePicker
@@ -183,7 +204,7 @@ export default function CourseWrite() {
 
           {/* Professor */}
           <div>
-            <label className="mb-1 block text-sm font-medium">
+            <label className="mb-1 block text-sm font-semibold">
               Professor <span className="text-red-600">*</span>
             </label>
             <input
@@ -199,7 +220,7 @@ export default function CourseWrite() {
 
           {/* Semester */}
           <div>
-            <label className="mb-1 block text-sm font-medium">Semester</label>
+            <label className="mb-1 block text-sm font-semibold">Semester</label>
             <select
               value={semester}
               onChange={(e) => setSemester(e.target.value)}
@@ -213,10 +234,12 @@ export default function CourseWrite() {
             </select>
           </div>
 
-          {/* I'm offering my personal class notes about,  ← 다중 체크 */}
+          {/* I'm offering … (multi check) */}
           <div>
-            <div className="mb-1 text-sm font-medium">What are you offering?</div>
-            <div className="mb-1 text-sm text-gray-700">I’m offering my personal class notes about,</div>
+            <div className="mb-1 text-sm font-semibold">What are you offering?</div>
+            <div className="mb-2 text-sm text-gray-700">
+              I’m offering my <span className="font-medium">personal course materials</span> regarding,
+            </div>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               {OFFERING_OPTIONS.map((opt) => (
                 <label key={opt.value} className="flex items-center gap-2 text-sm">
@@ -231,62 +254,47 @@ export default function CourseWrite() {
             </div>
           </div>
 
-          {/* Regarding… */}
+          {/* Warning (display only) */}
           <div>
-            <label className="mb-1 block text-sm font-medium">Regarding…</label>
-            <input
-              type="text"
-              value={regarding}
-              onChange={(e) => setRegarding(e.target.value)}
-              placeholder="class notes (topic/summary)"
-              className="w-full rounded-lg border px-3 py-2 text-sm"
-            />
+            <div className="mb-1 text-sm font-semibold">Warning</div>
+            <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-3 text-xs leading-relaxed text-yellow-900">
+              Professor-created materials are copyrighted by the professor.
+              Please <b>do not buy or sell copyrighted materials</b> (e.g., full syllabus PDFs).
+              Only share your own personal notes or summaries.
+            </div>
           </div>
 
           {/* Price */}
           <div>
-            <label className="mb-1 block text-sm font-medium">Price</label>
+            <label className="mb-1 block text-sm font-semibold">Price</label>
             {listingType === "wanted" ? (
               <div className="rounded-lg border bg-gray-50 px-3 py-2 text-xs text-gray-600">
                 This is a <b>Wanted</b> post. Price is not required.
               </div>
             ) : (
               <div className="flex items-center gap-4">
-                <label className="flex items-center gap-2 text-sm">
+                <div className="relative">
                   <input
-                    type="radio"
-                    name="priceType"
-                    checked={isFree}
-                    onChange={() => setIsFree(true)}
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    minLength={1}
+                    value={priceStr}
+                    onChange={onPriceChange}
+                    placeholder="Amount"
+                    className="w-32 rounded-lg border px-3 py-2 pr-8 text-sm"
                   />
-                  Free
-                </label>
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="radio"
-                    name="priceType"
-                    checked={!isFree}
-                    onChange={() => setIsFree(false)}
-                  />
-                  Paid
-                </label>
-                <input
-                  type="number"
-                  min={1}
-                  step="1"
-                  disabled={isFree}
-                  value={isFree ? "" : price}
-                  onChange={(e) => setPrice(Number(e.target.value))}
-                  placeholder="Amount"
-                  className="w-28 rounded-lg border px-3 py-2 text-sm disabled:bg-gray-100"
-                />
+                  <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-sm text-gray-500">
+                    $
+                  </span>
+                </div>
               </div>
             )}
           </div>
 
           {/* Share preference (single) */}
           <div>
-            <label className="mb-1 block text-sm font-medium">
+            <label className="mb-1 block text-sm font-semibold">
               How would you like to share?
             </label>
             <div className="flex flex-wrap items-center gap-3">
@@ -350,6 +358,10 @@ export default function CourseWrite() {
     </div>
   );
 }
+
+
+
+
 
 
 
