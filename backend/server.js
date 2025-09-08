@@ -8,6 +8,7 @@ const mongoose = require("mongoose");
 const Conversation = require("./models/Conversation");
 const Message = require("./models/Message");
 const Post = require("./models/Post");
+const Request = require("./models/Request"); // ✅ 추가
 
 if (process.env.NODE_ENV !== "production") {
   require("dotenv").config();
@@ -30,7 +31,6 @@ const io = new Server(server, {
     methods: ["GET", "POST"],
     credentials: true,
   },
-  // 핑 간격/타임아웃 상향: 일시적인 네트워크 슬립에도 끊기지 않도록
   pingInterval: 25000,
   pingTimeout: 60000,
 });
@@ -41,6 +41,19 @@ mongoose
   .connect(process.env.MONGODB_URI)
   .then(() => console.log("✅ MongoDB connected"))
   .catch((err) => console.error("❌ MongoDB connect failed", err));
+
+// ✅ Mongo 연결 완료 후 인덱스 마이그레이션 실행
+mongoose.connection.once("open", async () => {
+  try {
+    await Request.ensureIndexesUpToDate();
+    console.log("[Request] indexes are up-to-date");
+  } catch (e) {
+    console.error("[Request] ensureIndexesUpToDate failed:", e);
+  }
+});
+
+// --- 이하 socket.io 인증 및 이벤트 핸들러 그대로 ---
+
 
 // 소켓 인증 (JWT)
 io.use((socket, next) => {

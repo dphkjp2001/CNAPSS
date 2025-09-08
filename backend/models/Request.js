@@ -76,7 +76,19 @@ requestSchema.statics.migrateIndexes = async function () {
   }
 };
 
+// 👉 부팅시 호출용 유틸: 마이그레이션 + 인덱스 보장
+requestSchema.statics.ensureIndexesUpToDate = async function () {
+  await this.migrateIndexes();
+  // createIndexes/syncIndexes 중 택1; syncIndexes는 정의와 불일치도 맞춰줌
+  try {
+    await this.syncIndexes();
+  } catch {
+    await this.createIndexes();
+  }
+};
+
 module.exports = mongoose.model("Request", requestSchema);
+
 
 
 
