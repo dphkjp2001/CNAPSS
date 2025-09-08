@@ -30,14 +30,16 @@ export default function CourseWrite() {
   // REQUIRED
   const [professor, setProfessor] = useState("");
 
-  // Listing type: For Sale / Wanted  ✅ 추가
-  const [listingType, setListingType] = useState("sale"); // 'sale' | 'wanted'
+  // Listing type at TOP: 'sale' | 'wanted'
+  const [listingType, setListingType] = useState("sale");
 
-  // 1) What are you offering?
-  const [materialType, setMaterialType] = useState("personalMaterial"); // personalNote | personalMaterial
-  // 2) Regarding (only for personalMaterial)
+  // Always personalMaterial
+  const materialType = "personalMaterial";
+
+  // Regarding (kind)
   const materialKindOptions = useMemo(
     () => [
+      { ui: "class notes", value: "note" },       // ✅ 추가
       { ui: "syllabus", value: "syllabus" },
       { ui: "exam", value: "exam" },
       { ui: "slide", value: "slide" },
@@ -46,7 +48,7 @@ export default function CourseWrite() {
     ],
     []
   );
-  const [kind, setKind] = useState("note"); // auto-forced to "note" when personalNote
+  const [kind, setKind] = useState("note");
 
   // Price & share
   const [isFree, setIsFree] = useState(true);
@@ -87,10 +89,6 @@ export default function CourseWrite() {
       return setErr("Please enter a valid price (≥ 1).");
     }
 
-    // enforce kind policy on client as well
-    const _kind =
-      materialType === "personalNote" ? "note" : (kind || "other");
-
     try {
       setBusy(true);
       const API = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
@@ -98,24 +96,18 @@ export default function CourseWrite() {
         courseCode: courseCode.toUpperCase(),
         courseTitle: "",
         semester,
-        kind: _kind,
-        materialType,
-        // ✅ listingType 포함
-        listingType, // 'sale' | 'wanted'
-        // Wanted일 땐 무조건 무료로 처리
+        kind,                            // 선택된 kind 그대로 전송
+        materialType,                    // 항상 "personalMaterial"
+        listingType,                     // 'sale' | 'wanted'
         isFree: listingType === "wanted" ? true : isFree,
-        price:
-          listingType === "wanted" ? 0 : Number(isFree ? 0 : price),
+        price: listingType === "wanted" ? 0 : Number(isFree ? 0 : price),
         sharePreference,
         professor: prof,
         url: "",
-        // description, tags intentionally omitted
+        // description, tags 생략
         title: courseCode.toUpperCase(),
       };
-      await postJson(
-        `${API}/${encodeURIComponent(school)}/materials`,
-        payload
-      );
+      await postJson(`${API}/${encodeURIComponent(school)}/materials`, payload);
 
       navigate(
         schoolPath(
@@ -146,6 +138,31 @@ export default function CourseWrite() {
           onSubmit={onSubmit}
           className="space-y-5 rounded-2xl border bg-white p-5 shadow-sm"
         >
+          {/* ✅ Listing type 맨 위로 이동 */}
+          <div>
+            <label className="mb-1 block text-sm font-medium">Listing type</label>
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="radio"
+                  name="listingType"
+                  checked={listingType === "sale"}
+                  onChange={() => setListingType("sale")}
+                />
+                For Sale
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="radio"
+                  name="listingType"
+                  checked={listingType === "wanted"}
+                  onChange={() => setListingType("wanted")}
+                />
+                Wanted
+              </label>
+            </div>
+          </div>
+
           {/* Course code (required) */}
           <div>
             <label htmlFor="courseCodeInput" className="mb-1 block text-sm font-medium">
@@ -176,106 +193,47 @@ export default function CourseWrite() {
             />
           </div>
 
-          {/* Semester & Listing type */}
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <div className="sm:w-1/2">
-              <label className="mb-1 block text-sm font-medium">Semester</label>
-              <select
-                value={semester}
-                onChange={(e) => setSemester(e.target.value)}
-                className="w-full rounded-lg border px-3 py-2 text-sm"
-              >
-                {semesterOptions.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* ✅ Listing type */}
-            <div className="sm:w-1/2">
-              <label className="mb-1 block text-sm font-medium">Listing type</label>
-              <div className="flex flex-wrap items-center gap-3">
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="radio"
-                    name="listingType"
-                    checked={listingType === "sale"}
-                    onChange={() => setListingType("sale")}
-                  />
-                  For Sale
-                </label>
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="radio"
-                    name="listingType"
-                    checked={listingType === "wanted"}
-                    onChange={() => setListingType("wanted")}
-                  />
-                  Wanted
-                </label>
-              </div>
-            </div>
-          </div>
-
-          {/* What are you offering? */}
+          {/* Semester */}
           <div>
-            <label className="mb-1 block text-sm font-medium">
-              What are you offering?
-            </label>
-            <div className="flex flex-wrap items-center gap-3">
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="radio"
-                  name="offerType"
-                  checked={materialType === "personalNote"}
-                  onChange={() => {
-                    setMaterialType("personalNote");
-                    setKind("note");
-                  }}
-                />
-                Personal Class Note
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="radio"
-                  name="offerType"
-                  checked={materialType === "personalMaterial"}
-                  onChange={() => {
-                    setMaterialType("personalMaterial");
-                    // default to 'other' for material
-                    setKind("other");
-                  }}
-                />
-                Personal Class Material
-              </label>
+            <label className="mb-1 block text-sm font-medium">Semester</label>
+            <select
+              value={semester}
+              onChange={(e) => setSemester(e.target.value)}
+              className="w-full rounded-lg border px-3 py-2 text-sm"
+            >
+              {semesterOptions.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* What are you offering? -> 단일 옵션 */}
+          <div>
+            <label className="mb-1 block text-sm font-medium">What are you offering?</label>
+            <div className="rounded-lg border px-3 py-2 text-sm">
+              <span className="font-semibold">Personal Class Material</span>
             </div>
           </div>
 
-          {/* Regarding (kind) – only for personalMaterial */}
-          {materialType === "personalMaterial" ? (
-            <div>
-              <label className="mb-1 block text-sm font-medium">Regarding…</label>
-              <select
-                value={kind}
-                onChange={(e) => setKind(e.target.value)}
-                className="w-full rounded-lg border px-3 py-2 text-sm"
-              >
-                {materialKindOptions.map((k) => (
-                  <option key={k.value} value={k.value}>
-                    {k.ui}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : (
-            <div className="rounded-lg border bg-gray-50 px-3 py-2 text-xs text-gray-600">
-              Kind is fixed to <b>note</b> for Personal Class Note.
-            </div>
-          )}
+          {/* Regarding (kind) */}
+          <div>
+            <label className="mb-1 block text-sm font-medium">Regarding…</label>
+            <select
+              value={kind}
+              onChange={(e) => setKind(e.target.value)}
+              className="w-full rounded-lg border px-3 py-2 text-sm"
+            >
+              {materialKindOptions.map((k) => (
+                <option key={k.value} value={k.value}>
+                  {k.ui}
+                </option>
+              ))}
+            </select>
+          </div>
 
-          {/* Price (Wanted일 땐 비활성/숨김) */}
+          {/* Price (Wanted일 땐 안내문으로 대체) */}
           <div>
             <label className="mb-1 block text-sm font-medium">Price</label>
             {listingType === "wanted" ? (
@@ -382,6 +340,8 @@ export default function CourseWrite() {
     </div>
   );
 }
+
+
 
 
 

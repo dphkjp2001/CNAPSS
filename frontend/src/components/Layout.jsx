@@ -6,9 +6,21 @@ import { useSchool } from "../contexts/SchoolContext";
 import useNotificationsPolling from "../hooks/useNotificationsPolling";
 import { useSchoolPath } from "../utils/schoolPath";
 
+function Initials({ name = "GU", bg = "#f1ecff" }) {
+  const text = String(name || "GU").slice(0, 2).toUpperCase();
+  return (
+    <div
+      className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold text-gray-900"
+      style={{ background: bg }}
+    >
+      {text}
+    </div>
+  );
+}
+
 export default function Layout() {
   const { user, logout } = useAuth();
-  const { school } = useSchool();
+  const { school, schoolTheme } = useSchool();
   const navigate = useNavigate();
   const schoolPath = useSchoolPath();
 
@@ -22,6 +34,9 @@ export default function Layout() {
 
   const [showNoti, setShowNoti] = useState(false);
   const [showScheduleMenu, setShowScheduleMenu] = useState(false);
+
+  // profile dropdown
+  const [showProfile, setShowProfile] = useState(false);
 
   const [bump, setBump] = useState(false);
   const prevCountRef = useRef(count);
@@ -45,6 +60,8 @@ export default function Layout() {
 
   const openScheduleMenu = () => setShowScheduleMenu(true);
   const closeScheduleMenu = () => setShowScheduleMenu(false);
+
+  const nickname = user?.nickname || (user?.email ? user.email.split("@")[0] : "GU");
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -87,9 +104,7 @@ export default function Layout() {
               type="button"
               onClick={() => {
                 setShowNoti((v) => !v);
-                if (!showNoti && count > 0) {
-                  markAllAsRead();
-                }
+                if (!showNoti && count > 0) markAllAsRead();
               }}
               className="relative ml-1 px-3 py-2 text-sm rounded-md hover:bg-violet-50"
               aria-label="Notifications"
@@ -108,27 +123,80 @@ export default function Layout() {
               )}
             </button>
 
-            {/* Auth buttons */}
+            {/* Auth / Profile */}
             {user?.email ? (
-              <>
-                <span className="mx-1 text-sm text-gray-600 hidden sm:inline">
-                  {user.email}
-                </span>
-                <button onClick={onLogout} className={`${linkCls} text-red-600`}>
-                  Log out
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowProfile((v) => !v)}
+                  className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-violet-50"
+                >
+                  <Initials name={nickname} bg={schoolTheme?.bg || "#f1ecff"} />
+                  <span className="hidden sm:inline text-sm font-medium text-gray-700">
+                    {nickname}
+                  </span>
+                  <svg
+                    className={`h-4 w-4 text-gray-500 transition ${showProfile ? "rotate-180" : ""}`}
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.25a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" />
+                  </svg>
                 </button>
-              </>
+
+                {showProfile && (
+                  <>
+                    {/* click-away */}
+                    <div
+                      className="fixed inset-0 z-40"
+                      onClick={() => setShowProfile(false)}
+                    />
+                    <div className="absolute right-0 z-50 mt-2 w-56 rounded-xl border bg-white shadow-lg">
+                      <div className="px-3 py-2 border-b">
+                        <div className="text-sm font-semibold">{nickname}</div>
+                        <div className="text-xs text-gray-500 truncate">{user.email}</div>
+                      </div>
+                      <div className="p-1 text-sm">
+                        <MenuItem to={schoolPath("/dashboard")} onClick={() => setShowProfile(false)}>
+                          Dashboard
+                        </MenuItem>
+                        <MenuItem to={schoolPath("/myposts")} onClick={() => setShowProfile(false)}>
+                          My Posts
+                        </MenuItem>
+                        <MenuItem to={schoolPath("/liked")} onClick={() => setShowProfile(false)}>
+                          Liked
+                        </MenuItem>
+                        <MenuItem to={schoolPath("/commented")} onClick={() => setShowProfile(false)}>
+                          Commented
+                        </MenuItem>
+                        <MenuItem to={schoolPath("/messages")} onClick={() => setShowProfile(false)}>
+                          Messages
+                        </MenuItem>
+                        <MenuItem to={schoolPath("/market")} onClick={() => setShowProfile(false)}>
+                          Marketplace
+                        </MenuItem>
+                        <MenuItem to={schoolPath("/foodmap")} onClick={() => setShowProfile(false)}>
+                          Food Map
+                        </MenuItem>
+                      </div>
+                      <div className="border-t p-1">
+                        <button
+                          onClick={onLogout}
+                          className="w-full rounded-lg px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+                        >
+                          Log out
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
             ) : (
               <>
-                {/* ✅ 비로그인 상태에서 로그인/회원가입 노출 */}
                 <Link to="/login" className={linkCls}>
                   Log in
                 </Link>
-                <Link
-                  to="/register"
-                  className={`${linkCls} sm:ml-1`}
-                  title="Create an account"
-                >
+                <Link to="/register" className={`${linkCls} sm:ml-1`} title="Create an account">
                   Register
                 </Link>
               </>
@@ -150,14 +218,14 @@ export default function Layout() {
             <div className="text-sm text-gray-500 mb-2">Schedule</div>
             <div className="flex flex-col gap-2">
               <Link
-                to={schoolPath("/schedule")}
+                to={schoolPath("/personal-schedule")}
                 className="rounded-md px-3 py-2 text-sm hover:bg-violet-50"
                 onClick={closeScheduleMenu}
               >
                 My Schedule
               </Link>
               <Link
-                to={schoolPath("/schedule/group")}
+                to={schoolPath("/group-availability")}
                 className="rounded-md px-3 py-2 text-sm hover:bg-violet-50"
                 onClick={closeScheduleMenu}
               >
@@ -205,9 +273,7 @@ export default function Layout() {
                         Read
                       </button>
                     </div>
-                    {n.message && (
-                      <div className="mt-1 text-gray-600">{n.message}</div>
-                    )}
+                    {n.message && <div className="mt-1 text-gray-600">{n.message}</div>}
                   </div>
                 ))
               )}
@@ -223,6 +289,19 @@ export default function Layout() {
     </div>
   );
 }
+
+function MenuItem({ to, children, onClick }) {
+  return (
+    <Link
+      to={to}
+      onClick={onClick}
+      className="block rounded-lg px-3 py-2 hover:bg-violet-50 text-gray-700"
+    >
+      {children}
+    </Link>
+  );
+}
+
 
 
 

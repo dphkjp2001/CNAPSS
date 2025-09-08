@@ -8,16 +8,22 @@ const requestSchema = new mongoose.Schema(
     // tenant
     school: { type: String, required: true, enum: ALLOWED_SCHOOLS, lowercase: true, trim: true },
 
-    // source: market | coursehub
-    source: { type: String, required: true, enum: ["market", "coursehub"], default: "market", index: true },
+    // source: market | coursehub | coursehub_wtb
+    source: {
+      type: String,
+      required: true,
+      enum: ["market", "coursehub", "coursehub_wtb"],
+      default: "market",
+      index: true,
+    },
 
     // target (polymorphic)
-    itemId: { type: mongoose.Schema.Types.ObjectId, ref: "MarketItem", default: null },  // for market
-    materialId: { type: mongoose.Schema.Types.ObjectId, ref: "Material", default: null }, // for coursehub
+    itemId: { type: mongoose.Schema.Types.ObjectId, ref: "MarketItem", default: null },   // for market
+    materialId: { type: mongoose.Schema.Types.ObjectId, ref: "Material", default: null }, // for coursehub / coursehub_wtb
 
     // actors
-    buyer: { type: String, required: true, lowercase: true, trim: true },  // email
-    seller: { type: String, required: true, lowercase: true, trim: true }, // email
+    buyer:  { type: String, required: true, lowercase: true, trim: true },  // email
+    seller: { type: String, required: true, lowercase: true, trim: true },  // email
 
     // content
     message: { type: String, required: true, trim: true },
@@ -32,7 +38,7 @@ requestSchema.pre("validate", function (next) {
   if (this.source === "market" && !this.itemId) {
     return next(new Error("itemId required for market requests"));
   }
-  if (this.source === "coursehub" && !this.materialId) {
+  if ((this.source === "coursehub" || this.source === "coursehub_wtb") && !this.materialId) {
     return next(new Error("materialId required for coursehub requests"));
   }
   next();
@@ -49,4 +55,5 @@ requestSchema.index(
 );
 
 module.exports = mongoose.model("Request", requestSchema);
+
 
