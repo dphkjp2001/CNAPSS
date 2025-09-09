@@ -27,7 +27,7 @@ export async function listMaterials({
   sort = "new",
   page = 1,
   limit = 50,
-  type = "all", // ✅ sale|wanted|all
+  type = "all", // sale|wanted|all
 }) {
   const qs = new URLSearchParams({
     course: course || "",
@@ -57,13 +57,23 @@ export async function getMaterial({ school, token, id }) {
 }
 
 // GET /materials/recent  (로그인 O)  /public/materials/recent (로그인 X)
-export async function listRecentMaterials({ school, token, limit = 5, q = "", prof = "", type = "all" }) {
+// ✅ page / limit / q / prof / type 모두 지원 (공개/보호 동일형식 반환)
+export async function listRecentMaterials({
+  school,
+  token,
+  page = 1,
+  limit = 20,
+  q = "",
+  prof = "",
+  type = "all", // sale | wanted | all
+} = {}) {
   const params = new URLSearchParams({
-    limit: String(Math.max(1, Math.min(20, limit))),
+    page: String(Math.max(1, page)),
+    limit: String(Math.max(1, Math.min(50, limit))),
   });
   if (q) params.set("q", q);
   if (prof) params.set("prof", prof);
-  if (type && type !== "all") params.set("type", type); // ✅
+  if (type && type !== "all") params.set("type", type);
 
   const base = token
     ? `${API}/${encodeURIComponent(school)}/materials/recent`
@@ -72,7 +82,7 @@ export async function listRecentMaterials({ school, token, limit = 5, q = "", pr
   const init = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
   const res = await apiFetch(`${base}?${params.toString()}`, init);
   if (!res.ok) throw new Error("Failed to load recent materials");
-  return res.json();
+  return res.json(); // {items, page, limit, total, hasMore}
 }
 
 /* ---------------- Requests (CourseHub 전용) ---------------- */
@@ -110,6 +120,7 @@ export async function sendMaterialRequest({ school, token, materialId, message, 
   if (res.status === 409) return { alreadySent: true, ...data };
   throw new Error(data?.message || "request failed");
 }
+
 
 
 

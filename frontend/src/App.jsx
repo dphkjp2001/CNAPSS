@@ -174,7 +174,7 @@ export default function App() {
             />
 
             {/* Market */}
-            {/* ✅ List is now PUBLIC */}
+            {/* ✅ List is PUBLIC */}
             <Route path="market" element={<MarketList />} />
             {/* Detail / Write / Edit remain protected */}
             <Route
@@ -240,15 +240,8 @@ export default function App() {
               }
             />
 
-            {/* CourseHub */}
-            <Route
-              path="courses"
-              element={
-                <RequireAuth>
-                  <Courses />
-                </RequireAuth>
-              }
-            />
+            {/* ✅ CourseHub — 리스트는 공개, 작성/상세는 보호 */}
+            <Route path="courses" element={<Courses />} /> {/* PUBLIC */}
             <Route
               path="courses/write"
               element={
@@ -275,6 +268,7 @@ export default function App() {
     </AuthGateProvider>
   );
 }
+
 
 
 

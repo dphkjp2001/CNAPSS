@@ -1,5 +1,5 @@
 // frontend/src/pages/courses/Courses.jsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { useSchool } from "../../contexts/SchoolContext";
@@ -59,18 +59,8 @@ export default function Courses() {
 
   const [q, setQ] = useState(sp.get("q") || "");
   const [prof, setProf] = useState(sp.get("prof") || "");
-  const [qDeb, setQDeb] = useState(q.trim());
-  const [profDeb, setProfDeb] = useState(prof.trim());
 
-  useEffect(() => {
-    const t = setTimeout(() => setQDeb(q.trim()), 350);
-    return () => clearTimeout(t);
-  }, [q]);
-  useEffect(() => {
-    const t = setTimeout(() => setProfDeb(prof.trim()), 350);
-    return () => clearTimeout(t);
-  }, [prof]);
-
+  // URL 동기화: type/q/prof 변경 시 page 초기화
   useEffect(() => {
     const next = new URLSearchParams(sp);
     type === "sale" ? next.delete("type") : next.set("type", "wanted");
@@ -80,10 +70,14 @@ export default function Courses() {
     setSp(next, { replace: true });
     setPage(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [type, qDeb, profDeb]);
+  }, [type, q, prof]);
 
+  // URL 동기화: page 변경 시
   useEffect(() => {
     const next = new URLSearchParams(sp);
+    type === "sale" ? next.delete("type") : next.set("type", "wanted");
+    q ? next.set("q", q) : next.delete("q");
+    prof ? next.set("prof", prof) : next.delete("prof");
     next.set("page", String(page));
     setSp(next, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -93,10 +87,11 @@ export default function Courses() {
   const cardClass =
     "rounded-2xl border shadow-sm p-4 hover:shadow-md transition-shadow bg-white";
 
+  // ✅ 비로그인도 조회 가능: token 없어도 실행
   useEffect(() => {
     let alive = true;
     async function run() {
-      if (!school || !token) return;
+      if (!school) return;
       setErr("");
 
       if (!hasLoadedOnce) setLoading(true);
@@ -105,17 +100,18 @@ export default function Courses() {
       try {
         const res = await listRecentMaterials({
           school,
-          token,
+          token,            // 없으면 자동 /public 폴백
           page,
           limit: PAGE_SIZE,
-          q: qDeb,
-          prof: profDeb,
-          type,
+          q: q.trim(),
+          prof: prof.trim(),
+          type,             // "sale" | "wanted"
         });
-        const list = Array.isArray(res?.items) ? res.items : [];
+        // API는 {items,total,...} 형태를 반환
+        const list = Array.isArray(res?.items) ? res.items : Array.isArray(res) ? res : [];
         if (alive) {
           setItems(list);
-          setTotal(Number(res?.total || 0));
+          setTotal(Number(res?.total || list.length || 0));
         }
       } catch {
         if (alive) setErr("Failed to load postings.");
@@ -130,9 +126,15 @@ export default function Courses() {
     return () => {
       alive = false;
     };
-  }, [school, token, page, qDeb, profDeb, hasLoadedOnce, type]);
+  }, [school, token, page, q, prof, hasLoadedOnce, type]);
 
-  const onCreate = () => navigate(schoolPath("/courses/write"));
+  const onCreate = () => {
+    if (!token) {
+      navigate(`/login?next=${encodeURIComponent(schoolPath("/courses/write"))}`);
+    } else {
+      navigate(schoolPath("/courses/write"));
+    }
+  };
   const goDetail = (id) =>
     navigate(schoolPath(`/courses/materials/${encodeURIComponent(id)}`));
 
@@ -272,7 +274,7 @@ export default function Courses() {
           </ul>
         )}
 
-        {/* ✅ 항상 페이지네이션 표시(아이템만 있으면) — 1페이지만 있어도 보여줌 */}
+        {/* ✅ 1페이지만 있어도 항상 페이지네이션 UI 노출 */}
         {items.length > 0 && (
           <Pagination
             page={page}
@@ -289,6 +291,7 @@ export default function Courses() {
     </div>
   );
 }
+
 
 
 

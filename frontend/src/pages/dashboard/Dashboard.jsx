@@ -35,7 +35,7 @@ const currency = new Intl.NumberFormat("en-US", {
 });
 
 export default function Dashboard() {
-  const { user, token } = useAuth();
+  const { token } = useAuth();
   const { school, schoolTheme } = useSchool();
   const { ensureAuth } = useLoginGate();
   const nav = useNavigate();
@@ -115,7 +115,6 @@ export default function Dashboard() {
 
         let rows = [];
         if (token) {
-          // protected list: 첫 페이지 5개
           const res = await listMarketItems({ school, token, page: 1, limit: 5, sort: "latest" });
           if (res && typeof res === "object" && Array.isArray(res.items)) {
             rows = res.items;
@@ -126,14 +125,13 @@ export default function Dashboard() {
             rows = sorted.slice(0, 5);
           }
         } else {
-          // public recent
           const res = await getPublicMarketRecent({ school, limit: 5 });
           rows = res?.items || [];
         }
 
         if (!alive) return;
         setMktItems(rows);
-      } catch (e) {
+      } catch {
         if (alive) setErrorMkt("Failed to load marketplace items.");
       } finally {
         if (alive) setLoadingMkt(false);
@@ -254,7 +252,6 @@ export default function Dashboard() {
               No listings yet.
             </div>
           ) : (
-            // ✅ 5개 미리보기 + 5열 그리드(반응형)
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
               {mktItems.map((item) => {
                 const id = item._id || item.id;
@@ -401,6 +398,7 @@ function CourseHubList({ title, items, badgeClass, onOpen }) {
     </div>
   );
 }
+
 
 
 

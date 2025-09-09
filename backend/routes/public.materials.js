@@ -4,11 +4,13 @@ const router = express.Router({ mergeParams: true });
 const Material = require("../models/Material");
 const User = require("../models/User");
 
-// same allowed schools as other public endpoints
 const ALLOWED_SCHOOLS = ["nyu", "columbia", "boston"];
 
 const n = (v) => String(v || "").trim();
 const low = (v) => n(v).toLowerCase();
+
+// safe regex
+const escapeRe = (s) => n(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 // ---- utilities ----
 async function attachAuthorNames(docs) {
@@ -30,9 +32,14 @@ async function attachAuthorNames(docs) {
 }
 
 /**
- * GET /api/public/:school/materials/recent?limit=5&type=sale|wanted|all
- * - public(비로그인) 대시보드/프리뷰용
- * - ⚠️ 기존 문제: type을 무시해서 sale/wanted가 섞여 반환됨 → 아래에서 해결
+ * GET /api/public/:school/materials/recent
+ * Query:
+ *  - page (default 1)
+ *  - limit (max 50, default 20)
+ *  - q (course code/title contains)
+ *  - prof (professor contains)
+ *  - type: sale|wanted|all (default all)
+ * Returns: { items, page, limit, total, hasMore }
  */
 router.get("/recent", async (req, res) => {
   try {
@@ -41,37 +48,56 @@ router.get("/recent", async (req, res) => {
       return res.status(400).json({ message: "Invalid school." });
     }
 
-    const limit = Math.min(20, Math.max(1, parseInt(req.query.limit || "5", 10)));
-    const type = low(req.query.type || "all"); // "sale" | "wanted" | "all"
+    const page = Math.max(1, parseInt(req.query.page || "1", 10));
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit || "20", 10)));
+    const q = n(req.query.q || "");
+    const prof = n(req.query.prof || "");
+    const type = low(req.query.type || "all");
 
-    // ✅ 로그인 버전과 동일한 필터 로직 적용
-    //    - status는 'active'만 노출(삭제/아카이브/판매완료 노출 방지)
+    // ✅ 보호 라우트와 동일한 필터 (단, 공개는 항상 status: active 만)
     const filter = { school, status: "active" };
+    if (q) {
+      const r = new RegExp(escapeRe(q), "i");
+      filter.$or = [{ courseCode: r }, { courseTitle: r }];
+    }
+    if (prof) {
+      filter.professor = new RegExp(escapeRe(prof), "i");
+    }
     if (type === "sale" || type === "wanted") {
       filter.listingType = type;
     }
 
-    let items = await Material.find(filter)
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .lean();
+    const [itemsRaw, total] = await Promise.all([
+      Material.find(filter)
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean(),
+      Material.countDocuments(filter),
+    ]);
 
-    items = await attachAuthorNames(items);
+    const itemsFilled = await attachAuthorNames(itemsRaw);
+
+    const items = itemsFilled.map((m) => ({
+      id: m._id,
+      courseCode: m.courseCode,
+      courseTitle: m.courseTitle,
+      professor: m.professor || "",
+      semester: m.semester,
+      materialType: m.materialType,
+      kind: m.kind,
+      title: m.title,
+      authorName: m.authorName || "",
+      listingType: m.listingType || "sale",
+      createdAt: m.createdAt,
+    }));
 
     res.json({
-      items: items.map((m) => ({
-        id: m._id,
-        courseCode: m.courseCode,
-        courseTitle: m.courseTitle,
-        professor: m.professor || "",
-        semester: m.semester,
-        materialType: m.materialType,
-        kind: m.kind,
-        title: m.title,
-        authorName: m.authorName || "",
-        listingType: m.listingType || "sale",
-        createdAt: m.createdAt,
-      })),
+      items,
+      page,
+      limit,
+      total,
+      hasMore: (page - 1) * limit + items.length < total,
     });
   } catch (err) {
     console.error("Public materials recent error:", err);
@@ -80,3 +106,4 @@ router.get("/recent", async (req, res) => {
 });
 
 module.exports = router;
+
