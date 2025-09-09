@@ -35,6 +35,7 @@ async function attachAuthorNames(docs) {
 /** recent list for school (dashboard / list) */
 router.get("/recent", async (req, res) => {
   const school = low(req.params.school);
+  const page = Math.max(1, parseInt(req.query.page || "1", 10));
   const limit = Math.min(20, Math.max(1, parseInt(req.query.limit || "5", 10)));
   const q = n(req.query.q || "");
   const prof = n(req.query.prof || "");
@@ -52,28 +53,38 @@ router.get("/recent", async (req, res) => {
     filter.listingType = type;
   }
 
-  let items = await Material.find(filter)
-    .sort({ createdAt: -1 })
-    .limit(limit)
-    .lean();
+  const [itemsRaw, total] = await Promise.all([
+    Material.find(filter)
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean(),
+    Material.countDocuments(filter),
+  ]);
 
-  items = await attachAuthorNames(items);
+  const itemsFilled = await attachAuthorNames(itemsRaw);
+
+  const items = itemsFilled.map((m) => ({
+    id: m._id,
+    courseCode: m.courseCode,
+    courseTitle: m.courseTitle,
+    professor: m.professor || "",
+    semester: m.semester,
+    materialType: m.materialType,
+    kind: m.kind,
+    title: m.title,
+    authorName: m.authorName,
+    uploaderEmail: m.uploaderEmail, // internal use only in FE
+    listingType: m.listingType || "sale",
+    createdAt: m.createdAt,
+  }));
 
   res.json({
-    items: items.map((m) => ({
-      id: m._id,
-      courseCode: m.courseCode,
-      courseTitle: m.courseTitle,
-      professor: m.professor || "",
-      semester: m.semester,
-      materialType: m.materialType,
-      kind: m.kind,
-      title: m.title,
-      authorName: m.authorName,
-      uploaderEmail: m.uploaderEmail, // internal use only in FE
-      listingType: m.listingType || "sale",
-      createdAt: m.createdAt,
-    })),
+    items,
+    page,
+    limit,
+    total,
+    hasMore: (page - 1) * limit + items.length < total,
   });
 });
 
@@ -140,7 +151,6 @@ router.get("/", async (req, res) => {
       listingType: m.listingType || "sale",
       createdAt: m.createdAt,
       updatedAt: m.updatedAt,
-      // offerings/regarding는 상세에서만 사용 → 목록엔 굳이 포함 안 함
     })),
   });
 });
@@ -260,6 +270,7 @@ router.delete("/:id", async (req, res) => {
 });
 
 module.exports = router;
+
 
 
 

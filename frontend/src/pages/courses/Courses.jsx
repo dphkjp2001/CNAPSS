@@ -5,6 +5,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useSchool } from "../../contexts/SchoolContext";
 import { useSchoolPath } from "../../utils/schoolPath";
 import { listRecentMaterials } from "../../api/materials";
+import Pagination from "../../components/Pagination";
 
 const prettyKind = (v) =>
   v === "note"
@@ -32,6 +33,8 @@ const timeAgo = (iso) => {
   return `${d2}d ago`;
 };
 
+const PAGE_SIZE = 20;
+
 export default function Courses() {
   const { token } = useAuth();
   const { school, schoolTheme } = useSchool();
@@ -39,12 +42,16 @@ export default function Courses() {
   const schoolPath = useSchoolPath();
   const [sp, setSp] = useSearchParams();
 
-  // ✅ sale|wanted 토글 (URL 쿼리 type과 동기화, 기본값: sale)
+  // ✅ sale|wanted 토글 (URL 동기화)
   const initialType = sp.get("type") === "wanted" ? "wanted" : "sale";
   const [type, setType] = useState(initialType);
 
+  // ✅ page 쿼리 동기화
+  const initialPage = Math.max(1, parseInt(sp.get("page") || "1", 10));
+  const [page, setPage] = useState(initialPage);
+
   const [items, setItems] = useState([]);
-  const [limit, setLimit] = useState(20);
+  const [total, setTotal] = useState(0);
 
   // loading flags
   const [loading, setLoading] = useState(true);
@@ -54,10 +61,10 @@ export default function Courses() {
   const [err, setErr] = useState("");
 
   // search UI
-  const [q, setQ] = useState("");
-  const [prof, setProf] = useState("");
-  const [qDeb, setQDeb] = useState("");
-  const [profDeb, setProfDeb] = useState("");
+  const [q, setQ] = useState(sp.get("q") || "");
+  const [prof, setProf] = useState(sp.get("prof") || "");
+  const [qDeb, setQDeb] = useState(q.trim());
+  const [profDeb, setProfDeb] = useState(prof.trim());
 
   // debounce 350ms
   useEffect(() => {
@@ -69,14 +76,25 @@ export default function Courses() {
     return () => clearTimeout(t);
   }, [prof]);
 
-  // ✅ type 바뀌면 URL 쿼리 동기화
+  // ✅ type/q/prof 변경 시 URL & page=1 리셋
   useEffect(() => {
     const next = new URLSearchParams(sp);
-    if (type === "sale") next.delete("type");
-    else next.set("type", "wanted");
+    type === "sale" ? next.delete("type") : next.set("type", "wanted");
+    q ? next.set("q", q) : next.delete("q");
+    prof ? next.set("prof", prof) : next.delete("prof");
+    next.set("page", "1");
+    setSp(next, { replace: true });
+    setPage(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [type, qDeb, profDeb]);
+
+  // ✅ page 변경 시 URL 동기화
+  useEffect(() => {
+    const next = new URLSearchParams(sp);
+    next.set("page", String(page));
     setSp(next, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [type]);
+  }, [page]);
 
   const containerClass = "mx-auto max-w-5xl p-4 sm:p-6";
   const cardClass =
@@ -95,13 +113,17 @@ export default function Courses() {
         const res = await listRecentMaterials({
           school,
           token,
-          limit,
+          page,
+          limit: PAGE_SIZE,
           q: qDeb,
           prof: profDeb,
           type, // ✅ sale|wanted 필터 적용
         });
         const list = Array.isArray(res?.items) ? res.items : [];
-        if (alive) setItems(list);
+        if (alive) {
+          setItems(list);
+          setTotal(Number(res?.total || 0));
+        }
       } catch {
         if (alive) setErr("Failed to load postings.");
       } finally {
@@ -115,7 +137,7 @@ export default function Courses() {
     return () => {
       alive = false;
     };
-  }, [school, token, limit, qDeb, profDeb, hasLoadedOnce, type]);
+  }, [school, token, page, qDeb, profDeb, hasLoadedOnce, type]);
 
   const onCreate = () => navigate(schoolPath("/courses/write"));
   const goDetail = (id) =>
@@ -124,7 +146,7 @@ export default function Courses() {
   const showSkeleton = loading && !hasLoadedOnce;
   const empty = !showSkeleton && !isSearching && !items.length && !err;
 
-  // ✅ 세그먼트 토글 스타일
+  // ✅ 세그먼트 토글
   const SegBtn = ({ active, children, onClick }) => (
     <button
       onClick={onClick}
@@ -134,7 +156,6 @@ export default function Courses() {
           ? "bg-white shadow text-gray-900"
           : "text-gray-600 hover:text-gray-800")
       }
-      style={active ? {} : {}}
     >
       {children}
     </button>
@@ -273,20 +294,24 @@ export default function Courses() {
           </ul>
         )}
 
-        {!!items.length && items.length >= limit && (
-          <div className="mt-4 flex justify-center">
-            <button
-              className="rounded-xl border px-4 py-2 text-sm hover:bg-gray-50"
-              onClick={() => setLimit((v) => Math.min(100, v + 20))}
-            >
-              Load more
-            </button>
-          </div>
+        {/* ✅ 20개 초과일 때만 숫자 페이지네이션 노출 */}
+        {total > PAGE_SIZE && (
+          <Pagination
+            page={page}
+            total={total}
+            limit={PAGE_SIZE}
+            onPageChange={(p) => setPage(p)}
+            siblingCount={1}
+            boundaryCount={1}
+            className="mb-2"
+            showStatus
+          />
         )}
       </div>
     </div>
   );
 }
+
 
 
 

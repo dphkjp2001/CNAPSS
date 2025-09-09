@@ -1,6 +1,6 @@
-/// src/pages/freeboard/FreeBoardList.jsx
+/// frontend/src/pages/freeboard/FreeBoardList.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { useSchool } from "../../contexts/SchoolContext";
 import { useSchoolPath } from "../../utils/schoolPath";
@@ -9,14 +9,13 @@ import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import "dayjs/locale/en";
 
-// Using the existing API for now (Step 2 will switch to /api/public)
 import { listPosts, getPublicPosts } from "../../api/posts";
-
+import Pagination from "../../components/Pagination";
 
 dayjs.extend(relativeTime);
 dayjs.locale("en");
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 20;
 
 function SkeletonRow() {
   return (
@@ -48,77 +47,97 @@ function EmptyState({ onWrite, primary }) {
 }
 
 export default function FreeBoardList() {
-  const { user, token } = useAuth();
+  const { token } = useAuth();
   const { school, schoolTheme } = useSchool();
   const schoolPath = useSchoolPath();
   const navigate = useNavigate();
   const { ensureAuth } = useLoginGate();
 
-  const [posts, setPosts] = useState([]);
+  const [sp, setSp] = useSearchParams();
+  const page = Math.max(1, parseInt(sp.get("page") || "1", 10));
+  const query = sp.get("q") || "";
+  const sort = sp.get("sort") || "new"; // "new" | "old"
+
+  const setPage = (p) => {
+    const next = new URLSearchParams(sp.toString());
+    next.set("page", String(p));
+    setSp(next, { replace: true });
+  };
+  const setQuery = (q) => {
+    const next = new URLSearchParams(sp.toString());
+    q ? next.set("q", q) : next.delete("q");
+    next.set("page", "1");
+    setSp(next, { replace: true });
+  };
+  const setSort = (s) => {
+    const next = new URLSearchParams(sp.toString());
+    next.set("sort", s);
+    next.set("page", "1");
+    setSp(next, { replace: true });
+  };
+
+  const [items, setItems] = useState([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // UI state
-  const [query, setQuery] = useState("");
-  const [sort, setSort] = useState("new"); // "new" | "old"
-  const [page, setPage] = useState(1);
-
-  // Load list (requires token for now; Step 2 will make it public)
+  // Load list (server-side pagination; public/protected both 지원)
   useEffect(() => {
     let alive = true;
     if (!school) return;
-  
+
     (async () => {
       setLoading(true);
       setError("");
       try {
-        let data;
+        let res;
         if (token) {
-          // 🔐 logged-in: protected API
-          data = await listPosts({ school, token });
+          // protected API (same-school scope)
+          res = await listPosts({ school, page, limit: PAGE_SIZE, q: query, sort });
         } else {
-          // 🌐 logged-out: public API
-          data = await getPublicPosts({ school, page: 1, limit: 20 });
+          // public API (minimal fields)
+          res = await getPublicPosts({ school, page, limit: PAGE_SIZE, q: query, sort });
         }
-        // normalize response
-        const rows = Array.isArray(data)
-          ? data
-          : Array.isArray(data?.items)
-          ? data.items
-          : [];
-        if (alive) setPosts(rows);
+
+        // normalize
+        let rows = [];
+        let tot = 0;
+        if (res && typeof res === "object" && Array.isArray(res.items)) {
+          rows = res.items;
+          tot = Number(res.total || 0);
+        } else if (Array.isArray(res)) {
+          // fallback: old array-only response
+          const q = (query || "").trim().toLowerCase();
+          rows = res.filter((p) =>
+            q ? p.title?.toLowerCase().includes(q) || p.content?.toLowerCase().includes(q) : true
+          );
+          rows = rows.sort((a, b) =>
+            sort === "old"
+              ? new Date(a.createdAt) - new Date(b.createdAt)
+              : new Date(b.createdAt) - new Date(a.createdAt)
+          );
+          tot = rows.length;
+          const start = (page - 1) * PAGE_SIZE;
+          rows = rows.slice(start, start + PAGE_SIZE);
+        }
+
+        if (!alive) return;
+        setItems(rows);
+        setTotal(tot);
       } catch (e) {
         if (alive) setError("Failed to load posts.");
       } finally {
         if (alive) setLoading(false);
       }
     })();
-  
+
     return () => {
       alive = false;
     };
-  }, [school, token]);
-  
+  }, [school, token, page, query, sort]);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    let list = posts.filter((p) =>
-      q ? p.title?.toLowerCase().includes(q) || p.content?.toLowerCase().includes(q) : true
-    );
-    list = list.sort((a, b) =>
-      sort === "old"
-        ? new Date(a.createdAt) - new Date(b.createdAt)
-        : new Date(b.createdAt) - new Date(a.createdAt)
-    );
-    return list;
-  }, [posts, query, sort]);
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-
-  useEffect(() => {
-    setPage(1);
-  }, [query, sort]);
+  const headerColor = { color: schoolTheme?.text || "#111827" };
+  const primaryBtn = { backgroundColor: schoolTheme?.primary || "#111827" };
 
   return (
     <div
@@ -128,7 +147,9 @@ export default function FreeBoardList() {
       <div className="mx-auto max-w-3xl">
         {/* Top bar */}
         <div className="mb-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-          <h2 className="text-2xl font-bold tracking-tight text-gray-900">Free Board</h2>
+          <h2 className="text-2xl font-bold tracking-tight" style={headerColor}>
+            Free Board
+          </h2>
 
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
             <div className="relative sm:w-80">
@@ -155,7 +176,7 @@ export default function FreeBoardList() {
             <button
               onClick={() => ensureAuth(() => navigate(schoolPath("/freeboard/write")))}
               className="inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold text-white shadow focus:outline-none focus:ring-2 focus:ring-offset-0"
-              style={{ backgroundColor: schoolTheme?.primary || "#6b46c1" }}
+              style={primaryBtn}
             >
               + Write Post
             </button>
@@ -173,7 +194,7 @@ export default function FreeBoardList() {
           <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
             {error}
           </div>
-        ) : filtered.length === 0 ? (
+        ) : items.length === 0 ? (
           <EmptyState
             onWrite={() => ensureAuth(() => navigate(schoolPath("/freeboard/write")))}
             primary={schoolTheme?.primary || "#6b46c1"}
@@ -181,7 +202,7 @@ export default function FreeBoardList() {
         ) : (
           <>
             <ul className="rounded-2xl border border-gray-200 bg-white shadow-sm">
-              {paged.map((post, idx) => (
+              {items.map((post, idx) => (
                 <li key={post._id} className="px-4 py-4 sm:px-6">
                   <button
                     onClick={() =>
@@ -196,31 +217,23 @@ export default function FreeBoardList() {
                       Posted by anonymous • {dayjs(post.createdAt).fromNow()}
                     </p>
                   </button>
-                  {idx !== paged.length - 1 && <div className="mt-4 h-px w-full bg-gray-100" />}
+                  {idx !== items.length - 1 && <div className="mt-4 h-px w-full bg-gray-100" />}
                 </li>
               ))}
             </ul>
 
-            {totalPages > 1 && (
-              <div className="mt-6 flex items-center justify-center gap-2">
-                <button
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page === 1}
-                  className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Previous
-                </button>
-                <span className="text-sm text-gray-600">
-                  {page} / {totalPages}
-                </span>
-                <button
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={page === totalPages}
-                  className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Next
-                </button>
-              </div>
+            {/* ✅ 20개 초과일 때만 숫자 페이지네이션 노출 */}
+            {total > PAGE_SIZE && (
+              <Pagination
+                page={page}
+                total={total}
+                limit={PAGE_SIZE}
+                onPageChange={setPage}
+                siblingCount={1}
+                boundaryCount={1}
+                className="mb-2"
+                showStatus
+              />
             )}
           </>
         )}
@@ -228,6 +241,7 @@ export default function FreeBoardList() {
     </div>
   );
 }
+
 
 
 

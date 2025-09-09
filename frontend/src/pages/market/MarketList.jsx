@@ -1,12 +1,13 @@
 // src/pages/market/MarketList.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useSchool } from "../../contexts/SchoolContext";
 import { useSchoolPath } from "../../utils/schoolPath";
 import { listItems } from "../../api/market";
 import { useAuth } from "../../contexts/AuthContext";
+import Pagination from "../../components/Pagination";
 
-const PAGE_SIZE = 12;
+const PAGE_SIZE = 20; // 1줄 5개 × 4줄
 
 const currency = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -75,7 +76,6 @@ function MarketCard({ item, schoolPath }) {
         <p className="mt-1 text-sm font-medium text-gray-800">
           {currency.format(Number(item.price) || 0)}
         </p>
-        {/* ✅ 이메일 대신 닉네임만 표시 */}
         <p className="mt-1 line-clamp-1 text-xs text-gray-500">
           {item.sellerNickname || "Unknown"}
         </p>
@@ -94,62 +94,101 @@ const MarketList = () => {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState(null);
 
-  const [query, setQuery] = useState("");
-  const [sort, setSort] = useState("new"); // "new" | "price-asc" | "price-desc"
-  const [page, setPage] = useState(1);
-
   const { school, schoolTheme } = useSchool();
   const schoolPath = useSchoolPath();
   const { token } = useAuth();
 
+  const [sp, setSp] = useSearchParams();
+  const page = Math.max(1, parseInt(sp.get("page") || "1", 10));
+  const query = sp.get("q") || "";
+  const sort = sp.get("sort") || "new"; // "new" | "price-asc" | "price-desc"
+
+  const setPage = (p) => {
+    const next = new URLSearchParams(sp.toString());
+    next.set("page", String(p));
+    setSp(next, { replace: true });
+  };
+  const setQuery = (q) => {
+    const next = new URLSearchParams(sp.toString());
+    q ? next.set("q", q) : next.delete("q");
+    next.set("page", "1");
+    setSp(next, { replace: true });
+  };
+  const setSort = (s) => {
+    const next = new URLSearchParams(sp.toString());
+    next.set("sort", s);
+    next.set("page", "1");
+    setSp(next, { replace: true });
+  };
+
+  const [total, setTotal] = useState(0);
+
+  // 서버에서 페이지별로 받아오되, 구버전(배열 응답)도 자동 호환
   useEffect(() => {
     let mounted = true;
+
     const fetchItems = async () => {
       try {
         setLoading(true);
-        const data = await listItems({ school, token }); // /api/:school/market + Authorization
-        if (mounted) setItems(Array.isArray(data) ? data : []);
+        setErr(null);
+
+        const serverSort =
+          sort === "new" ? "latest" :
+          sort === "price-asc" ? "price_asc" :
+          sort === "price-desc" ? "price_desc" : "latest";
+
+        const data = await listItems({
+          school,
+          token,
+          page,
+          limit: PAGE_SIZE,
+          q: query,
+          sort: serverSort,
+        });
+
+        if (!mounted) return;
+
+        // 새 서버(표준 응답)
+        if (data && typeof data === "object" && Array.isArray(data.items)) {
+          setItems(data.items);
+          setTotal(Number(data.total || 0));
+          return;
+        }
+
+        // 구버전 서버(배열 응답) 호환: 클라에서 필터/정렬/페이지 처리를 fallback
+        const raw = Array.isArray(data) ? data : [];
+        const q = (query || "").trim().toLowerCase();
+        let list = raw.filter((it) => {
+          if (!q) return true;
+          return (
+            it.title?.toLowerCase().includes(q) ||
+            it.description?.toLowerCase().includes(q) ||
+            it.seller?.toLowerCase().includes(q)
+          );
+        });
+        list = list.sort((a, b) => {
+          if (sort === "price-asc") return (a.price ?? 0) - (b.price ?? 0);
+          if (sort === "price-desc") return (b.price ?? 0) - (a.price ?? 0);
+          const ak = a.createdAt ?? a._id ?? "";
+          const bk = b.createdAt ?? b._id ?? "";
+          return String(bk).localeCompare(String(ak));
+        });
+        setTotal(list.length);
+        const start = (page - 1) * PAGE_SIZE;
+        setItems(list.slice(start, start + PAGE_SIZE));
       } catch (e) {
-        setErr("Failed to load listings.");
         console.error("❌ Failed to load listings", e);
+        setErr("Failed to load listings.");
       } finally {
         if (mounted) setLoading(false);
       }
     };
-    fetchItems();
+
+    if (school && token) fetchItems();
     return () => {
       mounted = false;
     };
-  }, [school, token]);
-
-  const processed = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    let list = items.filter((it) => {
-      if (!q) return true;
-      // 🔸 기존 동작 유지: 제목/이메일 검색 로직은 그대로 둠
-      return (
-        it.title?.toLowerCase().includes(q) ||
-        it.seller?.toLowerCase().includes(q)
-      );
-    });
-
-    list = list.sort((a, b) => {
-      if (sort === "price-asc") return (a.price ?? 0) - (b.price ?? 0);
-      if (sort === "price-desc") return (b.price ?? 0) - (a.price ?? 0);
-      const ak = a.createdAt ?? a._id ?? "";
-      const bk = b.createdAt ?? b._id ?? "";
-      return String(bk).localeCompare(String(ak));
-    });
-
-    return list;
-  }, [items, query, sort]);
-
-  const totalPages = Math.max(1, Math.ceil(processed.length / PAGE_SIZE));
-  const paged = processed.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-
-  useEffect(() => {
-    setPage(1);
-  }, [query, sort]);
+  }, [school, token, page, query, sort]);
 
   return (
     <div
@@ -214,43 +253,33 @@ const MarketList = () => {
         )}
 
         {loading ? (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
-            {Array.from({ length: 9 }).map((_, i) => (
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+            {Array.from({ length: 10 }).map((_, i) => (
               <SkeletonCard key={i} />
             ))}
           </div>
-        ) : processed.length === 0 ? (
+        ) : items.length === 0 ? (
           <EmptyState schoolPath={schoolPath} />
         ) : (
           <>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
-              {paged.map((item) => (
+            {/* ✅ 5열 그리드(반응형: 2→3→4→5) */}
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+              {items.map((item) => (
                 <MarketCard key={item._id} item={item} schoolPath={schoolPath} />
               ))}
             </div>
 
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="mt-6 flex items-center justify-center gap-2">
-                <button
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page === 1}
-                  className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Previous
-                </button>
-                <span className="text-sm text-gray-600">
-                  {page} / {totalPages}
-                </span>
-                <button
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={page === totalPages}
-                  className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Next
-                </button>
-              </div>
-            )}
+            {/* ✅ 페이지 수와 상관없이 항상 페이지네이션 표시 (단, 아이템 있을 때만) */}
+            <Pagination
+              page={page}
+              total={total}
+              limit={PAGE_SIZE}
+              onPageChange={setPage}
+              siblingCount={1}
+              boundaryCount={1}
+              className="mb-2"
+              showStatus
+            />
           </>
         )}
       </div>
@@ -259,6 +288,9 @@ const MarketList = () => {
 };
 
 export default MarketList;
+
+
+
 
 
 

@@ -23,14 +23,40 @@ function isValidId(id) {
 
 /**
  * GET /
- * - 내 학교 마켓 아이템 목록
- * - optional 쿼리: q(검색), status, minPrice, maxPrice, sort(latest|price_asc|price_desc)
- * - ✅ 각 아이템에 sellerNickname 추가해 내려줌
+ * 내 학교 마켓 아이템 목록
+ * 쿼리:
+ *  - q: 검색어(제목/설명)
+ *  - status: available|reserved|sold
+ *  - minPrice, maxPrice
+ *  - sort: latest|price_asc|price_desc (alias: newest, price-asc, price-desc)
+ *  - page, limit (기본 page=1, limit=20)
+ * 응답:
+ *  {
+ *    items: [...],
+ *    page: 1,
+ *    limit: 20,
+ *    total: 134,
+ *    hasMore: true
+ *  }
  */
 router.get("/", async (req, res) => {
   try {
-    const { q = "", status, minPrice, maxPrice, sort = "latest" } = req.query;
+    const {
+      q = "",
+      status,
+      minPrice,
+      maxPrice,
+      sort = "latest",
+      page: pageRaw,
+      limit: limitRaw,
+    } = req.query;
 
+    const page = Math.max(1, parseInt(pageRaw || "1", 10));
+    // 페이지 크기 안전장치(최대 50)
+    const limit = Math.min(50, Math.max(1, parseInt(limitRaw || "20", 10)));
+    const skip = (page - 1) * limit;
+
+    // ===== 필터 =====
     const filter = { school: req.user.school };
     if (status && ["available", "reserved", "sold"].includes(status)) {
       filter.status = status;
@@ -45,12 +71,18 @@ router.get("/", async (req, res) => {
       filter.$or = [{ title: regex }, { description: regex }];
     }
 
+    // ===== 정렬 =====
     let sortSpec = { createdAt: -1 };
-    if (sort === "price_asc") sortSpec = { price: 1, createdAt: -1 };
-    if (sort === "price_desc") sortSpec = { price: -1, createdAt: -1 };
+    const s = String(sort).toLowerCase();
+    if (s === "newest" || s === "latest") sortSpec = { createdAt: -1 };
+    if (s === "price_asc" || s === "price-asc") sortSpec = { price: 1, createdAt: -1 };
+    if (s === "price_desc" || s === "price-desc") sortSpec = { price: -1, createdAt: -1 };
 
-    // 원래 로직 그대로 유지 + lean() 후 닉네임 매핑만 추가
-    const items = await MarketItem.find(filter).sort(sortSpec).lean();
+    // ===== 조회 + 총개수 =====
+    const [items, total] = await Promise.all([
+      MarketItem.find(filter).sort(sortSpec).skip(skip).limit(limit).lean(),
+      MarketItem.countDocuments(filter),
+    ]);
 
     // 이메일 → 닉네임 맵 구성
     const emails = [
@@ -75,7 +107,13 @@ router.get("/", async (req, res) => {
       sellerNickname: nickMap[String(i.seller || "").toLowerCase()] || "Unknown",
     }));
 
-    res.json(itemsWithNick);
+    return res.json({
+      items: itemsWithNick,
+      page,
+      limit,
+      total,
+      hasMore: skip + itemsWithNick.length < total,
+    });
   } catch (err) {
     console.error("List market error:", err);
     res.status(500).json({ message: "Failed to fetch items." });
@@ -101,8 +139,6 @@ router.get("/mine", async (req, res) => {
 
 /**
  * GET /request/:itemId/:buyerEmail
- * - 문의 보냈는지 여부 (본인만 확인 가능, superadmin 예외)
- * - ✅ school 스코프 반영
  */
 router.get("/request/:itemId/:buyerEmail", async (req, res) => {
   const { itemId, buyerEmail } = req.params;
@@ -138,9 +174,6 @@ router.get("/request/:itemId/:buyerEmail", async (req, res) => {
 /**
  * POST /request
  * - 문의 요청 + 대화/메시지 생성
- * body: { itemId, message }
- * - buyer는 토큰에서 읽음(클라 입력 무시)
- * - ✅ Request 생성/조회에 school 주입(스키마에서 required)
  */
 router.post("/request", async (req, res) => {
   const { itemId, message } = req.body;
@@ -240,8 +273,7 @@ router.post("/request", async (req, res) => {
 
 /**
  * GET /:id
- * - 단일 아이템 조회(같은 학교)
- * - sellerNickname 포함
+ * - 단일 아이템 조회(같은 학교) + sellerNickname
  */
 router.get("/:id", async (req, res) => {
   const { id } = req.params;
@@ -415,6 +447,7 @@ router.delete("/:id", async (req, res) => {
 });
 
 module.exports = router;
+
 
 
 

@@ -100,7 +100,7 @@ export default function Dashboard() {
     };
   }, [school, token]);
 
-  /* ================= Marketplace (latest 3 with thumbnails) ================= */
+  /* ================= Marketplace (latest 5 with thumbnails) ================= */
   const [mktItems, setMktItems] = useState([]);
   const [loadingMkt, setLoadingMkt] = useState(true);
   const [errorMkt, setErrorMkt] = useState("");
@@ -115,13 +115,19 @@ export default function Dashboard() {
       setLoadingMkt(true);
       setErrorMkt("");
       try {
-        const list = await listMarketItems({ school, token });
+        // 서버 표준 응답 우선 사용, 구버전 배열 응답도 자동 호환
+        const res = await listMarketItems({ school, token, page: 1, limit: 5, sort: "latest" });
+        let rows = [];
+        if (res && typeof res === "object" && Array.isArray(res.items)) {
+          rows = res.items;
+        } else if (Array.isArray(res)) {
+          const sorted = [...res].sort((a, b) =>
+            String(b.createdAt ?? b._id ?? "").localeCompare(String(a.createdAt ?? a._id ?? ""))
+          );
+          rows = sorted.slice(0, 5);
+        }
         if (!alive) return;
-        const rows = Array.isArray(list) ? list : [];
-        const sorted = [...rows].sort((a, b) =>
-          String(b.createdAt ?? b._id ?? "").localeCompare(String(a.createdAt ?? a._id ?? ""))
-        );
-        setMktItems(sorted.slice(0, 3));
+        setMktItems(rows);
       } catch (e) {
         if (alive) setErrorMkt("Failed to load marketplace items.");
       } finally {
@@ -153,7 +159,7 @@ export default function Dashboard() {
               CourseHub
             </h2>
 
-            {/* ✅ Open 버튼 제거, 작성 버튼만 유지 */}
+            {/* 작성 버튼만 유지 */}
             <div className="flex w-full justify-end sm:w-auto">
               <button
                 onClick={() => ensureAuth(() => nav(schoolPath("/courses/write")))}
@@ -201,7 +207,7 @@ export default function Dashboard() {
           )}
         </section>
 
-        {/* ===== Marketplace preview (latest 3 with thumbnails) ===== */}
+        {/* ===== Marketplace preview (latest 5) ===== */}
         <section className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2
@@ -212,7 +218,6 @@ export default function Dashboard() {
               Marketplace
             </h2>
 
-            {/* ✅ Open 버튼 제거 → 작성 버튼만 */}
             <div className="flex w-full justify-end sm:w-auto">
               <button
                 onClick={() => ensureAuth(() => nav(schoolPath("/market/write")))}
@@ -229,8 +234,8 @@ export default function Dashboard() {
               Log in to see the latest listings.
             </div>
           ) : loadingMkt ? (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              {Array.from({ length: 3 }).map((_, i) => (
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
+              {Array.from({ length: 5 }).map((_, i) => (
                 <div key={i} className="animate-pulse rounded-2xl border border-gray-200/60 bg-white shadow-sm">
                   <div className="aspect-[4/3] w-full rounded-t-2xl bg-gray-100" />
                   <div className="p-4 space-y-3">
@@ -248,7 +253,8 @@ export default function Dashboard() {
               No listings yet.
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            // ✅ 5개 미리보기 + 5열 그리드(반응형)
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
               {mktItems.map((item) => (
                 <button
                   key={item._id}
@@ -390,6 +396,7 @@ function CourseHubList({ title, items, badgeClass, onOpen }) {
     </div>
   );
 }
+
 
 
 

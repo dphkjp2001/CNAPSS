@@ -1,4 +1,3 @@
-// frontend/src/pages/messages/Messages.jsx
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import ChatBox from "../../components/Chatbox";
@@ -6,28 +5,18 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useSocket } from "../../contexts/SocketContext";
 import * as chatApi from "../../api/chat";
 
-/**
- * 변경 요약
- * - 필터칩: All / Marketplace / CourseHub – For Sale / CourseHub – Wanted
- * - coursehub_wtb 소스 정식 분리
- * - ?conversation=... 로 진입 시 해당 소스 탭 자동 전환
- * - 나머지 데이터/흐름/ChatBox 사용은 그대로
- */
 export default function Messages() {
   const { user, token } = useAuth() || {};
   const { school: schoolParam } = useParams();
   const [sp, setSp] = useSearchParams();
   const { on: onSocket } = useSocket() || {};
 
-  const [list, setList] = useState([]); // conversations
+  const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selected, setSelected] = useState(null); // selected conversation
+  const [selected, setSelected] = useState(null);
 
-  // 필터 상태: all | market | coursehub | coursehub_wtb
   const [filter, setFilter] = useState("all");
-
   const school = (schoolParam || "").toLowerCase();
-
   const myEmail = useMemo(() => (user?.email || "").toLowerCase(), [user]);
 
   const fetchConversations = useCallback(async () => {
@@ -43,14 +32,11 @@ export default function Messages() {
     }
   }, [school, token]);
 
-  // 최초 로딩
   useEffect(() => {
     let alive = true;
     (async () => {
       const arr = await fetchConversations();
       if (!alive) return;
-
-      // URL로 진입 시 해당 대화 선택 + 탭 자동 전환
       const qId = sp.get("conversation");
       if (qId && Array.isArray(arr)) {
         const found = arr.find((c) => String(c._id) === String(qId));
@@ -61,29 +47,26 @@ export default function Messages() {
       }
     })();
 
-    // 소켓으로 새 메시지 오면 목록 갱신 (간단 refresh)
-    const off = onSocket?.("chat:new-message", () => {
+    // ✅ 서버는 'chat:preview'를 보냄 → 그때 목록 리프레시
+    const un = onSocket?.("chat:preview", () => {
       fetchConversations();
     });
 
     return () => {
       alive = false;
-      if (typeof off === "function") off();
+      if (typeof un === "function") un();
     };
   }, [fetchConversations, onSocket, sp]);
 
-  // 타입 분류
   const typeOf = (c) => {
     const src = String(c?.source || "").toLowerCase();
     if (src === "market") return "market";
     if (src === "coursehub_wtb") return "coursehub_wtb";
     if (src === "coursehub") return "coursehub";
-    // 레거시 폴백: itemId 있으면 market 취급
     if (c?.itemId) return "market";
     return "dm";
   };
 
-  // 소스 → 필터 매핑
   const mapSourceToFilter = (src, itemId) => {
     const s = String(src || "").toLowerCase();
     if (s === "market") return "market";
@@ -101,7 +84,6 @@ export default function Messages() {
     return "💬 DM";
   };
 
-  // 상대 이메일/표시명
   const otherEmail = (c) => {
     const b = String(c?.buyer || "").toLowerCase();
     const s = String(c?.seller || "").toLowerCase();
@@ -111,19 +93,16 @@ export default function Messages() {
     email ? String(email).split("@")[0] : "Unknown";
 
   const titleOf = (c) => {
-    // resourceTitle > 상대 닉/이메일 로컬
     const t = c?.resourceTitle;
     if (t && t.trim()) return t;
     return displayNameFromEmail(otherEmail(c));
   };
 
-  // 필터링된 목록
   const filtered = useMemo(() => {
     if (filter === "all") return list;
     return list.filter((c) => typeOf(c) === filter);
   }, [list, filter]);
 
-  // 선택 시 URL 동기화
   useEffect(() => {
     const id = selected?._id ? String(selected._id) : null;
     const next = new URLSearchParams(sp.toString());
@@ -134,31 +113,14 @@ export default function Messages() {
 
   return (
     <div className="mx-auto flex h-[calc(100vh-120px)] max-w-6xl gap-4 p-4">
-      {/* 좌측: 대화 리스트 */}
       <div className="flex w-[340px] shrink-0 flex-col rounded-2xl border bg-white">
-        {/* 필터칩 */}
         <div className="flex flex-wrap gap-2 p-3">
-          <Chip active={filter === "all"} onClick={() => setFilter("all")}>
-            All
-          </Chip>
-          <Chip active={filter === "market"} onClick={() => setFilter("market")}>
-            Marketplace
-          </Chip>
-          <Chip
-            active={filter === "coursehub"}
-            onClick={() => setFilter("coursehub")}
-          >
-            CourseHub – For Sale
-          </Chip>
-          <Chip
-            active={filter === "coursehub_wtb"}
-            onClick={() => setFilter("coursehub_wtb")}
-          >
-            CourseHub – Wanted
-          </Chip>
+          <Chip active={filter === "all"} onClick={() => setFilter("all")}>All</Chip>
+          <Chip active={filter === "market"} onClick={() => setFilter("market")}>Marketplace</Chip>
+          <Chip active={filter === "coursehub"} onClick={() => setFilter("coursehub")}>CourseHub – For Sale</Chip>
+          <Chip active={filter === "coursehub_wtb"} onClick={() => setFilter("coursehub_wtb")}>CourseHub – Wanted</Chip>
         </div>
 
-        {/* 목록 */}
         <div className="min-h-0 grow overflow-y-auto">
           {loading ? (
             <div className="p-3 text-sm text-gray-500">Loading…</div>
@@ -173,7 +135,6 @@ export default function Messages() {
                     <button
                       onClick={() => {
                         setSelected(c);
-                        // 탭 자동 전환(수동 탭 변경 시에도 일관 유지)
                         setFilter(mapSourceToFilter(c?.source, c?.itemId));
                       }}
                       className={
@@ -205,7 +166,6 @@ export default function Messages() {
         </div>
       </div>
 
-      {/* 우측: 채팅창 */}
       <div className="min-w-0 grow rounded-2xl border bg-white">
         {selected ? (
           <ChatBox
@@ -240,6 +200,7 @@ function Chip({ active, children, onClick }) {
     </button>
   );
 }
+
 
 
 
