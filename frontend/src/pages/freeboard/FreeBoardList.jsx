@@ -92,10 +92,8 @@ export default function FreeBoardList() {
       try {
         let res;
         if (token) {
-          // protected API (same-school scope)
           res = await listPosts({ school, page, limit: PAGE_SIZE, q: query, sort });
         } else {
-          // public API (minimal fields)
           res = await getPublicPosts({ school, page, limit: PAGE_SIZE, q: query, sort });
         }
 
@@ -106,7 +104,7 @@ export default function FreeBoardList() {
           rows = res.items;
           tot = Number(res.total || 0);
         } else if (Array.isArray(res)) {
-          // fallback: old array-only response
+          // fallback for old API
           const q = (query || "").trim().toLowerCase();
           rows = res.filter((p) =>
             q ? p.title?.toLowerCase().includes(q) || p.content?.toLowerCase().includes(q) : true
@@ -222,25 +220,24 @@ export default function FreeBoardList() {
               ))}
             </ul>
 
-            {/* ✅ 20개 초과일 때만 숫자 페이지네이션 노출 */}
-            {total > PAGE_SIZE && (
-              <Pagination
-                page={page}
-                total={total}
-                limit={PAGE_SIZE}
-                onPageChange={setPage}
-                siblingCount={1}
-                boundaryCount={1}
-                className="mb-2"
-                showStatus
-              />
-            )}
+            {/* ✅ 항상 페이지네이션 표시(아이템만 있으면) — 1페이지만 있어도 보여줌 */}
+            <Pagination
+              page={page}
+              total={Math.max(total, items.length)}
+              limit={PAGE_SIZE}
+              onPageChange={setPage}
+              siblingCount={1}
+              boundaryCount={1}
+              className="mb-2"
+              showStatus
+            />
           </>
         )}
       </div>
     </div>
   );
 }
+
 
 
 

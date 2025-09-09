@@ -1,17 +1,37 @@
-// src/pages/auth/Register.jsx
+// frontend/src/pages/auth/Register.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useLocation } from "react-router-dom";
 import AsyncButton from "../../components/AsyncButton";
 import { useAuth } from "../../contexts/AuthContext";
 
 const ENABLED_SCHOOLS = new Set(["nyu"]);
-
-// keep in sync with backend
 const ALL_SCHOOLS = [
   { value: "nyu", label: "NYU" },
   { value: "columbia", label: "Columbia" },
   { value: "boston", label: "Boston" },
 ];
+
+const ALLOWED_BY_SCHOOL = {
+  nyu: ["nyu.edu"],
+};
+
+const emailMatches = (email, domains) => {
+  const at = String(email || "").toLowerCase().trim().split("@");
+  if (at.length !== 2) return false;
+  const domain = at[1];
+  return (domains || []).some((d) => domain === String(d).toLowerCase());
+};
+
+// Helper to build "Class of" options around current year
+function buildClassOfOptions(rangeYears = 8) {
+  const y = new Date().getFullYear();
+  // show current year - 1 up to current year + 6 (flexible)
+  const start = y - 1;
+  const end = y + 6;
+  const arr = [];
+  for (let yy = start; yy <= end; yy++) arr.push(yy);
+  return arr;
+}
 
 function Register() {
   const navigate = useNavigate();
@@ -22,9 +42,12 @@ function Register() {
   const [email, setEmail] = useState("");
   const [nickname, setNickname] = useState("");
   const [password, setPassword] = useState("");
-  const [code, setCode] = useState("");
+
+  const [classOf, setClassOf] = useState(""); // NEW
+  const classOfOptions = useMemo(() => buildClassOfOptions(8), []);
 
   const [school, setSchool] = useState("");
+  const [code, setCode] = useState("");
   const [codeSent, setCodeSent] = useState(false);
   const [emailVerified, setEmailVerified] = useState(false);
   const [cooldown, setCooldown] = useState(0);
@@ -33,12 +56,12 @@ function Register() {
 
   const baseURL = import.meta.env.VITE_API_URL;
 
-  // prefill school from URL/state/localStorage, but only allow enabled ones
+  // prefill school (only if enabled)
   useEffect(() => {
     const fromState = location?.state?.prefillSchool;
     const fromStorage = localStorage.getItem("lastVisitedSchool") || "";
-    const candidate = (schoolParam || fromState || fromStorage || "").toLowerCase();
-    setSchool(ENABLED_SCHOOLS.has(candidate) ? candidate : "");
+    const candidate = String(schoolParam || fromState || fromStorage || "").toLowerCase();
+    setSchool(ENABLED_SCHOOLS.has(candidate) ? candidate : "nyu");
   }, [schoolParam, location?.state?.prefillSchool]);
 
   useEffect(() => {
@@ -47,8 +70,15 @@ function Register() {
     return () => clearInterval(id);
   }, [cooldown]);
 
+  const allowedDomains = ALLOWED_BY_SCHOOL[school] || [];
+  const emailAllowed = emailMatches(email, allowedDomains);
+
   const sendCode = async () => {
     if (!email || busy || cooldown) return;
+    if (!emailAllowed) {
+      setError(`Please use your official school email (${allowedDomains.join(", ")}).`);
+      return;
+    }
     setError("");
     try {
       setBusy(true);
@@ -71,6 +101,10 @@ function Register() {
 
   const verifyCode = async () => {
     if (!email || !code || busy) return;
+    if (!emailAllowed) {
+      setError(`Please use your official school email (${allowedDomains.join(", ")}).`);
+      return;
+    }
     setError("");
     try {
       setBusy(true);
@@ -92,8 +126,16 @@ function Register() {
 
   const handleRegister = async () => {
     if (!emailVerified || !school || busy) return;
+    if (!classOf) {
+      setError("Please select your class year (e.g., 2029).");
+      return;
+    }
     if (!ENABLED_SCHOOLS.has(school)) {
       alert("This school is coming soon 🚧");
+      return;
+    }
+    if (!emailAllowed) {
+      setError(`Please use your official school email (${allowedDomains.join(", ")}).`);
       return;
     }
     setError("");
@@ -102,7 +144,13 @@ function Register() {
       const res = await fetch(`${baseURL}/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, nickname, school }),
+        body: JSON.stringify({
+          email,
+          password,
+          nickname,
+          school,
+          classOf: Number(classOf), // ✅ send cohort
+        }),
       });
       const data = await res.json();
 
@@ -121,9 +169,10 @@ function Register() {
 
       if (data?.user && data?.token) {
         try {
+          // keep classOf in user state
+          data.user.classOf = data.user.classOf ?? Number(classOf);
           login({ user: data.user, token: data.token });
         } catch {}
-
         const from = location.state?.from;
         const bad = ["/", "/select-school", "/auth-required", "/login", "/register"];
         const fallback = `/${data.user.school}/dashboard`;
@@ -160,7 +209,7 @@ function Register() {
           <div className="mb-6 text-center">
             <h1 className="text-2xl font-bold text-gray-900">Sign Up</h1>
             <p className="mt-1 text-sm text-gray-600">
-              Create your CNAPSS account to join your campus community.
+              CNAPSS currently supports university emails only. For NYU, please use <b>@nyu.edu</b>.
             </p>
           </div>
 
@@ -175,13 +224,20 @@ function Register() {
               <label className="mb-1 block text-sm font-medium text-gray-700">Email</label>
               <input
                 type="email"
-                placeholder="your.email@school.edu"
-                className="w-full rounded-xl border px-3 py-2 outline-none focus:ring-2"
+                placeholder="your.name@nyu.edu"
+                className={`w-full rounded-xl border px-3 py-2 outline-none focus:ring-2 ${
+                  email && !emailAllowed ? "border-red-300 focus:ring-red-200" : ""
+                }`}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 autoComplete="email"
               />
+              {email && !emailAllowed && (
+                <p className="mt-1 text-xs text-red-600">
+                  Please use your official school email ({allowedDomains.join(", ")}).
+                </p>
+              )}
             </div>
 
             <div>
@@ -221,10 +277,32 @@ function Register() {
                 {schoolOptions}
               </select>
               <p className="mt-1 text-xs text-gray-500">
-                Prefilled from the school you were browsing. You can change it.
+                Only NYU is available for sign-up right now. Others are coming soon.
               </p>
             </div>
 
+            {/* NEW: Class of YYYY */}
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Class year</label>
+              <select
+                value={classOf}
+                onChange={(e) => setClassOf(e.target.value)}
+                required
+                className="w-full rounded-xl border px-3 py-2 outline-none focus:ring-2"
+              >
+                <option value="">Select your class year (Class of …)</option>
+                {classOfOptions.map((yy) => (
+                  <option key={yy} value={yy}>
+                    Class of {yy}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-gray-500">
+                We’ll display your standing (Freshman/Sophomore/Junior/Senior) automatically from this.
+              </p>
+            </div>
+
+            {/* Email code section */}
             <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
               <div className="flex-1">
                 <label className="mb-1 block text-sm font-medium text-gray-700">
@@ -264,7 +342,7 @@ function Register() {
               onClick={handleRegister}
               loadingText="Signing up..."
               className="mt-2 w-full rounded-xl bg-indigo-600 px-4 py-2 font-semibold text-white shadow hover:bg-indigo-700 disabled:opacity-60"
-              disabled={!emailVerified || !school || busy}
+              disabled={!emailVerified || !school || !classOf || busy}
             >
               Sign Up
             </AsyncButton>
@@ -283,6 +361,8 @@ function Register() {
 }
 
 export default Register;
+
+
 
 
 

@@ -42,31 +42,26 @@ export default function Courses() {
   const schoolPath = useSchoolPath();
   const [sp, setSp] = useSearchParams();
 
-  // ✅ sale|wanted 토글 (URL 동기화)
   const initialType = sp.get("type") === "wanted" ? "wanted" : "sale";
   const [type, setType] = useState(initialType);
 
-  // ✅ page 쿼리 동기화
   const initialPage = Math.max(1, parseInt(sp.get("page") || "1", 10));
   const [page, setPage] = useState(initialPage);
 
   const [items, setItems] = useState([]);
   const [total, setTotal] = useState(0);
 
-  // loading flags
   const [loading, setLoading] = useState(true);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
 
   const [err, setErr] = useState("");
 
-  // search UI
   const [q, setQ] = useState(sp.get("q") || "");
   const [prof, setProf] = useState(sp.get("prof") || "");
   const [qDeb, setQDeb] = useState(q.trim());
   const [profDeb, setProfDeb] = useState(prof.trim());
 
-  // debounce 350ms
   useEffect(() => {
     const t = setTimeout(() => setQDeb(q.trim()), 350);
     return () => clearTimeout(t);
@@ -76,7 +71,6 @@ export default function Courses() {
     return () => clearTimeout(t);
   }, [prof]);
 
-  // ✅ type/q/prof 변경 시 URL & page=1 리셋
   useEffect(() => {
     const next = new URLSearchParams(sp);
     type === "sale" ? next.delete("type") : next.set("type", "wanted");
@@ -88,7 +82,6 @@ export default function Courses() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [type, qDeb, profDeb]);
 
-  // ✅ page 변경 시 URL 동기화
   useEffect(() => {
     const next = new URLSearchParams(sp);
     next.set("page", String(page));
@@ -117,7 +110,7 @@ export default function Courses() {
           limit: PAGE_SIZE,
           q: qDeb,
           prof: profDeb,
-          type, // ✅ sale|wanted 필터 적용
+          type,
         });
         const list = Array.isArray(res?.items) ? res.items : [];
         if (alive) {
@@ -146,15 +139,12 @@ export default function Courses() {
   const showSkeleton = loading && !hasLoadedOnce;
   const empty = !showSkeleton && !isSearching && !items.length && !err;
 
-  // ✅ 세그먼트 토글
   const SegBtn = ({ active, children, onClick }) => (
     <button
       onClick={onClick}
       className={
         "rounded-full px-3 py-1.5 text-xs font-semibold transition " +
-        (active
-          ? "bg-white shadow text-gray-900"
-          : "text-gray-600 hover:text-gray-800")
+        (active ? "bg-white shadow text-gray-900" : "text-gray-600 hover:text-gray-800")
       }
     >
       {children}
@@ -170,15 +160,11 @@ export default function Courses() {
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
             <h1 className="text-xl font-semibold">CourseHub</h1>
-            {/* ✅ For sale / Wanted Segment */}
             <div className="rounded-full bg-gray-100 p-1">
               <SegBtn active={type === "sale"} onClick={() => setType("sale")}>
                 For sale
               </SegBtn>
-              <SegBtn
-                active={type === "wanted"}
-                onClick={() => setType("wanted")}
-              >
+              <SegBtn active={type === "wanted"} onClick={() => setType("wanted")}>
                 Wanted
               </SegBtn>
             </div>
@@ -208,9 +194,7 @@ export default function Courses() {
                 Clear
               </button>
             )}
-            {isSearching && (
-              <span className="text-xs text-gray-500">Searching…</span>
-            )}
+            {isSearching && <span className="text-xs text-gray-500">Searching…</span>}
           </div>
 
           <button
@@ -254,7 +238,6 @@ export default function Courses() {
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <div className="flex items-center gap-2">
-                          {/* ✅ Listing 타입 뱃지 */}
                           <span
                             className={
                               "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold " +
@@ -277,15 +260,10 @@ export default function Courses() {
                           {m.authorName ? ` • ${m.authorName}` : ""}
                         </div>
                       </div>
-                      <div className="text-xs text-gray-400">
-                        {timeAgo(m.createdAt)}
-                      </div>
+                      <div className="text-xs text-gray-400">{timeAgo(m.createdAt)}</div>
                     </div>
-
                     {m.title ? (
-                      <div className="mt-1 text-sm text-gray-700 line-clamp-2">
-                        {m.title}
-                      </div>
+                      <div className="mt-1 text-sm text-gray-700 line-clamp-2">{m.title}</div>
                     ) : null}
                   </button>
                 </li>
@@ -294,11 +272,11 @@ export default function Courses() {
           </ul>
         )}
 
-        {/* ✅ 20개 초과일 때만 숫자 페이지네이션 노출 */}
-        {total > PAGE_SIZE && (
+        {/* ✅ 항상 페이지네이션 표시(아이템만 있으면) — 1페이지만 있어도 보여줌 */}
+        {items.length > 0 && (
           <Pagination
             page={page}
-            total={total}
+            total={Math.max(total, items.length)}
             limit={PAGE_SIZE}
             onPageChange={(p) => setPage(p)}
             siblingCount={1}
@@ -311,6 +289,7 @@ export default function Courses() {
     </div>
   );
 }
+
 
 
 
