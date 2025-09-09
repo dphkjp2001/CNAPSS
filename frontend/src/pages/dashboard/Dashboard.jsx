@@ -12,7 +12,7 @@ import { useLoginGate } from "../../hooks/useLoginGate";
 
 import { listPosts, getPublicPosts } from "../../api/posts";
 import { listRecentMaterials } from "../../api/materials";
-import { listItems as listMarketItems } from "../../api/market";
+import { listItems as listMarketItems, getPublicMarketRecent } from "../../api/market";
 
 dayjs.extend(relativeTime);
 dayjs.locale("en");
@@ -107,25 +107,30 @@ export default function Dashboard() {
 
   useEffect(() => {
     let alive = true;
-    if (!school || !token) {
-      setLoadingMkt(false);
-      return;
-    }
+    if (!school) return;
     (async () => {
-      setLoadingMkt(true);
-      setErrorMkt("");
       try {
-        // 서버 표준 응답 우선 사용, 구버전 배열 응답도 자동 호환
-        const res = await listMarketItems({ school, token, page: 1, limit: 5, sort: "latest" });
+        setLoadingMkt(true);
+        setErrorMkt("");
+
         let rows = [];
-        if (res && typeof res === "object" && Array.isArray(res.items)) {
-          rows = res.items;
-        } else if (Array.isArray(res)) {
-          const sorted = [...res].sort((a, b) =>
-            String(b.createdAt ?? b._id ?? "").localeCompare(String(a.createdAt ?? a._id ?? ""))
-          );
-          rows = sorted.slice(0, 5);
+        if (token) {
+          // protected list: 첫 페이지 5개
+          const res = await listMarketItems({ school, token, page: 1, limit: 5, sort: "latest" });
+          if (res && typeof res === "object" && Array.isArray(res.items)) {
+            rows = res.items;
+          } else if (Array.isArray(res)) {
+            const sorted = [...res].sort((a, b) =>
+              String(b.createdAt ?? b._id ?? "").localeCompare(String(a.createdAt ?? a._id ?? ""))
+            );
+            rows = sorted.slice(0, 5);
+          }
+        } else {
+          // public recent
+          const res = await getPublicMarketRecent({ school, limit: 5 });
+          rows = res?.items || [];
         }
+
         if (!alive) return;
         setMktItems(rows);
       } catch (e) {
@@ -229,11 +234,7 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {!token ? (
-            <div className="rounded-lg border border-dashed border-gray-300 p-6 text-center text-sm text-gray-600">
-              Log in to see the latest listings.
-            </div>
-          ) : loadingMkt ? (
+          {loadingMkt ? (
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
               {Array.from({ length: 5 }).map((_, i) => (
                 <div key={i} className="animate-pulse rounded-2xl border border-gray-200/60 bg-white shadow-sm">
@@ -255,37 +256,41 @@ export default function Dashboard() {
           ) : (
             // ✅ 5개 미리보기 + 5열 그리드(반응형)
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
-              {mktItems.map((item) => (
-                <button
-                  key={item._id}
-                  onClick={() => nav(schoolPath(`/market/${item._id}`))}
-                  className="group block overflow-hidden rounded-2xl border border-gray-200/60 bg-white text-left shadow-sm transition hover:shadow-md focus:outline-none focus:ring-2 focus:ring-gray-900/20"
-                >
-                  <div className="relative aspect-[4/3] w-full overflow-hidden bg-gray-50">
-                    {item?.images?.[0] ? (
-                      <img
-                        src={item.images[0]}
-                        alt={item.title}
-                        className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center text-4xl">🖼️</div>
-                    )}
-                  </div>
-                  <div className="p-4">
-                    <h3 className="line-clamp-1 text-base font-semibold text-gray-900">
-                      {item.title}
-                    </h3>
-                    <p className="mt-1 text-sm font-medium text-gray-800">
-                      {currency.format(Number(item.price) || 0)}
-                    </p>
-                    <p className="mt-1 line-clamp-1 text-xs text-gray-500">
-                      {item.sellerNickname || "Unknown"}
-                    </p>
-                  </div>
-                </button>
-              ))}
+              {mktItems.map((item) => {
+                const id = item._id || item.id;
+                const thumb = item.images?.[0] || item.image || "";
+                return (
+                  <button
+                    key={id}
+                    onClick={() => nav(schoolPath(`/market/${id}`))}
+                    className="group block overflow-hidden rounded-2xl border border-gray-200/60 bg-white text-left shadow-sm transition hover:shadow-md focus:outline-none focus:ring-2 focus:ring-gray-900/20"
+                  >
+                    <div className="relative aspect-[4/3] w-full overflow-hidden bg-gray-50">
+                      {thumb ? (
+                        <img
+                          src={thumb}
+                          alt={item.title}
+                          className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-4xl">🖼️</div>
+                      )}
+                    </div>
+                    <div className="p-4">
+                      <h3 className="line-clamp-1 text-base font-semibold text-gray-900">
+                        {item.title}
+                      </h3>
+                      <p className="mt-1 text-sm font-medium text-gray-800">
+                        {currency.format(Number(item.price) || 0)}
+                      </p>
+                      <p className="mt-1 line-clamp-1 text-xs text-gray-500">
+                        {item.sellerNickname || "Unknown"}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           )}
         </section>
@@ -396,6 +401,7 @@ function CourseHubList({ title, items, badgeClass, onOpen }) {
     </div>
   );
 }
+
 
 
 

@@ -1,9 +1,9 @@
 // src/pages/market/MarketList.jsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useSchool } from "../../contexts/SchoolContext";
 import { useSchoolPath } from "../../utils/schoolPath";
-import { listItems } from "../../api/market";
+import { listItems, getPublicMarketList } from "../../api/market";
 import { useAuth } from "../../contexts/AuthContext";
 import Pagination from "../../components/Pagination";
 
@@ -49,10 +49,11 @@ function EmptyState({ schoolPath }) {
 }
 
 function MarketCard({ item, schoolPath }) {
-  const thumb = item?.images?.[0];
+  const id = item._id || item.id;
+  const thumb = item?.images?.[0] || item?.image;
   return (
     <Link
-      to={schoolPath(`/market/${item._id}`)}
+      to={schoolPath(`/market/${id}`)}
       className="group block overflow-hidden rounded-2xl border border-gray-200/60 bg-white shadow-sm transition hover:shadow-md focus:outline-none focus:ring-2 focus:ring-gray-900/20"
       aria-label={`${item.title} detail`}
     >
@@ -123,7 +124,6 @@ const MarketList = () => {
 
   const [total, setTotal] = useState(0);
 
-  // 서버에서 페이지별로 받아오되, 구버전(배열 응답)도 자동 호환
   useEffect(() => {
     let mounted = true;
 
@@ -132,50 +132,62 @@ const MarketList = () => {
         setLoading(true);
         setErr(null);
 
-        const serverSort =
-          sort === "new" ? "latest" :
-          sort === "price-asc" ? "price_asc" :
-          sort === "price-desc" ? "price_desc" : "latest";
+        if (token) {
+          const serverSort =
+            sort === "new" ? "latest" :
+            sort === "price-asc" ? "price_asc" :
+            sort === "price-desc" ? "price_desc" : "latest";
 
-        const data = await listItems({
-          school,
-          token,
-          page,
-          limit: PAGE_SIZE,
-          q: query,
-          sort: serverSort,
-        });
+          const data = await listItems({
+            school,
+            token,
+            page,
+            limit: PAGE_SIZE,
+            q: query,
+            sort: serverSort,
+          });
 
-        if (!mounted) return;
+          if (!mounted) return;
 
-        // 새 서버(표준 응답)
-        if (data && typeof data === "object" && Array.isArray(data.items)) {
-          setItems(data.items);
-          setTotal(Number(data.total || 0));
-          return;
+          if (data && typeof data === "object" && Array.isArray(data.items)) {
+            setItems(data.items);
+            setTotal(Number(data.total || 0));
+          } else {
+            const raw = Array.isArray(data) ? data : [];
+            // fallback client-side filter/sort/page
+            const q = (query || "").trim().toLowerCase();
+            let list = raw.filter((it) => {
+              if (!q) return true;
+              return (
+                it.title?.toLowerCase().includes(q) ||
+                it.description?.toLowerCase().includes(q) ||
+                it.seller?.toLowerCase().includes(q)
+              );
+            });
+            list = list.sort((a, b) => {
+              if (sort === "price-asc") return (a.price ?? 0) - (b.price ?? 0);
+              if (sort === "price-desc") return (b.price ?? 0) - (a.price ?? 0);
+              const ak = a.createdAt ?? a._id ?? "";
+              const bk = b.createdAt ?? b._id ?? "";
+              return String(bk).localeCompare(String(ak));
+            });
+            setTotal(list.length);
+            const start = (page - 1) * PAGE_SIZE;
+            setItems(list.slice(start, start + PAGE_SIZE));
+          }
+        } else {
+          // Public list
+          const data = await getPublicMarketList({
+            school,
+            page,
+            pageSize: PAGE_SIZE,
+            q: query,
+            sort, // new | price-asc | price-desc
+          });
+          if (!mounted) return;
+          setItems(Array.isArray(data?.items) ? data.items : []);
+          setTotal(Number(data?.total || 0));
         }
-
-        // 구버전 서버(배열 응답) 호환: 클라에서 필터/정렬/페이지 처리를 fallback
-        const raw = Array.isArray(data) ? data : [];
-        const q = (query || "").trim().toLowerCase();
-        let list = raw.filter((it) => {
-          if (!q) return true;
-          return (
-            it.title?.toLowerCase().includes(q) ||
-            it.description?.toLowerCase().includes(q) ||
-            it.seller?.toLowerCase().includes(q)
-          );
-        });
-        list = list.sort((a, b) => {
-          if (sort === "price-asc") return (a.price ?? 0) - (b.price ?? 0);
-          if (sort === "price-desc") return (b.price ?? 0) - (a.price ?? 0);
-          const ak = a.createdAt ?? a._id ?? "";
-          const bk = b.createdAt ?? b._id ?? "";
-          return String(bk).localeCompare(String(ak));
-        });
-        setTotal(list.length);
-        const start = (page - 1) * PAGE_SIZE;
-        setItems(list.slice(start, start + PAGE_SIZE));
       } catch (e) {
         console.error("❌ Failed to load listings", e);
         setErr("Failed to load listings.");
@@ -184,7 +196,7 @@ const MarketList = () => {
       }
     };
 
-    if (school && token) fetchItems();
+    if (school) fetchItems();
     return () => {
       mounted = false;
     };
@@ -265,7 +277,7 @@ const MarketList = () => {
             {/* ✅ 5열 그리드(반응형: 2→3→4→5) */}
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
               {items.map((item) => (
-                <MarketCard key={item._id} item={item} schoolPath={schoolPath} />
+                <MarketCard key={item._id || item.id} item={item} schoolPath={schoolPath} />
               ))}
             </div>
 
@@ -288,6 +300,7 @@ const MarketList = () => {
 };
 
 export default MarketList;
+
 
 
 

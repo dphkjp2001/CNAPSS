@@ -3,6 +3,35 @@ import { apiFetch } from "./http";
 
 const API = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
 
+/* ------------------------- Public (no auth) ------------------------- */
+export async function getPublicMarketRecent({ school, limit = 5 } = {}) {
+  if (!school) throw new Error("school is required");
+  const url = `${API}/public/${encodeURIComponent(school)}/market/recent?limit=${limit}`;
+  const res = await apiFetch(url);
+  if (!res.ok) throw new Error("failed to load public recent");
+  return res.json(); // { items: [...] }
+}
+
+export async function getPublicMarketList({
+  school,
+  page = 1,
+  pageSize = 20,
+  q = "",
+  sort = "new", // new | price-asc | price-desc
+} = {}) {
+  if (!school) throw new Error("school is required");
+  const qs = new URLSearchParams();
+  qs.set("page", String(page));
+  qs.set("pageSize", String(pageSize));
+  if (q) qs.set("q", q);
+  if (sort) qs.set("sort", sort);
+  const url = `${API}/public/${encodeURIComponent(school)}/market?${qs.toString()}`;
+  const res = await apiFetch(url);
+  if (!res.ok) throw new Error("failed to load public list");
+  return res.json(); // { items, total, page, pageSize, totalPages }
+}
+
+/* ------------------------ Protected (auth) -------------------------- */
 /** ------------------------------------------------------------------
  * 리스트 조회 (이전/현재 호출 방식 모두 지원)
  *   1) listItems({ school, token, page, limit, q, mine, sold, cursor })
@@ -180,7 +209,6 @@ export async function sendRequest({ school, token, itemId, message }) {
   if (res.status === 409) return { alreadySent: true, ...data };
   throw new Error(data?.error || "request failed");
 }
-
 
 
 

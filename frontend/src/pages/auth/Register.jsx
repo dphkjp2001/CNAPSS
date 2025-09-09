@@ -22,12 +22,22 @@ const emailMatches = (email, domains) => {
   return (domains || []).some((d) => domain === String(d).toLowerCase());
 };
 
-// Helper to build "Class of" options around current year
-function buildClassOfOptions(rangeYears = 8) {
-  const y = new Date().getFullYear();
-  // show current year - 1 up to current year + 6 (flexible)
-  const start = y - 1;
-  const end = y + 6;
+/** Academic year that starts in September.
+ *  Sep(8)~Dec: current year, Jan~Aug: previous year.
+ */
+function academicStartYear(date = new Date()) {
+  const m = date.getMonth(); // 0=Jan
+  const y = date.getFullYear();
+  return m >= 8 ? y : y - 1; // 8 === September
+}
+
+/** Build "Class of YYYY" options around the current academic year.
+ *  Example (2025 Sep ~ 2026 Aug): base=2025 → range 2024 ~ 2031
+ */
+function buildClassOfOptions() {
+  const base = academicStartYear(); // academic year anchor
+  const start = base;
+  const end = base + 4; // show a comfortable forward window
   const arr = [];
   for (let yy = start; yy <= end; yy++) arr.push(yy);
   return arr;
@@ -44,7 +54,7 @@ function Register() {
   const [password, setPassword] = useState("");
 
   const [classOf, setClassOf] = useState(""); // NEW
-  const classOfOptions = useMemo(() => buildClassOfOptions(8), []);
+  const classOfOptions = useMemo(() => buildClassOfOptions(), []);
 
   const [school, setSchool] = useState("");
   const [code, setCode] = useState("");
@@ -149,7 +159,7 @@ function Register() {
           password,
           nickname,
           school,
-          classOf: Number(classOf), // ✅ send cohort
+          classOf: Number(classOf), // ✅ cohort (graduation year)
         }),
       });
       const data = await res.json();
@@ -169,7 +179,6 @@ function Register() {
 
       if (data?.user && data?.token) {
         try {
-          // keep classOf in user state
           data.user.classOf = data.user.classOf ?? Number(classOf);
           login({ user: data.user, token: data.token });
         } catch {}
@@ -281,7 +290,7 @@ function Register() {
               </p>
             </div>
 
-            {/* NEW: Class of YYYY */}
+            {/* Class of YYYY (academic year anchored in September) */}
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">Class year</label>
               <select
@@ -350,7 +359,11 @@ function Register() {
 
           <div className="mt-6 text-center text-sm text-gray-600">
             Already have an account?{" "}
-            <Link to="/login" state={{ from: location.state?.from }} className="font-semibold text-indigo-600 hover:underline">
+            <Link
+              to="/login"
+              state={{ from: location.state?.from }}
+              className="font-semibold text-indigo-600 hover:underline"
+            >
               Log In
             </Link>
           </div>
@@ -361,6 +374,7 @@ function Register() {
 }
 
 export default Register;
+
 
 
 

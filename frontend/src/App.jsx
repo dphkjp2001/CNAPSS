@@ -174,14 +174,9 @@ export default function App() {
             />
 
             {/* Market */}
-            <Route
-              path="market"
-              element={
-                <RequireAuth>
-                  <MarketList />
-                </RequireAuth>
-              }
-            />
+            {/* ✅ List is now PUBLIC */}
+            <Route path="market" element={<MarketList />} />
+            {/* Detail / Write / Edit remain protected */}
             <Route
               path="market/:id"
               element={
@@ -280,6 +275,7 @@ export default function App() {
     </AuthGateProvider>
   );
 }
+
 
 
 
