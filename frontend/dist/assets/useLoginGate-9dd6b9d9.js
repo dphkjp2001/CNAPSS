@@ -1,0 +1,1 @@
+import{u as t,f as a,o as m}from"./index-bd2128fc.js";function c(){const{user:e}=t(),{pathname:r,search:n}=a(),o=`${r}${n||""}`;function u(s){if(e)return s==null?void 0:s();m(o)}return{ensureAuth:u,isAuthed:!!e}}export{c as u};

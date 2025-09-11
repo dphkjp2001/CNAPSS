@@ -13,8 +13,8 @@ router.use(requireAuth, schoolGuard);
 
 /**
  * GET /
- * Query: page=1, limit=20, q, sort=new|old
  * Returns: { items, page, limit, total }
+ * each item includes: _id, title, createdAt, likesCount, commentsCount
  */
 router.get("/", async (req, res) => {
   try {
@@ -25,15 +25,41 @@ router.get("/", async (req, res) => {
     const sortOpt = String(req.query.sort || "new").toLowerCase();
     const sortStage = sortOpt === "old" ? { createdAt: 1, _id: 1 } : { createdAt: -1, _id: -1 };
 
-    const filter = { school };
+    const match = { school };
     if (q) {
       const regex = new RegExp(q, "i");
-      filter.$or = [{ title: regex }, { content: regex }];
+      match.$or = [{ title: regex }, { content: regex }];
     }
 
-    const [items, total] = await Promise.all([
-      CareerPost.find(filter).sort(sortStage).skip((page - 1) * limit).limit(limit).lean(),
-      CareerPost.countDocuments(filter),
+    const total = await CareerPost.countDocuments(match);
+
+    const items = await CareerPost.aggregate([
+      { $match: match },
+      { $sort: sortStage },
+      { $skip: (page - 1) * limit },
+      { $limit: limit },
+      {
+        $project: {
+          _id: 1,
+          title: 1,
+          createdAt: 1,
+          school: 1,
+          likesCount: { $size: { $ifNull: ["$thumbsUpUsers", []] } },
+        },
+      },
+      {
+        $lookup: {
+          from: "comments",
+          let: { pid: "$_id", sch: "$school" },
+          pipeline: [
+            { $match: { $expr: { $and: [{ $eq: ["$postId", "$$pid"] }, { $eq: ["$school", "$$sch"] }] } } },
+            { $count: "c" },
+          ],
+          as: "cc",
+        },
+      },
+      { $addFields: { commentsCount: { $ifNull: [{ $arrayElemAt: ["$cc.c", 0] }, 0] } } },
+      { $project: { cc: 0, school: 0 } },
     ]);
 
     res.json({ items, page, limit, total });
@@ -42,6 +68,10 @@ router.get("/", async (req, res) => {
     res.status(500).json({ message: "Failed to load posts." });
   }
 });
+
+// 👍 Liked, 💬 Commented, 단건 조회, 생성/수정/삭제, thumbs 토글은 기존 코드 그대로 유지
+// (밑에 부분은 그대로 두면 됨)
+
 
 // 👍 Liked
 router.get("/liked/:email", async (req, res) => {
