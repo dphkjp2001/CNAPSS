@@ -164,19 +164,9 @@ const requireAuth = require("../middleware/requireAuth");
 const schoolGuard = require("../middleware/schoolGuard");
 const Comment = require("../models/Comment");
 const Post = require("../models/Post");
-const CareerPost = require("../models/CareerPost");
 const User = require("../models/User");
 
 router.use(requireAuth, schoolGuard);
-
-// helper: find post in either Post or CareerPost within the same school
-async function findAnyPostById(postId, school) {
-  const [p1, p2] = await Promise.all([
-    Post.findOne({ _id: postId, school }).select("_id").lean(),
-    CareerPost.findOne({ _id: postId, school }).select("_id").lean(),
-  ]);
-  return p1 || p2 || null;
-}
 
 // GET /api/:school/comments/:postId
 router.get("/:postId", async (req, res) => {
@@ -185,7 +175,7 @@ router.get("/:postId", async (req, res) => {
     return res.status(400).json({ message: "Invalid postId" });
   }
   try {
-    const post = await findAnyPostById(postId, req.user.school);
+    const post = await Post.findOne({ _id: postId, school: req.user.school }).select("_id");
     if (!post) return res.status(404).json({ message: "Post not found." });
 
     const items = await Comment.find({ postId, school: req.user.school })
@@ -216,7 +206,7 @@ router.post("/:postId", async (req, res) => {
       return res.status(403).json({ message: "Only verified users can comment." });
     }
 
-    const post = await findAnyPostById(postId, req.user.school);
+    const post = await Post.findOne({ _id: postId, school: req.user.school }).select("_id");
     if (!post) return res.status(404).json({ message: "Post not found." });
 
     let parent = null;
@@ -237,17 +227,19 @@ router.post("/:postId", async (req, res) => {
       school: req.user.school,
     });
 
+    // 🔔 실시간 전파
     try {
       const io = req.app.get("io");
       if (io) {
-        io.to(`post:${postId}`).emit("comment:new", doc.toObject());
+        const out = doc.toObject();
+        io.to(`post:${postId}`).emit("comment:new", out);
       }
     } catch (_) {}
 
     res.status(201).json(doc);
   } catch (e) {
     console.error("comments:create", e);
-    res.status(500).json({ message: "Failed to create comment." });
+    res.status(500).json({ message: "Failed to add comment." });
   }
 });
 
@@ -256,29 +248,30 @@ router.put("/:id", async (req, res) => {
   const { id } = req.params;
   let { content } = req.body;
   content = String(content || "").trim();
-
   if (!mongoose.Types.ObjectId.isValid(id)) {
     return res.status(400).json({ message: "Invalid comment id" });
   }
   if (!content) return res.status(400).json({ message: "Content required" });
 
   try {
-    const owned = await Comment.findOne({ _id: id, school: req.user.school }).select("email postId");
-    if (!owned) return res.status(404).json({ message: "Comment not found." });
-    if (owned.email !== req.user.email && req.user.role !== "superadmin") {
+    const comment = await Comment.findOne({ _id: id, school: req.user.school });
+    if (!comment) return res.status(404).json({ message: "Comment not found." });
+    if (comment.email !== req.user.email && req.user.role !== "superadmin") {
       return res.status(403).json({ message: "You can only edit your own comments." });
     }
 
-    // ensure the target post (either type) exists in the same school
-    const post = await findAnyPostById(owned.postId, req.user.school);
-    if (!post) return res.status(404).json({ message: "Post not found." });
+    comment.content = content;
+    await comment.save();
 
-    const updated = await Comment.findOneAndUpdate(
-      { _id: id, school: req.user.school },
-      { $set: { content } },
-      { new: true }
-    );
-    res.json({ message: "Comment updated successfully.", comment: updated });
+    // 🔔 실시간 업데이트
+    try {
+      const io = req.app.get("io");
+      if (io) {
+        io.to(`post:${comment.postId}`).emit("comment:update", comment.toObject());
+      }
+    } catch (_) {}
+
+    res.json(comment);
   } catch (e) {
     console.error("comments:update", e);
     res.status(500).json({ message: "Failed to update comment." });
@@ -297,20 +290,62 @@ router.delete("/:id", async (req, res) => {
     if (owned.email !== req.user.email && req.user.role !== "superadmin") {
       return res.status(403).json({ message: "You can only delete your own comments." });
     }
-
-    // ensure the target post (either type) exists in the same school
-    const post = await findAnyPostById(owned.postId, req.user.school);
-    if (!post) return res.status(404).json({ message: "Post not found." });
-
     await Comment.deleteOne({ _id: id, school: req.user.school });
-    res.json({ message: "Comment deleted successfully." });
+
+    // 🔔 실시간 전파
+    try {
+      const io = req.app.get("io");
+      if (io) io.to(`post:${owned.postId}`).emit("comment:delete", { _id: id });
+    } catch (_) {}
+
+    res.json({ ok: true });
   } catch (e) {
     console.error("comments:delete", e);
     res.status(500).json({ message: "Failed to delete comment." });
   }
 });
 
+// POST /api/:school/comments/:commentId/thumbs
+// 👉 자기 댓글/대댓글 좋아요 금지
+router.post("/:commentId/thumbs", async (req, res) => {
+  try {
+    const { commentId } = req.params;
+    const email = String(req.user.email || "").toLowerCase();
+
+    const cur = await Comment.findOne({ _id: commentId, school: req.user.school })
+      .select("email thumbsUpUsers postId")
+      .lean();
+    if (!cur) return res.status(404).json({ message: "Not found" });
+
+    if (String(cur.email || "").toLowerCase() === email) {
+      return res.status(400).json({ message: "You cannot like your own comment." });
+    }
+
+    const has = (cur.thumbsUpUsers || []).map((e) => String(e || "").toLowerCase()).includes(email);
+    const update = has ? { $pull: { thumbsUpUsers: email } } : { $addToSet: { thumbsUpUsers: email } };
+
+    const next = await Comment.findOneAndUpdate(
+      { _id: commentId, school: req.user.school },
+      update,
+      { new: true, lean: true }
+    );
+
+    // 🔔 실시간 좋아요 반영
+    try {
+      const io = req.app.get("io");
+      if (io) io.to(`post:${cur.postId}`).emit("comment:thumbs", { _id: commentId, thumbs: next.thumbsUpUsers || [] });
+    } catch (_) {}
+
+    const arr = next.thumbsUpUsers || [];
+    res.json({ thumbs: arr, count: arr.length });
+  } catch (e) {
+    console.error("comments:thumbs", e);
+    res.status(500).json({ message: "Failed to toggle like." });
+  }
+});
+
 module.exports = router;
+
 
 
 

@@ -1,42 +1,24 @@
-// frontend/src/components/CommentSection.jsx
-import React, { useEffect, useMemo, useState, useCallback } from "react";
-import { useAuth } from "../contexts/AuthContext";
-import { useSchool } from "../contexts/SchoolContext";
-import { useSocket } from "../contexts/SocketContext";
-import AsyncButton from "./AsyncButton";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
-import "dayjs/locale/en";
-
-import {
-  listComments,
-  addComment,
-  updateComment as apiUpdateComment,
-  deleteComment as apiDeleteComment,
-  toggleCommentThumbs,
-} from "../api/comments";
-
 dayjs.extend(relativeTime);
-dayjs.locale("en");
 
-const toId = (v) => (v == null ? "" : String(v));
-const normEmail = (e) => String(e || "").toLowerCase().trim();
+import AsyncButton from "../components/AsyncButton"; // 경로는 프로젝트 구조에 맞게 유지
+import { useAuth } from "../contexts/AuthContext";
+import { useSocket } from "../contexts/SocketContext";
+import { toggleCommentThumbs, addComment, listComments, updateComment as apiUpdateComment, deleteComment as apiDeleteComment } from "../api/comments";
+import { normEmail, toId } from "../utils/gateBus"; // 프로젝트 유틸에 맞게 유지
 
-export default function CommentSection({ postId, authorEmail = "", highlightId = null }) {
+export default function CommentSection({ postId, authorEmail, highlightId }) {
   const { user, token } = useAuth();
-  const { school } = useSchool();
-  const socket = useSocket();
-
-  const me = normEmail(user?.email);
-  const author = normEmail(authorEmail);
-
+  const { socket } = useSocket();
   const [comments, setComments] = useState([]);
-  const [listLoading, setListLoading] = useState(true);
+  const [listLoading, setListLoading] = useState(false);
   const [err, setErr] = useState("");
 
   const [rootText, setRootText] = useState("");
-  const [postingRoot, setPostingRoot] = useState(false);
   const [composingRoot, setComposingRoot] = useState(false);
+  const [postingRoot, setPostingRoot] = useState(false);
 
   const [replyingId, setReplyingId] = useState(null);
   const [replyText, setReplyText] = useState("");
@@ -49,7 +31,11 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
   const [deletingId, setDeletingId] = useState(null);
   const [likingId, setLikingId] = useState(null);
 
-  const [flashId, setFlashId] = useState(null);
+  const [flashId, setFlashId] = useState(highlightId || null);
+
+  const school = user?.school || "";
+
+  const me = useMemo(() => normEmail(user?.email), [user]);
 
   const load = useCallback(async () => {
     if (!postId || !school || !token) return;
@@ -125,6 +111,7 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
       if (!firstSeen.has(em)) firstSeen.set(em, ts);
       else firstSeen.set(em, Math.min(firstSeen.get(em), ts));
     }
+    const author = normEmail(authorEmail);
     const others = Array.from(firstSeen.keys()).filter((e) => e && e !== author);
     others.sort((a, b) => (firstSeen.get(a) || 0) - (firstSeen.get(b) || 0));
 
@@ -132,43 +119,14 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
     if (author) map.set(author, "anonymous (게시자)");
     others.forEach((e, i) => map.set(e, `anonymous ${i + 1}`));
     return map;
-  }, [comments, author]);
+  }, [comments, authorEmail]);
 
-  const labelOf = useCallback(
-    (email) => anonLabelByEmail.get(normEmail(email)) || "anonymous",
-    [anonLabelByEmail]
-  );
-
-  // 트리 구조
-  const tree = useMemo(() => {
-    const nodes = (comments || []).map((c) => ({
-      ...c,
-      _id: toId(c._id),
-      parentId: c.parentId ? toId(c.parentId) : null,
-      children: [],
-    }));
-    const map = new Map();
-    nodes.forEach((n) => map.set(n._id, n));
-    const roots = [];
-    nodes.forEach((n) => {
-      const pid = n.parentId ? toId(n.parentId) : "";
-      if (pid && map.has(pid)) map.get(pid).children.push(n);
-      else roots.push(n);
-    });
-    const byTime = (a, b) => new Date(a.createdAt) - new Date(b.createdAt);
-    const walk = (arr) => { arr.sort(byTime); arr.forEach((n) => walk(n.children)); };
-    walk(roots);
-    return roots;
-  }, [comments]);
-
-  // 액션들
   const submitRoot = async () => {
     const content = rootText.trim();
     if (!content) return;
     setPostingRoot(true);
     try {
-      await addComment({ school, token, postId, content });
-      // ❌ setComments 바로 추가 제거 → 소켓으로만 반영
+      await addComment({ school, token, postId, content, parentId: null });
       setRootText("");
     } catch (e) {
       console.error("comments:add root failed", e);
@@ -185,7 +143,6 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
     setPostingReplyId(pid);
     try {
       await addComment({ school, token, postId, content, parentId: pid });
-      // ❌ setComments 제거
       setReplyingId(null);
       setReplyText("");
     } catch (e) {
@@ -201,8 +158,7 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
     if (!content || !editingId) return;
     setSavingId(editingId);
     try {
-      const updated = await apiUpdateComment({ school, token, commentId: editingId, content });
-      // 서버에서 socket "comment:update" 보내므로 여기선 로컬 업데이트 불필요
+      await apiUpdateComment({ school, token, commentId: editingId, content });
       setEditingId(null);
       setEditText("");
     } catch (e) {
@@ -219,7 +175,6 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
     setDeletingId(target);
     try {
       await apiDeleteComment({ school, token, commentId: target });
-      // socket "comment:delete"가 반영해줄 것
     } catch (e) {
       console.error("comments:delete failed", e);
       alert("Failed to delete comment.");
@@ -228,8 +183,11 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
     }
   };
 
-  const toggleLike = async (id) => {
+  const toggleLike = async (id, ownerEmail) => {
     const target = toId(id);
+    // ✋ 내 댓글엔 좋아요 금지 (프론트에서 선제 차단)
+    if (normEmail(ownerEmail) === me) return;
+
     setLikingId(target);
     try {
       await toggleCommentThumbs({ school, token, commentId: target });
@@ -273,12 +231,28 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
           <div className="p-3 text-sm text-gray-600">Loading…</div>
         ) : err ? (
           <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{err}</div>
-        ) : tree.length === 0 ? (
+        ) : comments.length === 0 ? (
           <div className="p-3 text-sm text-gray-600">No comments yet.</div>
         ) : (
           <ul className="space-y-3">
-            {tree.map((n) => (
-              <CommentNode key={n._id} node={n} me={me} getLabel={(e) => anonLabelByEmail.get(normEmail(e)) || "anonymous"} replyingId={replyingId} replyText={replyText} postingReplyId={postingReplyId} editingId={editingId} editText={editText} savingId={savingId} deletingId={deletingId} likingId={likingId} onStartReply={setReplyingId} onCancelReply={() => { setReplyingId(null); setReplyText(""); }} onChangeReply={setReplyText} onSubmitReply={submitReply} onStartEdit={(c) => { setEditingId(toId(c._id)); setEditText(c.content || ""); }} onCancelEdit={() => { setEditingId(null); setEditText(""); }} onChangeEdit={setEditText} onSaveEdit={saveEdit} onDelete={deleteOne} onToggleLike={toggleLike} flashId={flashId} />
+            {/** 트리 정렬은 서버에서 시간순, 여기선 플랫 렌더 */}
+            {comments.map((c) => (
+              <CommentNode
+                key={toId(c._id)}
+                node={c}
+                me={me}
+                authorLabelMap={anonLabelByEmail}
+                onToggleLike={toggleLike}
+                likingId={likingId}
+                deletingId={deletingId}
+                savingId={savingId}
+                onStartEdit={(x) => { setEditingId(toId(x._id)); setEditText(x.content || ""); }}
+                onCancelEdit={() => { setEditingId(null); setEditText(""); }}
+                onChangeEdit={setEditText}
+                onSaveEdit={saveEdit}
+                onDelete={deleteOne}
+                editingId={editingId}
+              />
             ))}
           </ul>
         )}
@@ -287,53 +261,40 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
   );
 }
 
-function CommentNode(props) {
-  const {
-    node,
-    me,
-    getLabel,
-    replyingId,
-    replyText,
-    postingReplyId,
-    editingId,
-    editText,
-    savingId,
-    deletingId,
-    likingId,
-    onStartReply,
-    onCancelReply,
-    onChangeReply,
-    onSubmitReply,
-    onStartEdit,
-    onCancelEdit,
-    onChangeEdit,
-    onSaveEdit,
-    onDelete,
-    onToggleLike,
-    flashId,
-  } = props;
-
+function CommentNode({
+  node,
+  me,
+  authorLabelMap,
+  onToggleLike,
+  likingId,
+  deletingId,
+  savingId,
+  onStartEdit,
+  onCancelEdit,
+  onChangeEdit,
+  onSaveEdit,
+  onDelete,
+  editingId,
+}) {
+  const isMine = String(node.email || "").toLowerCase() === String(me || "");
   const thumbsArr = node.thumbs ?? node.thumbsUpUsers ?? [];
   const liked = thumbsArr.map((e) => String(e || "").toLowerCase()).includes(me);
   const likeCount = node.thumbsCount ?? thumbsArr.length;
 
-  const highlight = String(flashId || "") === String(node._id);
-  const highlightCls = highlight ? "bg-yellow-50 ring-2 ring-yellow-300 rounded-lg p-2 transition-colors" : "";
-
   return (
     <li>
-      <div id={`comment-${node._id}`} className={`flex items-start gap-3 ${highlightCls}`}>
+      <div id={`comment-${node._id}`} className="flex items-start gap-3">
         <div className="h-8 w-8 shrink-0 rounded-full bg-gray-200" />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-gray-900">{getLabel(node.email)}</span>
+            <span className="text-sm font-medium text-gray-900">{authorLabelMap.get(String(node.email || "").toLowerCase()) || "anonymous"}</span>
             <span className="text-xs text-gray-500">• {dayjs(node.createdAt).fromNow()}</span>
           </div>
 
           {editingId === node._id ? (
             <div className="mt-2">
               <textarea
-                value={editText}
+                value={node.editText}
                 onChange={(e) => onChangeEdit(e.target.value)}
                 className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10"
               />
@@ -359,18 +320,16 @@ function CommentNode(props) {
 
           <div className="mt-2 flex items-center gap-3 text-xs text-gray-600">
             <button
-              onClick={() => onToggleLike(node._id)}
-              disabled={likingId === node._id}
+              onClick={() => onToggleLike(node._id, node.email)}
+              disabled={likingId === node._id || isMine} // ← 자기 댓글이면 비활성화
               className={`rounded px-2 py-1 ${liked ? "bg-blue-50 text-blue-600" : "hover:bg-gray-100"} disabled:opacity-60`}
+              title={isMine ? "You can’t like your own comment." : "Like comment"}
             >
               👍 {likeCount}
             </button>
 
-            <button onClick={() => onStartReply(node._id)} className="rounded px-2 py-1 hover:bg-gray-100">
-              Reply
-            </button>
-
-            {String(node.email || "").toLowerCase() === me && (
+            {/* 편집/삭제는 작성자만 */}
+            {isMine && (
               <>
                 <button onClick={() => onStartEdit(node)} className="rounded px-2 py-1 hover:bg-gray-100">
                   Edit
@@ -385,67 +344,12 @@ function CommentNode(props) {
               </>
             )}
           </div>
-
-          {node.children?.length > 0 && (
-            <ul className="mt-3 space-y-3 border-l-2 border-gray-200 pl-6">
-              {node.children.map((child) => (
-                <CommentNode
-                  key={child._id}
-                  node={child}
-                  me={me}
-                  getLabel={getLabel}
-                  replyingId={replyingId}
-                  replyText={replyText}
-                  postingReplyId={postingReplyId}
-                  editingId={editingId}
-                  editText={editText}
-                  savingId={savingId}
-                  deletingId={deletingId}
-                  likingId={likingId}
-                  onStartReply={onStartReply}
-                  onCancelReply={onCancelReply}
-                  onChangeReply={onChangeReply}
-                  onSubmitReply={onSubmitReply}
-                  onStartEdit={onStartEdit}
-                  onCancelEdit={onCancelEdit}
-                  onChangeEdit={onChangeEdit}
-                  onSaveEdit={onSaveEdit}
-                  onDelete={onDelete}
-                  onToggleLike={onToggleLike}
-                  flashId={flashId}
-                />
-              ))}
-            </ul>
-          )}
         </div>
       </div>
-
-      {/* reply box */}
-      {replyingId === node._id && (
-        <div className="ml-11 mt-2">
-          <textarea
-            value={replyText}
-            onChange={(e) => onChangeReply(e.target.value)}
-            className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10"
-            placeholder="Write a reply…"
-          />
-          <div className="mt-2 flex gap-2">
-            <button
-              onClick={() => onSubmitReply(node._id)}
-              disabled={postingReplyId === node._id}
-              className="rounded-lg bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-black disabled:opacity-60"
-            >
-              {postingReplyId === node._id ? "Posting…" : "Reply"}
-            </button>
-            <button onClick={onCancelReply} className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700">
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
     </li>
   );
 }
+
 
 
 

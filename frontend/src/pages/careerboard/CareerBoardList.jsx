@@ -27,21 +27,11 @@ function SkeletonRow() {
   );
 }
 
-function EmptyState({ onWrite, primary }) {
+/** ⬇️ 담백 버전: 아이콘/중앙 버튼 제거, 안내 문구만 */
+function EmptyState() {
   return (
-    <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-10 text-center">
-      <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 text-2xl">
-        💼
-      </div>
-      <h3 className="text-lg font-semibold text-gray-800">No posts yet</h3>
-      <p className="mt-1 text-sm text-gray-500">Start the first career discussion.</p>
-      <button
-        onClick={onWrite}
-        className="mt-6 inline-flex items-center rounded-xl px-4 py-2 text-sm font-medium text-white shadow focus:outline-none focus:ring-2 focus:ring-offset-0"
-        style={{ backgroundColor: primary }}
-      >
-        + Write Post
-      </button>
+    <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center">
+      <p className="text-sm text-gray-500">No posts yet.</p>
     </div>
   );
 }
@@ -96,27 +86,23 @@ export default function CareerBoardList() {
           res = await getPublicCareerPosts({ school, page, limit: PAGE_SIZE, q: query, sort });
         }
 
-        let rows = [];
-        let tot = 0;
-        if (res && typeof res === "object" && Array.isArray(res.items)) {
-          rows = res.items;
-          tot = Number(res.total || 0);
-        }
-
+        const nextItems = res?.items || res || [];
         if (!alive) return;
-        setItems(rows);
-        setTotal(tot);
-      } catch (e) {
-        if (alive) setError("Failed to load posts.");
+        setItems(nextItems);
+        setTotal(Number(res?.total ?? nextItems.length ?? 0));
+      } catch (err) {
+        if (!alive) return;
+        setError(err?.message || "Failed to load posts.");
       } finally {
-        if (alive) setLoading(false);
+        if (!alive) return;
+        setLoading(false);
       }
     })();
 
     return () => {
       alive = false;
     };
-  }, [school, token, page, query, sort]);
+  }, [token, school, page, query, sort]);
 
   const headerColor = { color: schoolTheme?.text || "#111827" };
   const primaryBtn = { backgroundColor: schoolTheme?.primary || "#111827" };
@@ -177,7 +163,7 @@ export default function CareerBoardList() {
             <li className="p-4 text-sm text-red-700">{error}</li>
           ) : items.length === 0 ? (
             <li className="p-4">
-              <EmptyState onWrite={() => navigate(schoolPath("/career/write"))} primary={schoolTheme?.primary || "#111827"} />
+              <EmptyState />
             </li>
           ) : (
             items.map((it) => (
@@ -209,3 +195,4 @@ export default function CareerBoardList() {
     </div>
   );
 }
+

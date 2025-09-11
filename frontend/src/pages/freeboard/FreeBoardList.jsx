@@ -1,4 +1,4 @@
-/// frontend/src/pages/freeboard/FreeBoardList.jsx
+// frontend/src/pages/freeboard/FreeBoardList.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
@@ -27,21 +27,11 @@ function SkeletonRow() {
   );
 }
 
-function EmptyState({ onWrite, primary }) {
+/** Minimal empty state */
+function EmptyState() {
   return (
-    <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-10 text-center">
-      <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 text-2xl">
-        📝
-      </div>
-      <h3 className="text-lg font-semibold text-gray-800">No posts yet</h3>
-      <p className="mt-1 text-sm text-gray-500">Be the first to start a discussion.</p>
-      <button
-        onClick={onWrite}
-        className="mt-6 inline-flex items-center rounded-xl px-4 py-2 text-sm font-medium text-white shadow focus:outline-none focus:ring-2 focus:ring-offset-0"
-        style={{ backgroundColor: primary }}
-      >
-        + Write Post
-      </button>
+    <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center">
+      <p className="text-sm text-gray-500">No posts yet.</p>
     </div>
   );
 }
@@ -81,7 +71,7 @@ export default function FreeBoardList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // Load list (server-side pagination; public/protected both 지원)
+  // Load list (server-side pagination; public/protected both)
   useEffect(() => {
     let alive = true;
     if (!school) return;
@@ -97,42 +87,23 @@ export default function FreeBoardList() {
           res = await getPublicPosts({ school, page, limit: PAGE_SIZE, q: query, sort });
         }
 
-        // normalize
-        let rows = [];
-        let tot = 0;
-        if (res && typeof res === "object" && Array.isArray(res.items)) {
-          rows = res.items;
-          tot = Number(res.total || 0);
-        } else if (Array.isArray(res)) {
-          // fallback for old API
-          const q = (query || "").trim().toLowerCase();
-          rows = res.filter((p) =>
-            q ? p.title?.toLowerCase().includes(q) || p.content?.toLowerCase().includes(q) : true
-          );
-          rows = rows.sort((a, b) =>
-            sort === "old"
-              ? new Date(a.createdAt) - new Date(b.createdAt)
-              : new Date(b.createdAt) - new Date(a.createdAt)
-          );
-          tot = rows.length;
-          const start = (page - 1) * PAGE_SIZE;
-          rows = rows.slice(start, start + PAGE_SIZE);
-        }
-
+        const nextItems = res?.items || res || [];
         if (!alive) return;
-        setItems(rows);
-        setTotal(tot);
-      } catch (e) {
-        if (alive) setError("Failed to load posts.");
+        setItems(nextItems);
+        setTotal(Number(res?.total ?? nextItems.length ?? 0));
+      } catch (err) {
+        if (!alive) return;
+        setError(err?.message || "Failed to load posts.");
       } finally {
-        if (alive) setLoading(false);
+        if (!alive) return;
+        setLoading(false);
       }
     })();
 
     return () => {
       alive = false;
     };
-  }, [school, token, page, query, sort]);
+  }, [token, school, page, query, sort]);
 
   const headerColor = { color: schoolTheme?.text || "#111827" };
   const primaryBtn = { backgroundColor: schoolTheme?.primary || "#111827" };
@@ -193,60 +164,38 @@ export default function FreeBoardList() {
             {error}
           </div>
         ) : items.length === 0 ? (
-          <EmptyState
-            onWrite={() => ensureAuth(() => navigate(schoolPath("/freeboard/write")))}
-            primary={schoolTheme?.primary || "#6b46c1"}
-          />
+          <EmptyState />
         ) : (
-          <>
-            <ul className="rounded-2xl border border-gray-200 bg-white shadow-sm">
-              {items.map((post, idx) => (
-                <li key={post._id} className="px-4 py-4 sm:px-6">
-                  <button
-                    onClick={() =>
-                      ensureAuth(() => navigate(schoolPath(`/freeboard/${post._id}`)))
-                    }
-                    className="block w-full text-left"
-                  >
-                    <h3 className="line-clamp-2 text-base font-semibold text-gray-900 hover:underline">
-                      {post.title}
-                    </h3>
-                    <p className="mt-1 text-xs text-gray-500">
-                      Posted by anonymous • {dayjs(post.createdAt).fromNow()}
-                    </p>
-                  </button>
-                  {idx !== items.length - 1 && <div className="mt-4 h-px w-full bg-gray-100" />}
-                </li>
-              ))}
-            </ul>
-
-            {/* ✅ 항상 페이지네이션 표시(아이템만 있으면) — 1페이지만 있어도 보여줌 */}
-            <Pagination
-              page={page}
-              total={Math.max(total, items.length)}
-              limit={PAGE_SIZE}
-              onPageChange={setPage}
-              siblingCount={1}
-              boundaryCount={1}
-              className="mb-2"
-              showStatus
-            />
-          </>
+          <ul className="rounded-2xl border border-gray-200 bg-white shadow-sm">
+            {items.map((post, idx) => (
+              <li key={post._id} className="px-4 py-4 sm:px-6">
+                <button
+                  onClick={() => ensureAuth(() => navigate(schoolPath(`/freeboard/${post._id}`)))}
+                  className="block w-full text-left"
+                >
+                  <h3 className="line-clamp-2 text-base font-semibold text-gray-900 hover:underline">
+                    {post.title}
+                  </h3>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Posted by anonymous • {dayjs(post.createdAt).fromNow()}
+                  </p>
+                </button>
+                {idx !== items.length - 1 && <div className="mt-4 h-px w-full bg-gray-100" />}
+              </li>
+            ))}
+          </ul>
         )}
+
+        {/* ✅ Careerboard와 동일하게 항상 페이지네이션 표시 */}
+        <Pagination
+          page={page}
+          total={total}
+          limit={PAGE_SIZE}
+          onPageChange={setPage}
+          className="mb-8"
+        />
       </div>
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
 

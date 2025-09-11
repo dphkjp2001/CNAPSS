@@ -203,8 +203,10 @@ export default function FreeBoardDetail() {
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <button
                 onClick={handleThumb}
-                className="rounded-xl border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-800 shadow-sm hover:bg-gray-50"
+                disabled={isAuthor} // ← 본인 글이면 비활성화
+                className="rounded-xl border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-800 shadow-sm hover:bg-gray-50 disabled:opacity-60"
                 aria-label="like post"
+                title={isAuthor ? "You can’t like your own post." : "Like post"}
               >
                 👍 {post.thumbsUpUsers?.length || 0}
               </button>

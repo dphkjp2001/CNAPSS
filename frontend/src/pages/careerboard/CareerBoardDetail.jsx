@@ -191,9 +191,11 @@ export default function CareerBoardDetail() {
 
           <div className="flex items-center justify-between border-t border-gray-100 px-5 py-3 sm:px-6">
             <div className="flex items-center gap-2">
-              <button
+                <button
                 onClick={handleThumb}
-                className="rounded-lg border px-3 py-1 text-sm hover:bg-gray-50"
+                disabled={isAuthor} // ← 본인 글이면 비활성화
+                className="rounded-lg border px-3 py-1 text-sm hover:bg-gray-50 disabled:opacity-60"
+                title={isAuthor ? "You can’t like your own post." : "Like post"}
               >
                 👍 Like
               </button>
