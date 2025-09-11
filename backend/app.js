@@ -20,7 +20,9 @@ const materialsRoutes = require("./routes/materials");
 const publicPostsRouter = require("./routes/public.posts");
 const publicMaterialsRouter = require("./routes/public.materials"); 
 const publicMarketRouter = require("./routes/public.market");
-
+// ✅ NEW: Career Board
+const careerPostsRoutes = require("./routes/career.posts");
+const publicCareerPostsRouter = require("./routes/public.career.posts");
 
 dotenv.config({
   path: process.env.NODE_ENV === "production" ? ".env.production" : ".env.development",
@@ -61,8 +63,14 @@ app.use("/api/auth", authRoutes);
 app.use("/api/public/:school/posts", publicPostsRouter);
 app.use("/api/public/:school/materials", publicMaterialsRouter);
 app.use("/api/public/:school/market", publicMarketRouter);
+// ✅ NEW: Career Board public
+app.use("/api/public/:school/career-posts", publicCareerPostsRouter);
 
+// ✅ 보호 라우트(학교 스코프)
 app.use("/api/:school/posts", postsRoutes);
+// ✅ NEW: Career Board protected
+app.use("/api/:school/career-posts", careerPostsRoutes);
+
 app.use("/api/:school/comments", commentRoutes);
 app.use("/api/:school/market", marketRoutes);
 app.use("/api/:school/chat", chatRoutes);
@@ -71,12 +79,9 @@ app.use("/api/:school/request", requireAuth, schoolGuard, requestRoutes);
 app.use("/api/:school/schedule", requireAuth, schoolGuard, scheduleRoutes);
 app.use("/api/:school/courses", requireAuth, schoolGuard, courseHubRoutes);
 app.use("/api/:school/materials", requireAuth, schoolGuard, materialsRoutes);
-app.use("/api/:school/places", requireAuth, schoolGuard, placesRouter);
-
-// 헬스체크
-app.get("/", (req, res) => res.send("✅ API server healthy"));
 
 module.exports = app;
+
 
 
 
