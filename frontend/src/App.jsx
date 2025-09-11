@@ -19,14 +19,21 @@ import Courses from "./pages/courses/Courses.jsx";
 import CourseWrite from "./pages/courses/CourseWrite";
 import MaterialDetail from "./pages/courses/MaterialDetail";
 
+// Dashboards (lazy)
 const Dashboard = lazy(() => import("./pages/dashboard/Dashboard"));
 const MyPosts = lazy(() => import("./pages/dashboard/MyPosts"));
 const LikedPosts = lazy(() => import("./pages/dashboard/LikedPosts"));
 const CommentedPosts = lazy(() => import("./pages/dashboard/CommentedPosts"));
 
+// FreeBoard (lazy)
 const FreeBoardList = lazy(() => import("./pages/freeboard/FreeBoardList"));
 const FreeBoardWrite = lazy(() => import("./pages/freeboard/FreeBoardWrite"));
 const FreeBoardDetail = lazy(() => import("./pages/freeboard/FreeBoardDetail"));
+
+// ✅ CareerBoard (lazy)
+const CareerBoardList = lazy(() => import("./pages/careerboard/CareerBoardList"));
+const CareerBoardWrite = lazy(() => import("./pages/careerboard/CareerBoardWrite"));
+const CareerBoardDetail = lazy(() => import("./pages/careerboard/CareerBoardDetail"));
 
 const MarketList = lazy(() => import("./pages/market/MarketList"));
 const MarketWrite = lazy(() => import("./pages/market/MarketWrite"));
@@ -56,7 +63,6 @@ function LegacyCourseMaterialsRedirect() {
   return <Navigate to={`/${school}/courses`} replace />;
 }
 
-/** 로그인/회원가입 라우트 가드: 이미 로그인 → 자신의 대시보드로 */
 function LoginRoute() {
   const { user } = useAuth();
   return user?.school ? <Navigate to={`/${user.school}/dashboard`} replace /> : <Login />;
@@ -66,7 +72,6 @@ function RegisterRoute() {
   return user?.school ? <Navigate to={`/${user.school}/dashboard`} replace /> : <Register />;
 }
 
-/** ✅ School whitelist gate (NYU only) */
 function SchoolGate({ children }) {
   const { school } = useParams();
   if (!ENABLED_SCHOOLS.has((school || "").toLowerCase())) {
@@ -97,8 +102,6 @@ export default function App() {
             <Route path="/" element={<SchoolSelect />} />
             <Route path="/select-school" element={<Navigate to="/" replace />} />
             <Route path="/about" element={<About />} />
-
-            {/* Auth (public look) */}
             <Route path="/login" element={<LoginRoute />} />
             <Route path="/register" element={<RegisterRoute />} />
             <Route path="/register/:school" element={<RegisterRoute />} />
@@ -147,6 +150,25 @@ export default function App() {
               }
             />
 
+            {/* ✅ CareerBoard */}
+            <Route path="career" element={<CareerBoardList />} />
+            <Route
+              path="career/:id"
+              element={
+                <RequireAuth>
+                  <CareerBoardDetail />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="career/write"
+              element={
+                <RequireAuth>
+                  <CareerBoardWrite />
+                </RequireAuth>
+              }
+            />
+
             {/* Dashboard sub-pages */}
             <Route
               path="myposts"
@@ -174,9 +196,7 @@ export default function App() {
             />
 
             {/* Market */}
-            {/* ✅ List is PUBLIC */}
             <Route path="market" element={<MarketList />} />
-            {/* Detail / Write / Edit remain protected */}
             <Route
               path="market/:id"
               element={
@@ -194,7 +214,7 @@ export default function App() {
               }
             />
             <Route
-              path="market/:id/edit"
+              path="market/edit/:id"
               element={
                 <RequireAuth>
                   <MarketEdit />
@@ -202,7 +222,7 @@ export default function App() {
               }
             />
 
-            {/* Messages */}
+            {/* Messages / Schedule / Food */}
             <Route
               path="messages"
               element={
@@ -211,10 +231,8 @@ export default function App() {
                 </RequireAuth>
               }
             />
-
-            {/* Schedule */}
             <Route
-              path="personal-schedule"
+              path="schedule"
               element={
                 <RequireAuth>
                   <PersonalSchedule />
@@ -229,45 +247,20 @@ export default function App() {
                 </RequireAuth>
               }
             />
+            <Route path="foodmap" element={<FoodMap />} />
 
-            {/* FoodMap */}
-            <Route
-              path="foodmap"
-              element={
-                <RequireAuth>
-                  <FoodMap />
-                </RequireAuth>
-              }
-            />
-
-            {/* ✅ CourseHub — 리스트는 공개, 작성/상세는 보호 */}
-            <Route path="courses" element={<Courses />} /> {/* PUBLIC */}
-            <Route
-              path="courses/write"
-              element={
-                <RequireAuth>
-                  <CourseWrite />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="courses/materials/:id"
-              element={
-                <RequireAuth>
-                  <MaterialDetail />
-                </RequireAuth>
-              }
-            />
-            <Route path="courses/:courseId/materials" element={<LegacyCourseMaterialsRedirect />} />
+            {/* Legacy redirects */}
+            <Route path="materials" element={<LegacyCourseMaterialsRedirect />} />
           </Route>
 
-          {/* Fallback */}
+          {/* 404 → home */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
     </AuthGateProvider>
   );
 }
+
 
 
 
