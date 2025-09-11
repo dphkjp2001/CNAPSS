@@ -8,8 +8,7 @@ const mongoose = require("mongoose");
 const Conversation = require("./models/Conversation");
 const Message = require("./models/Message");
 const Post = require("./models/Post");
-const CareerPost = require("./models/CareerPost"); // ✅ add: allow career posts to join rooms
-const Request = require("./models/Request");
+const Request = require("./models/Request"); // ✅ 추가
 
 if (process.env.NODE_ENV !== "production") {
   require("dotenv").config();
@@ -53,6 +52,9 @@ mongoose.connection.once("open", async () => {
   }
 });
 
+// --- 이하 socket.io 인증 및 이벤트 핸들러 그대로 ---
+
+
 // 소켓 인증 (JWT)
 io.use((socket, next) => {
   try {
@@ -62,12 +64,7 @@ io.use((socket, next) => {
       (socket.handshake.headers?.authorization || "").replace(/^Bearer\s+/i, "");
     if (!token) return next(new Error("UNAUTHORIZED"));
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    socket.user = {
-      id: decoded.id,
-      email: decoded.email,
-      school: decoded.school,
-      role: decoded.role || "user",
-    };
+    socket.user = { id: decoded.id, email: decoded.email, school: decoded.school, role: decoded.role || "user" };
     next();
   } catch {
     next(new Error("UNAUTHORIZED"));
@@ -135,29 +132,15 @@ io.on("connection", (socket) => {
     }
   });
 
-  // ✅ Freeboard + CareerBoard 모두 허용
   socket.on("post:join", async ({ postId }) => {
-    try {
-      if (!postId) return;
-
-      // try both Post and CareerPost
-      const [free, career] = await Promise.all([
-        Post.findById(postId).select("school").lean(),
-        CareerPost.findById(postId).select("school").lean(),
-      ]);
-      const schoolOf = free?.school || career?.school;
-
-      if (!schoolOf || schoolOf !== school) return; // tenant guard
-      socket.join(`post:${postId}`);
-    } catch (e) {
-      console.error("post:join error", e);
-    }
+    if (!postId) return;
+    const post = await Post.findById(postId).select("school").lean();
+    if (!post || post.school !== school) return;
+    socket.join(`post:${postId}`);
   });
-
   socket.on("post:leave", ({ postId }) => postId && socket.leave(`post:${postId}`));
 });
 
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => console.log(`🚀 Server listening on http://localhost:${PORT}`));
-
 
