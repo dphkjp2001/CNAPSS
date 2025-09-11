@@ -53,8 +53,7 @@ export default function CourseWrite() {
   const [kind] = useState("note");
 
   // Price & share
-  // Free 제거 → For Sale일 때만 가격을 입력(빈 문자열로 시작)
-  const [priceStr, setPriceStr] = useState(""); // "" → 바로 숫자 입력 가능
+  const [priceStr, setPriceStr] = useState("");
   const [sharePreference, setSharePreference] = useState("either");
 
   const [busy, setBusy] = useState(false);
@@ -96,7 +95,6 @@ export default function CourseWrite() {
       price = Math.floor(n);
       isFree = false;
     } else {
-      // wanted
       price = 0;
       isFree = true;
     }
@@ -121,13 +119,10 @@ export default function CourseWrite() {
       };
       await postJson(`${API}/${encodeURIComponent(school)}/materials`, payload);
 
-      navigate(
-        schoolPath(
-          `/courses/${encodeURIComponent(
-            courseCode.toUpperCase()
-          )}/materials?sem=${encodeURIComponent(semester)}`
-        )
-      );
+      // ✅ 생성 후 CourseHub 메인으로 이동
+      navigate(schoolPath(`/courses`));
+      // 기존(코스별 자료 목록 이동) 경로:
+      // navigate(schoolPath(`/courses/${encodeURIComponent(courseCode.toUpperCase())}/materials?sem=${encodeURIComponent(semester)}`));
     } catch {
       setErr("Failed to create your posting. Please try again.");
     } finally {
@@ -138,11 +133,10 @@ export default function CourseWrite() {
   // price 입력 핸들러: 숫자만 허용
   const onPriceChange = (e) => {
     const v = e.target.value;
-    const cleaned = v.replace(/[^\d]/g, ""); // 숫자 외 제거
+    const cleaned = v.replace(/[^\d]/g, "");
     setPriceStr(cleaned);
   };
 
-  // listingType 바꾸면 가격 입력 초기화
   const onChangeListing = (t) => {
     setListingType(t);
     setPriceStr("");
@@ -254,7 +248,7 @@ export default function CourseWrite() {
             </div>
           </div>
 
-          {/* Warning (display only) */}
+          {/* Warning */}
           <div>
             <div className="mb-1 text-sm font-semibold">Warning</div>
             <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-3 text-xs leading-relaxed text-yellow-900">
@@ -292,7 +286,7 @@ export default function CourseWrite() {
             )}
           </div>
 
-          {/* Share preference (single) */}
+          {/* Share preference */}
           <div>
             <label className="mb-1 block text-sm font-semibold">
               How would you like to share?
@@ -358,6 +352,7 @@ export default function CourseWrite() {
     </div>
   );
 }
+
 
 
 

@@ -166,6 +166,8 @@ export default function FreeBoardList() {
         ) : items.length === 0 ? (
           <EmptyState />
         ) : (
+          // FreeBoardList.jsx (수정된 부분만 설명)
+          // ...
           <ul className="rounded-2xl border border-gray-200 bg-white shadow-sm">
             {items.map((post, idx) => (
               <li key={post._id} className="px-4 py-4 sm:px-6">
@@ -177,13 +179,14 @@ export default function FreeBoardList() {
                     {post.title}
                   </h3>
                   <p className="mt-1 text-xs text-gray-500">
-                    Posted by anonymous • {dayjs(post.createdAt).fromNow()}
+                    Posted by anonymous • {dayjs(post.createdAt).fromNow()} · 💬 {post.commentsCount ?? "-"} · 👍 {post.likesCount ?? "-"}
                   </p>
                 </button>
                 {idx !== items.length - 1 && <div className="mt-4 h-px w-full bg-gray-100" />}
               </li>
             ))}
           </ul>
+
         )}
 
         {/* ✅ Careerboard와 동일하게 항상 페이지네이션 표시 */}

@@ -87,7 +87,7 @@ export default function CareerBoardDetail() {
   const handleThumb = async () => {
     try {
       await toggleCareerThumbs({ school, id: post._id });
-      // optimistic toggle then reload for consistency
+    // optimistic toggle then reload for consistency
       setPost((p) =>
         !p
           ? p
@@ -191,7 +191,7 @@ export default function CareerBoardDetail() {
 
           <div className="flex items-center justify-between border-t border-gray-100 px-5 py-3 sm:px-6">
             <div className="flex items-center gap-2">
-                <button
+              <button
                 onClick={handleThumb}
                 disabled={isAuthor} // ← 본인 글이면 비활성화
                 className="rounded-lg border px-3 py-1 text-sm hover:bg-gray-50 disabled:opacity-60"
@@ -243,7 +243,8 @@ export default function CareerBoardDetail() {
 
           {/* Comments (same endpoint `/api/:school/comments/:postId`) */}
           <div className="border-t border-gray-100 p-5 sm:p-6">
-            <CommentSection postId={post._id} />
+            {/* ✅ pass authorEmail just like FreeBoard */}
+            <CommentSection postId={post._id} authorEmail={post.email} />
           </div>
         </div>
 
@@ -259,3 +260,4 @@ export default function CareerBoardDetail() {
     </div>
   );
 }
+

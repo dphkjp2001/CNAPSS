@@ -153,34 +153,33 @@ export default function CareerBoardList() {
 
         {/* List */}
         <ul className="divide-y divide-gray-100 rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
-          {loading ? (
-            <>
-              <SkeletonRow />
-              <SkeletonRow />
-              <SkeletonRow />
-            </>
-          ) : error ? (
-            <li className="p-4 text-sm text-red-700">{error}</li>
-          ) : items.length === 0 ? (
-            <li className="p-4">
-              <EmptyState />
-            </li>
-          ) : (
-            items.map((it) => (
-              <li key={it._id} className="py-3">
-                <button
-                  onClick={() => navigate(schoolPath(`/career/${it._id}`))}
-                  className="w-full text-left"
-                >
-                  <div className="text-base font-medium text-gray-900">{it.title}</div>
-                  <div className="mt-1 text-xs text-gray-500">
-                    {dayjs(it.createdAt).fromNow()} · 💬 {it.commentsCount ?? "-"} · 👍{" "}
-                    {it.likesCount ?? "-"}
-                  </div>
-                </button>
-              </li>
-            ))
-          )}
+            {loading ? (
+                <>
+                <SkeletonRow />
+                <SkeletonRow />
+                <SkeletonRow />
+                </>
+            ) : error ? (
+                <li className="p-4 text-sm text-red-700">{error}</li>
+            ) : items.length === 0 ? (
+                <li className="p-4">
+                <EmptyState />
+                </li>
+            ) : (
+                items.map((it) => (
+                <li key={it._id} className="py-3">
+                    <button
+                    onClick={() => navigate(schoolPath(`/career/${it._id}`))}
+                    className="w-full text-left"
+                    >
+                    <div className="text-base font-medium text-gray-900">{it.title}</div>
+                    <div className="mt-1 text-xs text-gray-500">
+                        Posted by anonymous • {dayjs(it.createdAt).fromNow()} · 💬 {it.commentsCount ?? "-"} · 👍 {it.likesCount ?? "-"}
+                    </div>
+                    </button>
+                </li>
+                ))
+            )}
         </ul>
 
         {/* Pagination */}

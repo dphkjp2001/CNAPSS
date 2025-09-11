@@ -423,7 +423,8 @@ import { useLoginGate } from "../../hooks/useLoginGate";
 import { listPosts, getPublicPosts } from "../../api/posts";
 import { listRecentMaterials } from "../../api/materials";
 import { listItems as listMarketItems, getPublicMarketRecent } from "../../api/market";
-import SchoolBackground from "../../components/SchoolBackground";
+// ✅ CareerBoard 미리보기용 API (FreeBoard와 동일 패턴 가정)
+import { listCareerPosts, getPublicCareerPosts } from "../../api/careerPosts";
 
 dayjs.extend(relativeTime);
 dayjs.locale("en");
@@ -441,7 +442,7 @@ export default function Dashboard() {
   const nav = useNavigate();
   const schoolPath = useSchoolPath();
 
-  /* ================= Free Board ================= */
+  /* ================= Free Board (preview) ================= */
   const [posts, setPosts] = useState([]);
   const [loadingPosts, setLoadingPosts] = useState(true);
   const [errorPosts, setErrorPosts] = useState("");
@@ -462,6 +463,34 @@ export default function Dashboard() {
         if (alive) setErrorPosts("Failed to load posts.");
       } finally {
         if (alive) setLoadingPosts(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [school, token]);
+
+  /* ================= Career Board (preview) ================= */
+  const [careerPosts, setCareerPosts] = useState([]);
+  const [loadingCareer, setLoadingCareer] = useState(true);
+  const [errorCareer, setErrorCareer] = useState("");
+
+  useEffect(() => {
+    let alive = true;
+    if (!school) return;
+    (async () => {
+      setLoadingCareer(true);
+      setErrorCareer("");
+      try {
+        let data;
+        if (token) data = await listCareerPosts({ school, token });
+        else data = await getPublicCareerPosts({ school, page: 1, limit: 10 });
+        const rows = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : [];
+        if (alive) setCareerPosts(rows.slice(0, 5));
+      } catch {
+        if (alive) setErrorCareer("Failed to load career posts.");
+      } finally {
+        if (alive) setLoadingCareer(false);
       }
     })();
     return () => {
@@ -547,15 +576,50 @@ export default function Dashboard() {
 
   return (
     <div
-      className="relative min-h-screen px-4 py-6 sm:px-6 lg:px-8"
-      // style={{ backgroundColor: schoolTheme?.bg || "#f6f3ff" }} // ⛔️ 임시 비활성화
+      className="min-h-screen px-4 py-6 sm:px-6 lg:px-8"
+      style={{ backgroundColor: schoolTheme?.bg || "#f6f3ff" }}
     >
-      {/* 대시보드 전용 배경 */}
-      <SchoolBackground schoolKey="nyu" imageUrl="/nyu-bg.png" opacity={0.18} />
+      <div className="mx-auto w-full max-w-5xl space-y-5">
+        {/* ====== 상단 2열: Free Board | Career Board ====== */}
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+          {/* Free Board preview */}
+          <section className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5 shadow-sm">
+            <Header
+              title="Free Board"
+              onTitleClick={() => nav(schoolPath("/freeboard"))}
+              onWrite={() => ensureAuth(() => nav(schoolPath("/freeboard/write")))}
+              headerColor={headerColor}
+              primaryBtn={primaryBtn}
+              writeText="+ Write Post"
+            />
+            <PostList
+              loading={loadingPosts}
+              error={errorPosts}
+              rows={posts}
+              onOpen={(id) => ensureAuth(() => nav(schoolPath(`/freeboard/${id}`)))}
+            />
+          </section>
 
-      {/* ✅ 콘텐츠를 배경 위로 올려 완전 불투명 카드로 보이게 함 */}
-      <div className="relative z-10 mx-auto w-full max-w-5xl space-y-5">
-        {/* ===== CourseHub ===== */}
+          {/* Career Board preview (Free와 동일 스타일) */}
+          <section className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5 shadow-sm">
+            <Header
+              title="Career Board"
+              onTitleClick={() => nav(schoolPath("/career"))}
+              onWrite={() => ensureAuth(() => nav(schoolPath("/career/write")))}
+              headerColor={headerColor}
+              primaryBtn={primaryBtn}
+              writeText="+ Write Post"
+            />
+            <PostList
+              loading={loadingCareer}
+              error={errorCareer}
+              rows={careerPosts}
+              onOpen={(id) => ensureAuth(() => nav(schoolPath(`/career/${id}`)))}
+            />
+          </section>
+        </div>
+
+        {/* ====== 중간: CourseHub ====== */}
         <section className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5 shadow-sm">
           <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2
@@ -615,7 +679,7 @@ export default function Dashboard() {
           )}
         </section>
 
-        {/* ===== Marketplace (latest 4) ===== */}
+        {/* ====== 하단: Marketplace ====== */}
         <section className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5 shadow-sm">
           <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2
@@ -696,70 +760,75 @@ export default function Dashboard() {
             </div>
           )}
         </section>
-
-        {/* ===== Free Board (compact) ===== */}
-        <section className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5 shadow-sm">
-          <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <h2
-              onClick={() => nav(schoolPath("/freeboard"))}
-              className="cursor-pointer text-lg font-semibold sm:text-xl hover:underline"
-              style={headerColor}
-            >
-              Free Board
-            </h2>
-
-            <button
-              onClick={() => ensureAuth(() => nav(schoolPath("/freeboard/write")))}
-              className="w-full rounded-xl px-4 py-2 text-sm font-semibold text-white shadow sm:w-auto"
-              style={primaryBtn}
-            >
-              + Write Post
-            </button>
-          </div>
-
-          {loadingPosts ? (
-            <ul className="space-y-2">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <li key={i}>
-                  <div className="h-4 w-3/4 animate-pulse rounded bg-gray-100" />
-                </li>
-              ))}
-            </ul>
-          ) : errorPosts ? (
-            <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{errorPosts}</div>
-          ) : posts.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-gray-300 p-6 text-center text-sm text-gray-600">
-              No posts yet. Be the first to write!
-            </div>
-          ) : (
-            <ul className="divide-y divide-gray-100">
-              {posts.map((p) => (
-                <li key={p._id} className="py-2">
-                  <button
-                    onClick={() => ensureAuth(() => nav(schoolPath(`/freeboard/${p._id}`)))}
-                    className="flex w-full items-center justify-between text-left"
-                  >
-                    <h3 className="min-w-0 truncate text-sm font-semibold text-gray-900 hover:underline">
-                      {p.title}
-                    </h3>
-                    <span className="ml-3 shrink-0 text-[11px] text-gray-500">
-                      {dayjs(p.createdAt).fromNow()}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
       </div>
     </div>
+  );
+}
+
+/* ====== shared subcomponents ====== */
+function Header({ title, onTitleClick, onWrite, headerColor, primaryBtn, writeText }) {
+  return (
+    <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <h2
+        onClick={onTitleClick}
+        className="cursor-pointer text-lg font-semibold sm:text-xl hover:underline"
+        style={headerColor}
+      >
+        {title}
+      </h2>
+      <button
+        onClick={onWrite}
+        className="w-full rounded-xl px-4 py-2 text-sm font-semibold text-white shadow sm:w-auto"
+        style={primaryBtn}
+      >
+        {writeText}
+      </button>
+    </div>
+  );
+}
+
+function PostList({ loading, error, rows, onOpen }) {
+  if (loading) {
+    return (
+      <ul className="space-y-2">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <li key={i}>
+            <div className="h-4 w-3/4 animate-pulse rounded bg-gray-100" />
+          </li>
+        ))}
+      </ul>
+    );
+  }
+  if (error) {
+    return <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</div>;
+  }
+  if (!rows || rows.length === 0) {
+    return (
+      <div className="rounded-lg border border-dashed border-gray-300 p-6 text-center text-sm text-gray-600">
+        No posts yet. Be the first to write!
+      </div>
+    );
+  }
+  return (
+    <ul className="divide-y divide-gray-100">
+      {rows.map((p) => (
+        <li key={p._id} className="py-2">
+          <button onClick={() => onOpen(p._id)} className="flex w-full items-center justify-between text-left">
+            <h3 className="min-w-0 truncate text-sm font-semibold text-gray-900 hover:underline">{p.title}</h3>
+            <span className="ml-3 shrink-0 text-[11px] text-gray-500">
+              {p.createdAt ? dayjs(p.createdAt).fromNow() : ""}
+            </span>
+          </button>
+        </li>
+      ))}
+    </ul>
   );
 }
 
 /* ====== helpers ====== */
 function CourseHubList({ title, items, badgeClass, onOpen }) {
   return (
-    <div className="rounded-xl border p-4 bg-white">{/* bg-white 유지(불투명 카드) */}
+    <div className="rounded-xl border p-4 bg-white">
       <div className="mb-2 text-sm font-semibold text-gray-900">{title}</div>
       {!items || items.length === 0 ? (
         <div className="rounded-lg border border-dashed border-gray-300 p-6 text-center text-sm text-gray-600">
@@ -775,7 +844,7 @@ function CourseHubList({ title, items, badgeClass, onOpen }) {
               <li key={id} className="py-2">
                 <button
                   onClick={() => onOpen(id)}
-                  className="flex w-full items-center justify-between text-left hover:opacity-95"
+                  className="flex w-full items-center justify-between text.left hover:opacity-95"
                 >
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
@@ -801,6 +870,8 @@ function CourseHubList({ title, items, badgeClass, onOpen }) {
     </div>
   );
 }
+
+
 
 
 

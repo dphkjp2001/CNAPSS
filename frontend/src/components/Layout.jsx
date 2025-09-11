@@ -100,6 +100,16 @@ export default function Layout() {
               Marketplace
             </NavLink>
 
+
+            {/* Messages accessible anywhere*/}
+            <NavLink
+              to={schoolPath("/messages")}
+              className={({ isActive }) => `${linkCls} ${isActive ? activeCls : ""}`}
+            >
+              Messages
+            </NavLink>
+
+
             {/* Notifications */}
             <button
               type="button"
