@@ -115,6 +115,7 @@ router.post("/", async (req, res) => {
       title: String(title || "").trim(),
       content: String(content || "").trim(),
       email: req.user.email,
+      nickname: me.nickname,             // ✅ 추가: required 필드 채움
       school: req.user.school,
     });
     res.status(201).json({ message: "Post created successfully.", post: doc });
@@ -193,6 +194,7 @@ router.post("/:id/thumbs", async (req, res) => {
 });
 
 module.exports = router;
+
 
 
 

@@ -30,7 +30,7 @@ const FreeBoardList = lazy(() => import("./pages/freeboard/FreeBoardList"));
 const FreeBoardWrite = lazy(() => import("./pages/freeboard/FreeBoardWrite"));
 const FreeBoardDetail = lazy(() => import("./pages/freeboard/FreeBoardDetail"));
 
-// ✅ CareerBoard (lazy)
+// CareerBoard (lazy)
 const CareerBoardList = lazy(() => import("./pages/careerboard/CareerBoardList"));
 const CareerBoardWrite = lazy(() => import("./pages/careerboard/CareerBoardWrite"));
 const CareerBoardDetail = lazy(() => import("./pages/careerboard/CareerBoardDetail"));
@@ -150,7 +150,7 @@ export default function App() {
               }
             />
 
-            {/* ✅ CareerBoard */}
+            {/* CareerBoard */}
             <Route path="career" element={<CareerBoardList />} />
             <Route
               path="career/:id"
@@ -165,6 +165,25 @@ export default function App() {
               element={
                 <RequireAuth>
                   <CareerBoardWrite />
+                </RequireAuth>
+              }
+            />
+
+            {/* ✅ CourseHub (추가) */}
+            <Route path="courses" element={<Courses />} />
+            <Route
+              path="courses/write"
+              element={
+                <RequireAuth>
+                  <CourseWrite />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="courses/materials/:id"
+              element={
+                <RequireAuth>
+                  <MaterialDetail />
                 </RequireAuth>
               }
             />
@@ -260,6 +279,7 @@ export default function App() {
     </AuthGateProvider>
   );
 }
+
 
 
 
