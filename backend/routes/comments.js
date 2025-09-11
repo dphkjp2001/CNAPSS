@@ -160,23 +160,42 @@
 const express = require("express");
 const router = express.Router({ mergeParams: true });
 const mongoose = require("mongoose");
+
 const requireAuth = require("../middleware/requireAuth");
 const schoolGuard = require("../middleware/schoolGuard");
+
 const Comment = require("../models/Comment");
 const Post = require("../models/Post");
+const CareerPost = require("../models/CareerPost");
 const User = require("../models/User");
 
 router.use(requireAuth, schoolGuard);
 
+function isValidObjectId(id) {
+  return mongoose.Types.ObjectId.isValid(id);
+}
+
+/**
+ * 대상 글 존재 확인 (Freeboard Post 또는 CareerPost)
+ * - 둘 중 하나라도 같은 school로 존재하면 OK
+ */
+async function findAnyPostById(postId, school) {
+  const [free, career] = await Promise.all([
+    Post.findOne({ _id: postId, school }).select("_id").lean(),
+    CareerPost.findOne({ _id: postId, school }).select("_id").lean(),
+  ]);
+  return free || career; // 하나라도 있으면 truthy
+}
+
 // GET /api/:school/comments/:postId
 router.get("/:postId", async (req, res) => {
   const { postId } = req.params;
-  if (!mongoose.Types.ObjectId.isValid(postId)) {
+  if (!isValidObjectId(postId)) {
     return res.status(400).json({ message: "Invalid postId" });
   }
   try {
-    const post = await Post.findOne({ _id: postId, school: req.user.school }).select("_id");
-    if (!post) return res.status(404).json({ message: "Post not found." });
+    const target = await findAnyPostById(postId, req.user.school);
+    if (!target) return res.status(404).json({ message: "Post not found." });
 
     const items = await Comment.find({ postId, school: req.user.school })
       .sort({ createdAt: 1 })
@@ -195,7 +214,7 @@ router.post("/:postId", async (req, res) => {
   let { content, parentId = null } = req.body;
   content = String(content || "").trim();
 
-  if (!mongoose.Types.ObjectId.isValid(postId)) {
+  if (!isValidObjectId(postId)) {
     return res.status(400).json({ message: "Invalid postId" });
   }
   if (!content) return res.status(400).json({ message: "Content required" });
@@ -206,12 +225,12 @@ router.post("/:postId", async (req, res) => {
       return res.status(403).json({ message: "Only verified users can comment." });
     }
 
-    const post = await Post.findOne({ _id: postId, school: req.user.school }).select("_id");
-    if (!post) return res.status(404).json({ message: "Post not found." });
+    const target = await findAnyPostById(postId, req.user.school);
+    if (!target) return res.status(404).json({ message: "Post not found." });
 
     let parent = null;
     if (parentId) {
-      if (!mongoose.Types.ObjectId.isValid(parentId)) {
+      if (!isValidObjectId(parentId)) {
         return res.status(400).json({ message: "Invalid parentId" });
       }
       parent = await Comment.findOne({ _id: parentId, postId, school: req.user.school });
@@ -221,13 +240,13 @@ router.post("/:postId", async (req, res) => {
     const doc = await Comment.create({
       postId,
       email: req.user.email,
-      nickname: me.nickname,
+      nickname: me.nickname, // nickname은 DB에 저장(표시는 프론트에서 정책대로)
       content,
       parentId: parent ? parent._id : null,
       school: req.user.school,
     });
 
-    // 🔔 실시간 전파
+    // 🔔 실시간 전파(기존 채널명 그대로 유지)
     try {
       const io = req.app.get("io");
       if (io) {
@@ -248,7 +267,8 @@ router.put("/:id", async (req, res) => {
   const { id } = req.params;
   let { content } = req.body;
   content = String(content || "").trim();
-  if (!mongoose.Types.ObjectId.isValid(id)) {
+
+  if (!isValidObjectId(id)) {
     return res.status(400).json({ message: "Invalid comment id" });
   }
   if (!content) return res.status(400).json({ message: "Content required" });
@@ -263,7 +283,6 @@ router.put("/:id", async (req, res) => {
     comment.content = content;
     await comment.save();
 
-    // 🔔 실시간 업데이트
     try {
       const io = req.app.get("io");
       if (io) {
@@ -281,7 +300,7 @@ router.put("/:id", async (req, res) => {
 // DELETE /api/:school/comments/:id
 router.delete("/:id", async (req, res) => {
   const { id } = req.params;
-  if (!mongoose.Types.ObjectId.isValid(id)) {
+  if (!isValidObjectId(id)) {
     return res.status(400).json({ message: "Invalid comment id" });
   }
   try {
@@ -290,9 +309,9 @@ router.delete("/:id", async (req, res) => {
     if (owned.email !== req.user.email && req.user.role !== "superadmin") {
       return res.status(403).json({ message: "You can only delete your own comments." });
     }
+
     await Comment.deleteOne({ _id: id, school: req.user.school });
 
-    // 🔔 실시간 전파
     try {
       const io = req.app.get("io");
       if (io) io.to(`post:${owned.postId}`).emit("comment:delete", { _id: id });
@@ -306,10 +325,14 @@ router.delete("/:id", async (req, res) => {
 });
 
 // POST /api/:school/comments/:commentId/thumbs
-// 👉 자기 댓글/대댓글 좋아요 금지
+// 👉 자기 댓글 좋아요 금지
 router.post("/:commentId/thumbs", async (req, res) => {
   try {
     const { commentId } = req.params;
+    if (!isValidObjectId(commentId)) {
+      return res.status(400).json({ message: "Invalid comment id" });
+    }
+
     const email = String(req.user.email || "").toLowerCase();
 
     const cur = await Comment.findOne({ _id: commentId, school: req.user.school })
@@ -321,8 +344,13 @@ router.post("/:commentId/thumbs", async (req, res) => {
       return res.status(400).json({ message: "You cannot like your own comment." });
     }
 
-    const has = (cur.thumbsUpUsers || []).map((e) => String(e || "").toLowerCase()).includes(email);
-    const update = has ? { $pull: { thumbsUpUsers: email } } : { $addToSet: { thumbsUpUsers: email } };
+    const has = (cur.thumbsUpUsers || [])
+      .map((e) => String(e || "").toLowerCase())
+      .includes(email);
+
+    const update = has
+      ? { $pull: { thumbsUpUsers: email } }
+      : { $addToSet: { thumbsUpUsers: email } };
 
     const next = await Comment.findOneAndUpdate(
       { _id: commentId, school: req.user.school },
@@ -330,7 +358,6 @@ router.post("/:commentId/thumbs", async (req, res) => {
       { new: true, lean: true }
     );
 
-    // 🔔 실시간 좋아요 반영
     try {
       const io = req.app.get("io");
       if (io) io.to(`post:${cur.postId}`).emit("comment:thumbs", { _id: commentId, thumbs: next.thumbsUpUsers || [] });
@@ -345,6 +372,7 @@ router.post("/:commentId/thumbs", async (req, res) => {
 });
 
 module.exports = router;
+
 
 
 
