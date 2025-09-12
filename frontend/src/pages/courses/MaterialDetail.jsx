@@ -4,7 +4,13 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { useSchool } from "../../contexts/SchoolContext";
 import { useSchoolPath } from "../../utils/schoolPath";
-import { getMaterial, checkMaterialRequest, sendMaterialRequest } from "../../api/materials";
+import {
+  getMaterial,
+  getPublicMaterial,       // ✅ NEW
+  checkMaterialRequest,
+  sendMaterialRequest,
+} from "../../api/materials";
+import { useLoginGate } from "../../hooks/useLoginGate"; // ✅ NEW
 
 const currency = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -25,6 +31,7 @@ export default function MaterialDetail() {
   const { token, user } = useAuth();
   const { school, schoolTheme } = useSchool();
   const schoolPath = useSchoolPath();
+  const { ensureAuth } = useLoginGate();   // ✅
 
   const [mat, setMat] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -46,12 +53,14 @@ export default function MaterialDetail() {
 
   const isWanted = (mat?.listingType || "sale") === "wanted";
 
-  // load detail
+  // ✅ 상세 로딩: 토큰 있으면 보호, 없으면 공개
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
-        const data = await getMaterial({ school, token, id });
+        const data = token
+          ? await getMaterial({ school, token, id })
+          : await getPublicMaterial({ school, id });
         if (!alive) return;
         setMat(data);
       } catch {
@@ -65,9 +74,9 @@ export default function MaterialDetail() {
     };
   }, [school, token, id]);
 
-  // check existing request (only if not owner)
+  // 요청 중복 체크: 로그인 상태에서만 호출(비로그인은 패스)
   useEffect(() => {
-    if (!mat || isOwner) {
+    if (!token || !mat || isOwner) {
       setChecking(false);
       return;
     }
@@ -94,27 +103,30 @@ export default function MaterialDetail() {
     };
   }, [mat, isOwner, school, token, id, isWanted]);
 
-  const handleSend = async () => {
+  // ✅ Send: 클릭 시점에만 로그인 유도
+  const handleSend = () => {
     const text = String(message || "").trim();
     if (!text) return alert("Please enter a message.");
-    try {
-      setSending(true);
-      const res = await sendMaterialRequest({
-        school,
-        token,
-        materialId: id,
-        message: text,
-        reqType: isWanted ? "coursehub_wtb" : "coursehub",
-      });
-      setAlreadySent(true);
-      setConversationId(res?.conversationId || null);
-      setMessage("");
-    } catch (e) {
-      console.error(e);
-      alert(e?.message || "Failed to send request.");
-    } finally {
-      setSending(false);
-    }
+    ensureAuth(async () => {
+      try {
+        setSending(true);
+        const res = await sendMaterialRequest({
+          school,
+          token,
+          materialId: id,
+          message: text,
+          reqType: isWanted ? "coursehub_wtb" : "coursehub",
+        });
+        setAlreadySent(true);
+        setConversationId(res?.conversationId || null);
+        setMessage("");
+      } catch (e) {
+        console.error(e);
+        alert(e?.message || "Failed to send request.");
+      } finally {
+        setSending(false);
+      }
+    });
   };
 
   if (loading) {
@@ -140,14 +152,9 @@ export default function MaterialDetail() {
   }
 
   const priceText = mat.isFree ? "Free" : currency.format(Number(mat.price || 0));
-  const meta1 = [
-    mat.courseCode,
-    mat.semester,
-    mat.professor ? `Prof. ${mat.professor}` : null,
-  ]
+  const meta1 = [mat.courseCode, mat.semester, mat.professor ? `Prof. ${mat.professor}` : null]
     .filter(Boolean)
     .join(" • ");
-
   const meta2 = [
     (mat.listingType ? (mat.listingType === "wanted" ? "Wanted" : "For Sale") : null),
     mat.kind ? `${mat.kind}` : null,
@@ -160,16 +167,10 @@ export default function MaterialDetail() {
   const hasOfferings = Array.isArray(mat.offerings) && mat.offerings.length > 0;
 
   return (
-    <div
-      className="min-h-screen px-4 py-8"
-      style={{ backgroundColor: schoolTheme?.bg || "#f6f3ff" }}
-    >
+    <div className="min-h-screen px-4 py-8" style={{ backgroundColor: schoolTheme?.bg || "#f6f3ff" }}>
       <div className="mx-auto max-w-4xl">
         <div className="mb-4 flex items-center justify-between gap-3">
-          <button
-            onClick={() => navigate(-1)}
-            className="rounded-xl border px-3 py-1.5 text-sm hover:bg-white"
-          >
+          <button onClick={() => navigate(-1)} className="rounded-xl border px-3 py-1.5 text-sm hover:bg-white">
             Back
           </button>
           {isOwner && (
@@ -184,20 +185,16 @@ export default function MaterialDetail() {
           <div className="border-b border-gray-100 p-5 sm:p-6">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">
-                  {mat.title || mat.courseCode}
-                </h1>
+                <h1 className="text-2xl font-bold text-gray-900">{mat.title || mat.courseCode}</h1>
                 <div className="mt-1 text-sm text-gray-600">{meta1}</div>
                 {meta2 && <div className="mt-1 text-xs text-gray-500">{meta2}</div>}
 
-                {/* ✅ Regarding */}
                 {mat.regarding && (
                   <div className="mt-2 text-sm text-gray-800">
                     <span className="font-medium">Regarding:</span> {mat.regarding}
                   </div>
                 )}
 
-                {/* ✅ Offerings badges */}
                 {hasOfferings && (
                   <div className="mt-2 flex flex-wrap gap-2">
                     {mat.offerings.map((o) => (
@@ -226,7 +223,10 @@ export default function MaterialDetail() {
                 <ul className="list-disc pl-5 text-gray-700 space-y-1">
                   <li>Only personal class notes/materials are allowed.</li>
                   <li>Do not share or sell copyrighted materials (e.g., full syllabus PDFs).</li>
-                  <li>Discuss delivery (in person / online) via chat after {isWanted ? "fulfilling this request" : "sending a request"}.</li>
+                  <li>
+                    Discuss delivery (in person / online) via chat after{" "}
+                    {isWanted ? "fulfilling this request" : "sending a request"}.
+                  </li>
                 </ul>
               </div>
             </div>
@@ -235,12 +235,8 @@ export default function MaterialDetail() {
             <div className="space-y-3">
               <div className="rounded-xl border border-gray-200 p-4 text-sm">
                 <div className="text-gray-500">Posted by</div>
-                <div className="mt-0.5 font-medium text-gray-900">
-                  {mat.authorName || "Unknown"}
-                </div>
-                <div className="mt-2 text-xs text-gray-400">
-                  {new Date(mat.createdAt).toLocaleString()}
-                </div>
+                <div className="mt-0.5 font-medium text-gray-900">{mat.authorName || "Unknown"}</div>
+                <div className="mt-2 text-xs text-gray-400">{new Date(mat.createdAt).toLocaleString()}</div>
               </div>
 
               {/* Contact box (only non-owner) */}
@@ -251,7 +247,7 @@ export default function MaterialDetail() {
                   </div>
 
                   {/* Already sent */}
-                  {alreadySent ? (
+                  {token && alreadySent ? (
                     <div className="flex items-center justify-between gap-2">
                       <div className="text-xs text-green-700">
                         {isWanted ? "You have already offered." : "Request already sent."}
@@ -272,15 +268,18 @@ export default function MaterialDetail() {
                     </div>
                   ) : (
                     <>
+                      {/* 비로그인도 자유롭게 입력 가능 */}
                       <input
                         value={message}
                         onChange={(e) => setMessage(e.target.value)}
-                        placeholder={isWanted ? "Offer your note/material…" : "Say hello and ask about the material…"}
+                        placeholder={
+                          isWanted ? "Offer your note/material…" : "Say hello and ask about the material…"
+                        }
                         className="mb-2 w-full rounded-lg border px-3 py-2 text-sm"
                         disabled={checking || sending}
                       />
                       <button
-                        onClick={handleSend}
+                        onClick={handleSend}  // ✅ 클릭 시점에 로그인 유도
                         disabled={checking || sending || !message.trim()}
                         className={
                           "w-full rounded-lg px-3 py-2 text-sm font-semibold text-white " +
@@ -291,7 +290,7 @@ export default function MaterialDetail() {
                             : "bg-purple-600 hover:bg-purple-700")
                         }
                       >
-                        {sending ? (isWanted ? "Offering…" : "Sending…") : (isWanted ? "Fulfill" : "Send")}
+                        {sending ? (isWanted ? "Offering…" : "Sending…") : isWanted ? "Fulfill" : "Send"}
                       </button>
                     </>
                   )}
@@ -304,6 +303,7 @@ export default function MaterialDetail() {
     </div>
   );
 }
+
 
 
 
