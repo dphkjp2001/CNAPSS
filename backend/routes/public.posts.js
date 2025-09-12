@@ -9,13 +9,7 @@ const ALLOWED_SCHOOLS = ["nyu", "columbia", "boston"];
 
 /**
  * GET /api/public/:school/posts
- * Query:
- *  - page (default 1), limit (default 20, max 50)
- *  - q (search in title, optional)
- *  - sort = new | old (default new)
- *
- * Returns minimal safe fields:
- *  - _id, title, createdAt, commentsCount, likesCount
+ * Query: page, limit, q, sort(new|old)
  */
 router.get("/", async (req, res) => {
   try {
@@ -28,13 +22,10 @@ router.get("/", async (req, res) => {
     const limit = Math.min(Math.max(parseInt(req.query.limit || "20", 10), 1), 50);
     const q = (req.query.q || "").trim();
     const sortOpt = String(req.query.sort || "new").toLowerCase();
-
     const sortStage = sortOpt === "old" ? { createdAt: 1, _id: 1 } : { createdAt: -1, _id: -1 };
 
     const match = { school };
-    if (q) {
-      match.title = { $regex: q, $options: "i" }; // search by title only (no sensitive data exposure)
-    }
+    if (q) match.title = { $regex: q, $options: "i" };
 
     const total = await Post.countDocuments(match);
 
@@ -49,10 +40,9 @@ router.get("/", async (req, res) => {
           title: 1,
           createdAt: 1,
           school: 1,
-          likesCount: { $size: { $ifNull: ["$thumbsUpUsers", []] } }, // from Post schema
+          likesCount: { $size: { $ifNull: ["$thumbsUpUsers", []] } },
         },
       },
-      // count comments per post (same school)
       {
         $lookup: {
           from: "comments",
@@ -65,7 +55,7 @@ router.get("/", async (req, res) => {
         },
       },
       { $addFields: { commentsCount: { $ifNull: [{ $arrayElemAt: ["$cc.c", 0] }, 0] } } },
-      { $project: { cc: 0, school: 0 } }, // hide internal fields
+      { $project: { cc: 0, school: 0 } },
     ]);
 
     res.json({ page, limit, total, items });
@@ -75,4 +65,36 @@ router.get("/", async (req, res) => {
   }
 });
 
+/**
+ * ✅ NEW: GET /api/public/:school/posts/:id
+ * - 공개 상세 조회 (비로그인 허용)
+ * - 민감 정보 배제
+ */
+router.get("/:id", async (req, res) => {
+  try {
+    const school = String(req.params.school || "").toLowerCase();
+    if (!ALLOWED_SCHOOLS.includes(school)) {
+      return res.status(400).json({ message: "Invalid school." });
+    }
+
+    const post = await Post.findOne({ _id: req.params.id, school }).lean();
+    if (!post) return res.status(404).json({ message: "Post not found." });
+
+    // 최소 안전 필드만 노출
+    const safe = {
+      _id: post._id,
+      title: post.title,
+      content: post.content,
+      email: post.email,          // 작성자 식별(프론트에서 익명 정책 처리)
+      createdAt: post.createdAt,
+      thumbsUpUsers: post.thumbsUpUsers || [],
+    };
+    res.json(safe);
+  } catch (err) {
+    console.error("Public post detail error:", err);
+    res.status(500).json({ message: "Failed to load public post." });
+  }
+});
+
 module.exports = router;
+

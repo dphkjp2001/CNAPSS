@@ -23,6 +23,8 @@ const publicMarketRouter = require("./routes/public.market");
 // ✅ NEW: Career Board
 const careerPostsRoutes = require("./routes/career.posts");
 const publicCareerPostsRouter = require("./routes/public.career.posts");
+// ✅ NEW: Public comments (Freeboard/Career 공유)
+const publicCommentsRouter = require("./routes/public.comments");
 
 dotenv.config({
   path: process.env.NODE_ENV === "production" ? ".env.production" : ".env.development",
@@ -30,10 +32,8 @@ dotenv.config({
 
 const app = express();
 
-// 프록시 뒤에서 IP/프로토콜 판단 오류 방지
 app.set("trust proxy", 1);
 
-// 허용 origin
 const allowedOrigins = [
   "https://www.cnapss.com",
   "https://cnapss.com",
@@ -56,17 +56,16 @@ app.use(cors({
 
 app.use(express.json());
 
-// 라우트
-app.use("/api/auth", authRoutes);
-
-// ✅ 공개 라우트(로그인 불필요)
+// 공개 라우트(로그인 불필요)
 app.use("/api/public/:school/posts", publicPostsRouter);
 app.use("/api/public/:school/materials", publicMaterialsRouter);
 app.use("/api/public/:school/market", publicMarketRouter);
+// ✅ NEW: 공개 댓글 조회
+app.use("/api/public/:school/comments", publicCommentsRouter);
 // ✅ NEW: Career Board public
 app.use("/api/public/:school/career-posts", publicCareerPostsRouter);
 
-// ✅ 보호 라우트(학교 스코프)
+// 보호 라우트(학교 스코프)
 app.use("/api/:school/posts", postsRoutes);
 // ✅ NEW: Career Board protected
 app.use("/api/:school/career-posts", careerPostsRoutes);
@@ -81,6 +80,7 @@ app.use("/api/:school/courses", requireAuth, schoolGuard, courseHubRoutes);
 app.use("/api/:school/materials", requireAuth, schoolGuard, materialsRoutes);
 
 module.exports = app;
+
 
 
 

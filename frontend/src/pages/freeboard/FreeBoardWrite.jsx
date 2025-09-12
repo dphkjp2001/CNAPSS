@@ -6,12 +6,14 @@ import { useSchool } from "../../contexts/SchoolContext";
 import { useSchoolPath } from "../../utils/schoolPath";
 import AsyncButton from "../../components/AsyncButton";
 import { createPost } from "../../api/posts";
+import { useLoginGate } from "../../hooks/useLoginGate";
 
 export default function FreeBoardWrite() {
   const { user } = useAuth();
-  const { school, schoolTheme } = useSchool(); // ✅ scoped campus
+  const { school, schoolTheme } = useSchool();
   const schoolPath = useSchoolPath();
   const navigate = useNavigate();
+  const { ensureAuth } = useLoginGate();
 
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
@@ -22,16 +24,15 @@ export default function FreeBoardWrite() {
     [title, content]
   );
 
-  const submit = useCallback(async () => {
-    if (!isValid || !user) return;
+  const doCreate = useCallback(async () => {
     try {
       setError("");
       await createPost({
         title: title.trim(),
         content: content.trim(),
-        email: user.email,
-        nickname: user.nickname,
-        school, // ✅ send campus to backend
+        email: user?.email,
+        nickname: user?.nickname,
+        school,
       });
       alert("Post submitted!");
       navigate(schoolPath("/freeboard"));
@@ -41,26 +42,20 @@ export default function FreeBoardWrite() {
       setError(msg);
       alert(msg);
     }
-  }, [isValid, user, title, content, school, navigate, schoolPath]);
+  }, [title, content, user?.email, user?.nickname, school, navigate, schoolPath]);
+
+  const submit = useCallback(async () => {
+    if (!isValid) return;
+    if (!user) { ensureAuth(); return; } // 🔐 액션 시점에서만 로그인 요구
+    await doCreate();
+  }, [isValid, user, ensureAuth, doCreate]);
 
   const handleKeyDown = (e) => {
-    // Cmd/Ctrl + Enter to submit
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
       e.preventDefault();
       submit();
     }
   };
-
-  if (!user) {
-    return (
-      <div
-        className="min-h-screen flex items-center justify-center text-sm text-gray-600"
-        style={{ backgroundColor: schoolTheme?.bg || "#f6f3ff" }}
-      >
-        Loading user information…
-      </div>
-    );
-  }
 
   return (
     <div
@@ -99,7 +94,7 @@ export default function FreeBoardWrite() {
                 onKeyDown={handleKeyDown}
                 placeholder="Write your content here..."
                 rows={10}
-                className="mt-2 w-full resize-y rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:border-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900/10"
+                className="mt-2 w-full resize-y rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10"
                 required
                 aria-label="post content"
               />
@@ -133,9 +128,18 @@ export default function FreeBoardWrite() {
                 Post
               </AsyncButton>
             </div>
+
+            {!user && (
+              <p className="pt-1 text-right text-xs text-gray-500">
+                You can fill the form now — you’ll be asked to log in when you post.
+              </p>
+            )}
           </form>
         </div>
       </div>
     </div>
   );
 }
+
+
+

@@ -172,7 +172,7 @@ export default function FreeBoardList() {
             {items.map((post, idx) => (
               <li key={post._id} className="px-4 py-4 sm:px-6">
                 <button
-                  onClick={() => ensureAuth(() => navigate(schoolPath(`/freeboard/${post._id}`)))}
+                  onClick={() => navigate(schoolPath(`/freeboard/${post._id}`))}
                   className="block w-full text-left"
                 >
                   <h3 className="line-clamp-2 text-base font-semibold text-gray-900 hover:underline">

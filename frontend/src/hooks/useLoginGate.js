@@ -9,9 +9,12 @@ export function useLoginGate() {
   const from = `${pathname}${search || ""}`;
 
   function ensureAuth(actionIfAuthed) {
-    if (user) return actionIfAuthed?.();
-    openGate(from); // 🔥 open modal
+    if (user) {
+      return actionIfAuthed?.();
+    }
+    openGate(from); // 🔥 open login modal
   }
 
   return { ensureAuth, isAuthed: !!user };
 }
+

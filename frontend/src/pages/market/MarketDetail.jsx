@@ -1,5 +1,5 @@
 // frontend/src/pages/market/MarketDetail.jsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { useSchool } from "../../contexts/SchoolContext";
@@ -32,6 +32,9 @@ export default function MarketDetail() {
   const [message, setMessage] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
 
+  // 🖼 active image index for gallery
+  const [activeIndex, setActiveIndex] = useState(0);
+
   const isOwner = useMemo(
     () => !!user && !!item && user.email === item.seller,
     [user, item]
@@ -45,6 +48,7 @@ export default function MarketDetail() {
         const data = await getItem({ school, token, id });
         if (!mounted) return;
         setItem(data);
+        setActiveIndex(0); // reset when item changes
       } catch (e) {
         console.error(e);
         setErrorMsg(e?.payload?.message || "Failed to load the item.");
@@ -122,6 +126,24 @@ export default function MarketDetail() {
     navigate(schoolPath(`/market/${id}/edit`));
   };
 
+  // ↔️ keyboard navigation for gallery (left/right)
+  const onKeyDown = useCallback(
+    (e) => {
+      if (!item?.images?.length) return;
+      if (e.key === "ArrowRight") {
+        setActiveIndex((i) => (i + 1) % item.images.length);
+      } else if (e.key === "ArrowLeft") {
+        setActiveIndex((i) => (i - 1 + item.images.length) % item.images.length);
+      }
+    },
+    [item?.images?.length]
+  );
+
+  useEffect(() => {
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onKeyDown]);
+
   if (loading) {
     return (
       <div
@@ -144,12 +166,15 @@ export default function MarketDetail() {
     );
   }
 
+  const images = Array.isArray(item.images) ? item.images : [];
+  const activeSrc = images[activeIndex];
+
   return (
     <div
       className="min-h-screen px-4 py-8"
       style={{ backgroundColor: schoolTheme?.bg || "#f6f3ff" }}
     >
-      <div className="mx-auto max-w-5xl">
+      <div className="mx-auto max-w-6xl">
         {/* Title row */}
         <div className="mb-4 flex items-start justify-between gap-3">
           <h1 className="text-2xl font-bold text-gray-900">{item.title}</h1>
@@ -174,28 +199,44 @@ export default function MarketDetail() {
           )}
         </div>
 
-        <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
-          {/* Images */}
-          <div className="md:col-span-2">
-            {Array.isArray(item.images) && item.images.length > 0 ? (
+        {/* 💡 Layout balance: 5-column grid (3 : 2) on desktop */}
+        <div className="grid grid-cols-1 gap-8 md:grid-cols-5">
+          {/* Images (span 3) */}
+          <div className="md:col-span-3">
+            {images.length > 0 ? (
               <>
+                {/* Main image */}
                 <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
                   <img
-                    src={item.images[0]}
-                    alt="cover"
-                    className="w-full object-cover"
-                    style={{ aspectRatio: "4/3" }}
+                    src={activeSrc}
+                    alt={`photo ${activeIndex + 1}`}
+                    className="w-full h-full object-cover"
+                    // Slightly taller than 4:3 to feel balanced against the right panel
+                    style={{ aspectRatio: "5/4" }}
                   />
                 </div>
-                {item.images.length > 1 && (
-                  <div className="mt-3 flex gap-2">
-                    {item.images.slice(1).map((src, i) => (
-                      <img
+
+                {/* Thumbnails */}
+                {images.length > 1 && (
+                  <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+                    {images.map((src, i) => (
+                      <button
                         key={i}
-                        src={src}
-                        alt={`thumb ${i + 2}`}
-                        className="h-16 w-16 rounded-lg object-cover ring-1 ring-gray-200"
-                      />
+                        type="button"
+                        aria-label={`Show photo ${i + 1}`}
+                        onClick={() => setActiveIndex(i)}
+                        className={`relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-lg ring-1 transition 
+                          ${i === activeIndex ? "ring-gray-900" : "ring-gray-200 hover:ring-gray-300"}`}
+                      >
+                        <img
+                          src={src}
+                          alt={`thumb ${i + 1}`}
+                          className="h-full w-full object-cover"
+                        />
+                        {i === activeIndex && (
+                          <span className="pointer-events-none absolute inset-0 ring-2 ring-offset-1 ring-gray-900/80 rounded-lg" />
+                        )}
+                      </button>
                     ))}
                   </div>
                 )}
@@ -207,19 +248,20 @@ export default function MarketDetail() {
             )}
           </div>
 
-          {/* Right panel */}
-          <div className="space-y-4">
-            <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-              <div className="text-xl font-semibold text-gray-900">
+          {/* Right panel (span 2) */}
+          <div className="md:col-span-2 space-y-4">
+            <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+              <div className="text-2xl font-bold text-gray-900">
                 {currency.format(item.price)}
               </div>
-              <div className="mt-1 text-sm text-gray-600">
+              <div className="mt-2 text-sm text-gray-600">
                 Seller:{" "}
                 <span className="font-medium">
                   {item.sellerNickname || "Unknown"}
                 </span>
               </div>
-              <div className="mt-3 text-sm text-gray-700 whitespace-pre-wrap">
+
+              <div className="mt-4 text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
                 {item.description || "No description"}
               </div>
             </div>
@@ -281,6 +323,7 @@ export default function MarketDetail() {
     </div>
   );
 }
+
 
 
 

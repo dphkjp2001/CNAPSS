@@ -7,7 +7,7 @@ import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import "dayjs/locale/en";
 
-import { getPost, deletePost, toggleThumbs, updatePost } from "../../api/posts";
+import { getPost, getPublicPost, deletePost, toggleThumbs, updatePost } from "../../api/posts";
 import { useAuth } from "../../contexts/AuthContext";
 import { useSchool } from "../../contexts/SchoolContext";
 import { apiFetch } from "../../api/http";
@@ -19,7 +19,7 @@ export default function FreeBoardDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const { school, schoolTheme } = useSchool();
   const schoolPath = useSchoolPath();
 
@@ -34,7 +34,11 @@ export default function FreeBoardDetail() {
 
   const loadPost = async () => {
     try {
-      const data = await getPost({ school, id });
+      // 🔓 비로그인: 공개 API, 🔒 로그인: 보호 API
+      const data = token
+        ? await getPost({ school, id })
+        : await getPublicPost({ school, id });
+
       setPost(data);
       // 편집 폼 값 동기화
       setEditTitle(data?.title || "");
@@ -47,7 +51,7 @@ export default function FreeBoardDetail() {
   useEffect(() => {
     loadPost();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, school]);
+  }, [id, school, token]);
 
   // ✅ 알림 딥링크로 진입 시 서버에 읽음 반영
   useEffect(() => {
@@ -94,8 +98,11 @@ export default function FreeBoardDetail() {
   };
 
   const handleThumb = async () => {
+    // ✋ 요구사항: 비로그인은 좋아요 포함 “다른 기능” 불가 → 아무 것도 안 함(게이트도 열지 않음)
+    if (!user) return;
     try {
       await toggleThumbs({ school, id: post._id });
+      // 낙관적 업데이트
       setPost((p) =>
         !p
           ? p
@@ -123,7 +130,6 @@ export default function FreeBoardDetail() {
     setSaving(true);
     try {
       const updated = await updatePost({ school, id: post._id, title, content });
-      // API가 { message, post } or post 중 하나를 반환할 수 있으므로 양쪽 대응
       const next = updated?.post || updated;
       setPost(next);
       setIsEditing(false);
@@ -135,7 +141,6 @@ export default function FreeBoardDetail() {
   };
 
   const handleCancelEdit = () => {
-    // 원본으로 되돌리고 편집 종료
     setEditTitle(post?.title || "");
     setEditContent(post?.content || "");
     setIsEditing(false);
@@ -203,10 +208,16 @@ export default function FreeBoardDetail() {
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <button
                 onClick={handleThumb}
-                disabled={isAuthor} // ← 본인 글이면 비활성화
+                disabled={!user || isAuthor} // ← 비로그인/자기글이면 비활성화(게이트 안 뜸)
                 className="rounded-xl border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-800 shadow-sm hover:bg-gray-50 disabled:opacity-60"
                 aria-label="like post"
-                title={isAuthor ? "You can’t like your own post." : "Like post"}
+                title={
+                  !user
+                    ? "Log in to like (disabled for guests)"
+                    : isAuthor
+                    ? "You can’t like your own post."
+                    : "Like post"
+                }
               >
                 👍 {post.thumbsUpUsers?.length || 0}
               </button>
@@ -271,6 +282,7 @@ export default function FreeBoardDetail() {
     </div>
   );
 }
+
 
 
 

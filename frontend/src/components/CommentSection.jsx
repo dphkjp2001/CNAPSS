@@ -7,6 +7,7 @@ import AsyncButton from "./AsyncButton";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import "dayjs/locale/en";
+import { useLoginGate } from "../hooks/useLoginGate";
 
 import {
   listComments,
@@ -19,17 +20,24 @@ import {
 dayjs.extend(relativeTime);
 dayjs.locale("en");
 
-// local utils
 const toId = (v) => (v == null ? "" : String(v));
-const normEmail = (e) => String(e || "").toLowerCase().trim();
+const norm = (e) => String(e || "").toLowerCase().trim();
 
+/**
+ * 요구사항
+ * - 비로그인도: 댓글 목록 보기 가능, 입력창 타이핑 가능
+ * - "등록(Submit)"을 누르는 순간에만 로그인 요구(게이트 오픈)
+ * - 좋아요/수정/삭제는 비로그인 시 전부 불가능(비활성화)
+ *   (로그인 유저의 기존 동작은 유지)
+ */
 export default function CommentSection({ postId, authorEmail = "", highlightId = null }) {
   const { user, token } = useAuth();
   const { school } = useSchool();
   const socket = useSocket();
+  const { ensureAuth } = useLoginGate();
 
-  const me = normEmail(user?.email);
-  const author = normEmail(authorEmail);
+  const me = norm(user?.email);
+  const author = norm(authorEmail);
 
   const [comments, setComments] = useState([]);
   const [listLoading, setListLoading] = useState(true);
@@ -38,7 +46,7 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
   // root composer
   const [rootText, setRootText] = useState("");
   const [postingRoot, setPostingRoot] = useState(false);
-  const [composingRoot, setComposingRoot] = useState(false);
+  const [imeComposing, setImeComposing] = useState(false);
 
   // reply composer
   const [replyingId, setReplyingId] = useState(null);
@@ -56,8 +64,9 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
 
   const [flashId, setFlashId] = useState(highlightId || null);
 
+  // ✅ 목록은 토큰 없어도 로드 시도 (백엔드가 공개 조회 허용해야 함)
   const load = useCallback(async () => {
-    if (!postId || !school || !token) return;
+    if (!postId || !school) return;
     setListLoading(true);
     setErr("");
     try {
@@ -84,17 +93,14 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
       if (!c || String(c.postId) !== String(postId)) return;
       setComments((prev) => (prev.some((x) => toId(x._id) === toId(c._id)) ? prev : [...prev, c]));
     };
-
     const onUpdate = (c) => {
       if (!c || String(c.postId) !== String(postId)) return;
       setComments((prev) => prev.map((x) => (toId(x._id) === toId(c._id) ? c : x)));
     };
-
     const onDelete = ({ _id }) => {
       if (!_id) return;
       setComments((prev) => prev.filter((x) => toId(x._id) !== toId(_id)));
     };
-
     const onThumbs = ({ _id, thumbs }) => {
       if (!_id) return;
       setComments((prev) =>
@@ -110,7 +116,6 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
     socket.on("comment:update", onUpdate);
     socket.on("comment:delete", onDelete);
     socket.on("comment:thumbs", onThumbs);
-
     return () => {
       try { socket.emit("post:leave", { postId }); } catch (_) {}
       socket.off("comment:new", onNew);
@@ -120,11 +125,11 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
     };
   }, [socket, postId]);
 
-  // anonymous labels
+  // 익명 라벨 맵
   const anonLabelByEmail = useMemo(() => {
     const firstSeen = new Map();
     for (const c of comments) {
-      const em = normEmail(c.email);
+      const em = norm(c.email);
       if (!em) continue;
       const ts = new Date(c.createdAt || 0).getTime();
       if (!firstSeen.has(em)) firstSeen.set(em, ts);
@@ -140,11 +145,11 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
   }, [comments, author]);
 
   const labelOf = useCallback(
-    (email) => anonLabelByEmail.get(normEmail(email)) || "anonymous",
+    (email) => anonLabelByEmail.get(norm(email)) || "anonymous",
     [anonLabelByEmail]
   );
 
-  // highlight for deep-link
+  // 하이라이트 페이드
   useEffect(() => {
     if (!highlightId) return;
     setFlashId(highlightId);
@@ -152,7 +157,7 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
     return () => clearTimeout(t);
   }, [highlightId]);
 
-  // ✅ build tree: root(list) + children map
+  // 트리 구성
   const { roots, childrenMap } = useMemo(() => {
     const list = (comments || []).map((c) => ({ ...c, _id: toId(c._id), parentId: toId(c.parentId) || null }));
     const byParent = new Map();
@@ -163,14 +168,21 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
       arr.push(c);
       byParent.set(c.parentId || "__root__", arr);
     }
-    // keep chronological order (already sorted by createdAt asc from API)
     return { roots, childrenMap: byParent };
   }, [comments]);
 
-  // submit root comment
+  // ---------- 액션 가드: submit 시점에만 로그인 요구 ----------
+  const ensureBeforeAction = () => {
+    if (!user || !token) { ensureAuth(); return false; }
+    return true;
+  };
+
+  // Root 댓글 등록
   const submitRoot = async () => {
     const content = rootText.trim();
     if (!content) return;
+    if (!ensureBeforeAction()) return;
+
     setPostingRoot(true);
     try {
       await addComment({ school, token, postId, content, parentId: null });
@@ -183,10 +195,12 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
     }
   };
 
-  // submit reply
+  // 대댓글 등록
   const submitReply = async (parentId) => {
     const content = replyText.trim();
     if (!content) return;
+    if (!ensureBeforeAction()) return;
+
     const pid = toId(parentId);
     setPostingReplyId(pid);
     try {
@@ -201,10 +215,12 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
     }
   };
 
-  // edit save
+  // 편집/삭제/좋아요 (비로그인 차단, 로그인 시 기존 로직 유지)
   const saveEdit = async () => {
     const content = editText.trim();
     if (!content || !editingId) return;
+    if (!ensureBeforeAction()) return;
+
     setSavingId(editingId);
     try {
       await apiUpdateComment({ school, token, commentId: editingId, content });
@@ -218,9 +234,10 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
     }
   };
 
-  // delete
   const deleteOne = async (id) => {
+    if (!ensureBeforeAction()) return;
     if (!window.confirm("Delete this comment?")) return;
+
     const target = toId(id);
     setDeletingId(target);
     try {
@@ -233,14 +250,14 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
     }
   };
 
-  // like toggle (UI guard for self-like)
   const toggleLike = async (id, ownerEmail) => {
+    if (!ensureBeforeAction()) return;
+    if (norm(ownerEmail) === me) return; // 자기 댓글 좋아요 방지(UI)
     const target = toId(id);
-    if (normEmail(ownerEmail) === me) return; // self-like block on UI
     setLikingId(target);
     try {
       await toggleCommentThumbs({ school, token, commentId: target });
-      // socket will sync
+      // socket이 동기화해 줄 것
     } catch (e) {
       console.error("comments:thumb toggle failed", e);
     } finally {
@@ -248,35 +265,30 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
     }
   };
 
-  if (!user || !token) {
-    return (
-      <div className="mt-6 rounded-xl border bg-white p-4 text-sm text-gray-600">
-        Please log in to view and write comments.
-      </div>
-    );
-  }
-
+  // ❗️중요: 입력창은 로그인 여부와 무관하게 항상 활성화(disabled=false)
   return (
     <div className="mt-8">
       <h3 className="mb-3 text-lg font-semibold text-gray-900">Comments</h3>
 
-      {/* root composer */}
+      {/* Root composer */}
       <div className="mb-4 rounded-xl border bg-white p-3 shadow-sm">
         <textarea
           value={rootText}
           onChange={(e) => setRootText(e.target.value)}
-          onCompositionStart={() => setComposingRoot(true)}
-          onCompositionEnd={() => setComposingRoot(false)}
+          onCompositionStart={() => setImeComposing(true)}
+          onCompositionEnd={() => setImeComposing(false)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey && !composingRoot) {
+            if (e.key === "Enter" && !e.shiftKey && !imeComposing) {
               e.preventDefault();
               submitRoot();
             }
           }}
           placeholder="Write a comment…"
           className="h-20 w-full resize-none rounded-lg border px-3 py-2 text-sm"
+          // 로그인 여부와 무관하게 타이핑 가능
         />
-        <div className="mt-2 text-right">
+        <div className="mt-2 flex items-center justify-between">
+          {!user && <span className="text-xs text-gray-500">You’ll be asked to log in when you post.</span>}
           <AsyncButton
             disabled={postingRoot}
             onClick={submitRoot}
@@ -287,7 +299,7 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
         </div>
       </div>
 
-      {/* list (threaded) */}
+      {/* List */}
       <div className="rounded-xl border bg-white p-2 sm:p-3">
         {listLoading ? (
           <div className="p-3 text-sm text-gray-600">Loading…</div>
@@ -319,15 +331,13 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
                   setEditingId(toId(x._id));
                   setEditText(x.content || "");
                 }}
-                onCancelEdit={() => {
-                  setEditingId(null);
-                  setEditText("");
-                }}
+                onCancelEdit={() => { setEditingId(null); setEditText(""); }}
                 onChangeEdit={setEditText}
                 onSaveEdit={saveEdit}
                 onDelete={deleteOne}
                 editingId={editingId}
                 flashId={flashId}
+                isAuthed={!!user}
               />
             ))}
           </ul>
@@ -360,10 +370,11 @@ function ThreadNode({
   onDelete,
   editingId,
   flashId,
+  isAuthed,
 }) {
-  const isMine = normEmail(node.email) === me;
+  const isMine = norm(node.email) === me;
   const thumbsArr = node.thumbs ?? node.thumbsUpUsers ?? [];
-  const liked = thumbsArr.map((e) => normEmail(e)).includes(me);
+  const liked = thumbsArr.map((e) => norm(e)).includes(me);
   const likeCount = node.thumbsCount ?? thumbsArr.length;
 
   const children = (childrenMap.get(toId(node._id)) || []).filter((x) => toId(x._id) !== toId(node._id));
@@ -392,8 +403,9 @@ function ThreadNode({
               <div className="mt-2 flex gap-2">
                 <button
                   onClick={onSaveEdit}
-                  disabled={savingId === node._id}
+                  disabled={savingId === node._id || !isAuthed}
                   className="rounded-lg bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-black disabled:opacity-60"
+                  title={!isAuthed ? "Log in to edit" : "Save"}
                 >
                   {savingId === node._id ? "Saving…" : "Save"}
                 </button>
@@ -410,26 +422,30 @@ function ThreadNode({
           )}
 
           <div className="mt-2 flex items-center gap-3 text-xs text-gray-600">
+            {/* 좋아요: 비로그인 불가 */}
             <button
               onClick={() => onToggleLike(node._id, node.email)}
-              disabled={likingId === node._id || isMine}
+              disabled={likingId === node._id || isMine || !isAuthed}
               className={`rounded px-2 py-1 ${liked ? "bg-blue-50 text-blue-600" : "hover:bg-gray-100"} disabled:opacity-60`}
-              title={isMine ? "You can’t like your own comment." : "Like comment"}
+              title={!isAuthed ? "Log in to like" : isMine ? "You can’t like your own comment." : "Like comment"}
             >
               👍 {likeCount}
             </button>
 
+            {/* Reply: 에디터는 누구나 열 수 있게(쓰기 시점에서 게이트) */}
             <button
               onClick={() => {
                 setReplyingId(toId(node._id));
                 setReplyText("");
               }}
               className="rounded px-2 py-1 hover:bg-gray-100"
+              title="Reply"
             >
               Reply
             </button>
 
-            {isMine && (
+            {/* Edit/Delete: 본인 + 로그인에만 노출 */}
+            {isAuthed && isMine && (
               <>
                 <button onClick={() => onStartEdit(node)} className="rounded px-2 py-1 hover:bg-gray-100">
                   Edit
@@ -445,7 +461,7 @@ function ThreadNode({
             )}
           </div>
 
-          {/* inline reply editor */}
+          {/* inline reply editor (에디터는 항상 열 수 있음) */}
           {replyingId === toId(node._id) && (
             <div className="mt-2 rounded-lg border bg-white p-2">
               <textarea
@@ -502,6 +518,7 @@ function ThreadNode({
               onDelete={onDelete}
               editingId={editingId}
               flashId={flashId}
+              isAuthed={isAuthed}
             />
           ))}
         </ul>
@@ -509,6 +526,8 @@ function ThreadNode({
     </li>
   );
 }
+
+
 
 
 
