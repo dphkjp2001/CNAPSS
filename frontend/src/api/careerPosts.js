@@ -13,6 +13,11 @@ export async function getPublicCareerPosts({ school, page = 1, limit = 20, q = "
   return getJson(url);
 }
 
+export async function getPublicCareerPost({ school, id }) {
+  const url = `${API_URL}/public/${school}/career-posts/${id}`;
+  return getJson(url);
+}
+
 // ============== Protected (auth) ==============
 export async function listCareerPosts({ school, page = 1, limit = 20, q = "", sort = "new" } = {}) {
   const url = new URL(`${API_URL}/${school}/career-posts`);
@@ -57,3 +62,4 @@ export async function listCareerCommented({ school, email }) {
   const url = `${API_URL}/${school}/career-posts/commented/${encodeURIComponent(email)}`;
   return getJson(url);
 }
+

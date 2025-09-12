@@ -1,14 +1,14 @@
 // frontend/src/pages/careerboard/CareerBoardWrite.jsx
 import React, { useMemo, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../../contexts/AuthContext";
 import { useSchool } from "../../contexts/SchoolContext";
 import { useSchoolPath } from "../../utils/schoolPath";
 import AsyncButton from "../../components/AsyncButton";
 import { createCareerPost } from "../../api/careerPosts";
+import { useLoginGate } from "../../hooks/useLoginGate";
 
 export default function CareerBoardWrite() {
-  const { user } = useAuth();
+  const { ensureAuth } = useLoginGate();
   const { school, schoolTheme } = useSchool();
   const schoolPath = useSchoolPath();
   const navigate = useNavigate();
@@ -19,24 +19,26 @@ export default function CareerBoardWrite() {
 
   const isValid = useMemo(() => Boolean(title.trim() && content.trim()), [title, content]);
 
-  const submit = useCallback(async () => {
-    if (!isValid || !user) return;
-    try {
-      setError("");
-      await createCareerPost({
-        title: title.trim(),
-        content: content.trim(),
-        school,
-      });
-      alert("Post submitted!");
-      navigate(schoolPath("/career"));
-    } catch (err) {
-      console.error("Career post creation error:", err);
-      const msg = err?.message || "Unexpected error occurred.";
-      setError(msg);
-      alert(msg);
-    }
-  }, [isValid, user, title, content, school, navigate, schoolPath]);
+  const submit = useCallback(() => {
+    ensureAuth(async () => {
+      if (!isValid) return;
+      try {
+        setError("");
+        await createCareerPost({
+          title: title.trim(),
+          content: content.trim(),
+          school,
+        });
+        alert("Post submitted!");
+        navigate(schoolPath("/career"));
+      } catch (err) {
+        console.error("Career post creation error:", err);
+        const msg = err?.message || "Unexpected error occurred.";
+        setError(msg);
+        alert(msg);
+      }
+    });
+  }, [isValid, title, content, school, navigate, schoolPath, ensureAuth]);
 
   const handleKeyDown = (e) => {
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
@@ -44,17 +46,6 @@ export default function CareerBoardWrite() {
       submit();
     }
   };
-
-  if (!user) {
-    return (
-      <div
-        className="min-h-screen flex items-center justify-center text-sm text-gray-600"
-        style={{ backgroundColor: schoolTheme?.bg || "#f6f3ff" }}
-      >
-        Loading user information…
-      </div>
-    );
-  }
 
   return (
     <div
@@ -130,3 +121,4 @@ export default function CareerBoardWrite() {
     </div>
   );
 }
+

@@ -123,30 +123,16 @@ export default function App() {
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard" element={<Dashboard />} />
 
-            {/* FreeBoard — ✅ 진입 허용 (RequireAuth 제거) */}
+            {/* FreeBoard — public entry */}
             <Route path="freeboard" element={<FreeBoardList />} />
             <Route path="freeboard/:id" element={<FreeBoardDetail />} />
             <Route path="freeboard/write" element={<FreeBoardWrite />} />
             <Route path="freeboard/edit/:id" element={<EditToDetailRedirect />} />
 
-            {/* CareerBoard (현 상태 유지) */}
+            {/* ✅ CareerBoard — Freeboard와 동일하게 공개 진입 */}
             <Route path="career" element={<CareerBoardList />} />
-            <Route
-              path="career/:id"
-              element={
-                <RequireAuth>
-                  <CareerBoardDetail />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="career/write"
-              element={
-                <RequireAuth>
-                  <CareerBoardWrite />
-                </RequireAuth>
-              }
-            />
+            <Route path="career/:id" element={<CareerBoardDetail />} />
+            <Route path="career/write" element={<CareerBoardWrite />} />
 
             {/* CourseHub */}
             <Route path="courses" element={<Courses />} />
@@ -258,6 +244,7 @@ export default function App() {
     </AuthGateProvider>
   );
 }
+
 
 
 
