@@ -33,7 +33,6 @@ async function attachAuthorNames(docs) {
 
 /**
  * GET /api/public/:school/materials/recent
- * Query: page, limit, q, prof, type
  */
 router.get("/recent", async (req, res) => {
   try {
@@ -48,7 +47,6 @@ router.get("/recent", async (req, res) => {
     const prof = n(req.query.prof || "");
     const type = low(req.query.type || "all");
 
-    // 공개는 항상 status: active
     const filter = { school, status: "active" };
     if (q) {
       const r = new RegExp(escapeRe(q), "i");
@@ -98,7 +96,6 @@ router.get("/recent", async (req, res) => {
 /**
  * ✅ NEW: GET /api/public/:school/materials/:id
  * - 비로그인 공개 상세 조회
- * - 민감한 내부 필드는 배제하고, 상세에 필요한 필드는 그대로 제공
  */
 router.get("/:id", async (req, res) => {
   try {
@@ -112,7 +109,6 @@ router.get("/:id", async (req, res) => {
 
     doc = (await attachAuthorNames(doc)) || doc;
 
-    // 공개 상세: 프론트 상세뷰에 필요한 필드 위주
     const safe = {
       _id: doc._id,
       school: doc.school,
@@ -132,7 +128,7 @@ router.get("/:id", async (req, res) => {
       offerings: Array.isArray(doc.offerings) ? doc.offerings : [],
       regarding: doc.regarding || "",
       authorName: doc.authorName || "",
-      uploaderEmail: doc.uploaderEmail || "", // 소유자 판별용(프론트에서 isOwner 계산)
+      uploaderEmail: doc.uploaderEmail || "",
       likeCount: Number(doc.likeCount || 0),
       viewCount: Number(doc.viewCount || 0),
       createdAt: doc.createdAt,
@@ -147,5 +143,6 @@ router.get("/:id", async (req, res) => {
 });
 
 module.exports = router;
+
 
 

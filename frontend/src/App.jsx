@@ -8,6 +8,7 @@ import RequireAuth from "./components/RequireAuth";
 import { useAuth } from "./contexts/AuthContext";
 import AuthGateProvider from "./contexts/AuthGateProvider";
 
+// Top-level pages
 import SchoolSelect from "./pages/SchoolSelect";
 import About from "./pages/About";
 import Login from "./pages/auth/Login";
@@ -35,11 +36,13 @@ const CareerBoardList = lazy(() => import("./pages/careerboard/CareerBoardList")
 const CareerBoardWrite = lazy(() => import("./pages/careerboard/CareerBoardWrite"));
 const CareerBoardDetail = lazy(() => import("./pages/careerboard/CareerBoardDetail"));
 
+// Market (lazy)
 const MarketList = lazy(() => import("./pages/market/MarketList"));
 const MarketWrite = lazy(() => import("./pages/market/MarketWrite"));
 const MarketDetail = lazy(() => import("./pages/market/MarketDetail"));
 const MarketEdit = lazy(() => import("./pages/market/MarketEdit"));
 
+// Messages / Schedule / Food (lazy)
 const Messages = lazy(() => import("./pages/messages/Messages"));
 const PersonalSchedule = lazy(() => import("./pages/schedule/PersonalSchedule"));
 const GroupAvailability = lazy(() => import("./pages/schedule/GroupAvailability"));
@@ -123,37 +126,44 @@ export default function App() {
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard" element={<Dashboard />} />
 
-            {/* FreeBoard — public entry */}
+            {/* FreeBoard — public */}
             <Route path="freeboard" element={<FreeBoardList />} />
             <Route path="freeboard/:id" element={<FreeBoardDetail />} />
             <Route path="freeboard/write" element={<FreeBoardWrite />} />
             <Route path="freeboard/edit/:id" element={<EditToDetailRedirect />} />
 
-            {/* ✅ CareerBoard — Freeboard와 동일하게 공개 진입 */}
+            {/* CareerBoard — public */}
             <Route path="career" element={<CareerBoardList />} />
             <Route path="career/:id" element={<CareerBoardDetail />} />
             <Route path="career/write" element={<CareerBoardWrite />} />
 
-            {/* CourseHub */}
+            {/* CourseHub — list/write/detail 모두 공개 진입 */}
             <Route path="courses" element={<Courses />} />
+            <Route path="courses/write" element={<CourseWrite />} />
+            <Route path="courses/materials/:id" element={<MaterialDetail />} />
+
+            {/* ✅ Marketplace: 목록/상세 공개, 쓰기/수정 보호 */}
+            <Route path="market" element={<MarketList />} />
+            {/* ⬇️ 여기서 RequireAuth 제거 */}
+            <Route path="market/:id" element={<MarketDetail />} />
             <Route
-              path="courses/write"
+              path="market/write"
               element={
                 <RequireAuth>
-                  <CourseWrite />
+                  <MarketWrite />
                 </RequireAuth>
               }
             />
             <Route
-              path="courses/materials/:id"
+              path="market/edit/:id"
               element={
                 <RequireAuth>
-                  <MaterialDetail />
+                  <MarketEdit />
                 </RequireAuth>
               }
             />
 
-            {/* Dashboard sub-pages */}
+            {/* Protected sub-pages */}
             <Route
               path="myposts"
               element={
@@ -179,34 +189,6 @@ export default function App() {
               }
             />
 
-            {/* Market */}
-            <Route path="market" element={<MarketList />} />
-            <Route
-              path="market/:id"
-              element={
-                <RequireAuth>
-                  <MarketDetail />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="market/write"
-              element={
-                <RequireAuth>
-                  <MarketWrite />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="market/edit/:id"
-              element={
-                <RequireAuth>
-                  <MarketEdit />
-                </RequireAuth>
-              }
-            />
-
-            {/* Messages / Schedule / Food */}
             <Route
               path="messages"
               element={
@@ -244,6 +226,9 @@ export default function App() {
     </AuthGateProvider>
   );
 }
+
+
+
 
 
 

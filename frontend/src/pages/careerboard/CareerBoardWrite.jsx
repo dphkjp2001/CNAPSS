@@ -1,6 +1,7 @@
 // frontend/src/pages/careerboard/CareerBoardWrite.jsx
 import React, { useMemo, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../contexts/AuthContext";
 import { useSchool } from "../../contexts/SchoolContext";
 import { useSchoolPath } from "../../utils/schoolPath";
 import AsyncButton from "../../components/AsyncButton";
@@ -8,10 +9,11 @@ import { createCareerPost } from "../../api/careerPosts";
 import { useLoginGate } from "../../hooks/useLoginGate";
 
 export default function CareerBoardWrite() {
-  const { ensureAuth } = useLoginGate();
+  const { user } = useAuth();
   const { school, schoolTheme } = useSchool();
   const schoolPath = useSchoolPath();
   const navigate = useNavigate();
+  const { ensureAuth } = useLoginGate();
 
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
@@ -19,26 +21,33 @@ export default function CareerBoardWrite() {
 
   const isValid = useMemo(() => Boolean(title.trim() && content.trim()), [title, content]);
 
-  const submit = useCallback(() => {
-    ensureAuth(async () => {
-      if (!isValid) return;
-      try {
-        setError("");
-        await createCareerPost({
-          title: title.trim(),
-          content: content.trim(),
-          school,
-        });
-        alert("Post submitted!");
-        navigate(schoolPath("/career"));
-      } catch (err) {
-        console.error("Career post creation error:", err);
-        const msg = err?.message || "Unexpected error occurred.";
-        setError(msg);
-        alert(msg);
-      }
-    });
-  }, [isValid, title, content, school, navigate, schoolPath, ensureAuth]);
+  const doCreate = useCallback(async () => {
+    try {
+      setError("");
+      await createCareerPost({
+        title: title.trim(),
+        content: content.trim(),
+        school,
+      });
+      alert("Post submitted!");
+      navigate(schoolPath("/career"));
+    } catch (err) {
+      console.error("Career post creation error:", err);
+      const msg = err?.message || "Unexpected error occurred.";
+      setError(msg);
+      alert(msg);
+    }
+  }, [title, content, school, navigate, schoolPath]);
+
+  const submit = useCallback(async () => {
+    if (!isValid) return;
+    // 🔐 액션 시점에만 로그인 요구 (페이지 진입/입력은 허용)
+    if (!user) {
+      ensureAuth();
+      return;
+    }
+    await doCreate();
+  }, [isValid, user, ensureAuth, doCreate]);
 
   const handleKeyDown = (e) => {
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
@@ -82,37 +91,38 @@ export default function CareerBoardWrite() {
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Write your content here..."
+                placeholder="Write your post…"
                 rows={10}
-                className="mt-2 w-full resize-y rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10"
+                className="mt-2 w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:border-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900/10"
                 required
                 aria-label="post content"
               />
-              <p className="mt-1 text-xs text-gray-500">
-                Tip: Keep it concise and respectful. No personal information.
-              </p>
             </div>
 
-            {error && (
-              <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+            {!!error && (
+              <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
                 {error}
               </div>
             )}
 
-            <div className="flex items-center justify-end gap-2">
+            <div className="flex items-center justify-end gap-3">
               <button
-                onClick={() => navigate(schoolPath("/career"))}
+                type="button"
+                onClick={() => navigate(-1)}
                 className="rounded-xl border px-4 py-2 text-sm hover:bg-gray-50"
               >
                 Cancel
               </button>
               <AsyncButton
+                type="button"
                 onClick={submit}
-                loadingText="Posting..."
-                className="rounded-xl px-4 py-2 text-sm text-white"
-                style={{ backgroundColor: schoolTheme?.primary || "#111827" }}
+                className={
+                  "rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black " +
+                  (!isValid ? "opacity-50 cursor-not-allowed" : "")
+                }
+                disabled={!isValid}
               >
-                Post
+                Submit
               </AsyncButton>
             </div>
           </form>
@@ -121,4 +131,5 @@ export default function CareerBoardWrite() {
     </div>
   );
 }
+
 

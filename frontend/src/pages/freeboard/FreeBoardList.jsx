@@ -4,7 +4,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { useSchool } from "../../contexts/SchoolContext";
 import { useSchoolPath } from "../../utils/schoolPath";
-import { useLoginGate } from "../../hooks/useLoginGate";
+// import { useLoginGate } from "../../hooks/useLoginGate"; // ❌ 진입 게이트 제거로 미사용
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import "dayjs/locale/en";
@@ -41,7 +41,7 @@ export default function FreeBoardList() {
   const { school, schoolTheme } = useSchool();
   const schoolPath = useSchoolPath();
   const navigate = useNavigate();
-  const { ensureAuth } = useLoginGate();
+  // const { ensureAuth } = useLoginGate(); // ❌ 진입 게이트 제거로 미사용
 
   const [sp, setSp] = useSearchParams();
   const page = Math.max(1, parseInt(sp.get("page") || "1", 10));
@@ -142,8 +142,9 @@ export default function FreeBoardList() {
               <option value="old">Oldest</option>
             </select>
 
+            {/* ✅ 페이지 진입은 모두 허용: 게이트 제거, 그냥 이동 */}
             <button
-              onClick={() => ensureAuth(() => navigate(schoolPath("/freeboard/write")))}
+              onClick={() => navigate(schoolPath("/freeboard/write"))}
               className="inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold text-white shadow focus:outline-none focus:ring-2 focus:ring-offset-0"
               style={primaryBtn}
             >
@@ -166,8 +167,6 @@ export default function FreeBoardList() {
         ) : items.length === 0 ? (
           <EmptyState />
         ) : (
-          // FreeBoardList.jsx (수정된 부분만 설명)
-          // ...
           <ul className="rounded-2xl border border-gray-200 bg-white shadow-sm">
             {items.map((post, idx) => (
               <li key={post._id} className="px-4 py-4 sm:px-6">
@@ -179,17 +178,16 @@ export default function FreeBoardList() {
                     {post.title}
                   </h3>
                   <p className="mt-1 text-xs text-gray-500">
-                    Posted by anonymous • {dayjs(post.createdAt).fromNow()} · 💬 {post.commentsCount ?? "-"} · 👍 {post.likesCount ?? "-"}
+                    Posted by anonymous • {dayjs(post.createdAt).fromNow()} · 💬{" "}
+                    {post.commentsCount ?? "-"} · 👍 {post.likesCount ?? "-"}
                   </p>
                 </button>
                 {idx !== items.length - 1 && <div className="mt-4 h-px w-full bg-gray-100" />}
               </li>
             ))}
           </ul>
-
         )}
 
-        {/* ✅ Careerboard와 동일하게 항상 페이지네이션 표시 */}
         <Pagination
           page={page}
           total={total}
@@ -201,4 +199,5 @@ export default function FreeBoardList() {
     </div>
   );
 }
+
 

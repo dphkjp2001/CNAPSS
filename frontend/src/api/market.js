@@ -31,6 +31,15 @@ export async function getPublicMarketList({
   return res.json(); // { items, total, page, pageSize, totalPages }
 }
 
+export async function getPublicMarketItem({ school, id }) {
+  if (!school) throw new Error("school is required");
+  if (!id) throw new Error("id is required");
+  const url = `${API}/public/${encodeURIComponent(school)}/market/${encodeURIComponent(id)}`;
+  const res = await apiFetch(url);
+  if (!res.ok) throw new Error("failed to load public item");
+  return res.json(); // { id, title, description, price, images, status, sellerNickname, ... }
+}
+
 /* ------------------------ Protected (auth) -------------------------- */
 /** ------------------------------------------------------------------
  * 리스트 조회 (이전/현재 호출 방식 모두 지원)
@@ -209,6 +218,7 @@ export async function sendRequest({ school, token, itemId, message }) {
   if (res.status === 409) return { alreadySent: true, ...data };
   throw new Error(data?.error || "request failed");
 }
+
 
 
 

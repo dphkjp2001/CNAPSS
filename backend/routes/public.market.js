@@ -1,5 +1,6 @@
 // backend/routes/public.market.js
 const express = require("express");
+const mongoose = require("mongoose");
 const router = express.Router({ mergeParams: true });
 
 const MarketItem = require("../models/MarketItem");
@@ -14,6 +15,10 @@ const low = (v) => sanitize(v).toLowerCase();
 function toInt(v, def) {
   const n = parseInt(v, 10);
   return Number.isFinite(n) && n > 0 ? n : def;
+}
+
+function isValidId(id) {
+  return mongoose.Types.ObjectId.isValid(id);
 }
 
 /** Attach sellerNickname from User collection (email → nickname) */
@@ -149,4 +154,46 @@ router.get("/", async (req, res) => {
   }
 });
 
+/**
+ * GET /api/public/:school/market/:id
+ * - single item detail (no auth)
+ * - include safe fields only + sellerNickname
+ */
+router.get("/:id", async (req, res) => {
+  try {
+    const school = low(req.params.school);
+    const { id } = req.params;
+
+    if (!ALLOWED_SCHOOLS.has(school)) {
+      return res.status(400).json({ message: "Invalid school." });
+    }
+    if (!isValidId(id)) {
+      return res.status(400).json({ message: "Invalid item id." });
+    }
+
+    const m = await MarketItem.findOne({ _id: id, school }).lean();
+    if (!m) return res.status(404).json({ message: "Item not found." });
+
+    const sellerUser = await User.findOne({ email: m.seller }).select("nickname").lean();
+    const sellerNickname = sellerUser?.nickname || "Unknown";
+
+    // safe payload for public
+    return res.json({
+      id: m._id,
+      title: m.title,
+      description: m.description || "",
+      price: m.price,
+      images: Array.isArray(m.images) ? m.images : [],
+      status: m.status,
+      sellerNickname,
+      createdAt: m.createdAt,
+      location: m.location || "",
+    });
+  } catch (err) {
+    console.error("public.market detail error:", err);
+    res.status(500).json({ message: "Failed to load item." });
+  }
+});
+
 module.exports = router;
+

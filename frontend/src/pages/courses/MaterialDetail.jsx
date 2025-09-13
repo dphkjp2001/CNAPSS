@@ -6,11 +6,11 @@ import { useSchool } from "../../contexts/SchoolContext";
 import { useSchoolPath } from "../../utils/schoolPath";
 import {
   getMaterial,
-  getPublicMaterial,       // ✅ NEW
+  getPublicMaterial,     // ✅ 추가
   checkMaterialRequest,
   sendMaterialRequest,
 } from "../../api/materials";
-import { useLoginGate } from "../../hooks/useLoginGate"; // ✅ NEW
+import { useLoginGate } from "../../hooks/useLoginGate"; // ✅ Send 시점 게이트
 
 const currency = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -29,9 +29,9 @@ export default function MaterialDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { token, user } = useAuth();
+  const { ensureAuth } = useLoginGate();    // ✅
   const { school, schoolTheme } = useSchool();
   const schoolPath = useSchoolPath();
-  const { ensureAuth } = useLoginGate();   // ✅
 
   const [mat, setMat] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -74,7 +74,7 @@ export default function MaterialDetail() {
     };
   }, [school, token, id]);
 
-  // 요청 중복 체크: 로그인 상태에서만 호출(비로그인은 패스)
+  // 로그인 상태일 때만 중복 요청 체크
   useEffect(() => {
     if (!token || !mat || isOwner) {
       setChecking(false);
@@ -216,17 +216,13 @@ export default function MaterialDetail() {
 
           {/* Body */}
           <div className="grid grid-cols-1 gap-6 p-5 sm:grid-cols-3 sm:p-6">
-            {/* Left – info / guidelines */}
             <div className="sm:col-span-2 space-y-4">
               <div className="rounded-xl border border-gray-200 p-4 text-sm text-gray-800">
                 <div className="mb-1 font-medium text-gray-900">Before you trade</div>
                 <ul className="list-disc pl-5 text-gray-700 space-y-1">
                   <li>Only personal class notes/materials are allowed.</li>
                   <li>Do not share or sell copyrighted materials (e.g., full syllabus PDFs).</li>
-                  <li>
-                    Discuss delivery (in person / online) via chat after{" "}
-                    {isWanted ? "fulfilling this request" : "sending a request"}.
-                  </li>
+                  <li>Discuss delivery (in person / online) via chat after {isWanted ? "fulfilling this request" : "sending a request"}.</li>
                 </ul>
               </div>
             </div>
@@ -239,14 +235,12 @@ export default function MaterialDetail() {
                 <div className="mt-2 text-xs text-gray-400">{new Date(mat.createdAt).toLocaleString()}</div>
               </div>
 
-              {/* Contact box (only non-owner) */}
               {!isOwner && (
                 <div className="rounded-xl border border-gray-200 p-4 text-sm">
                   <div className="mb-2 font-medium text-gray-900">
                     {isWanted ? "Fulfill this request" : "Contact the uploader"}
                   </div>
 
-                  {/* Already sent */}
                   {token && alreadySent ? (
                     <div className="flex items-center justify-between gap-2">
                       <div className="text-xs text-green-700">
@@ -268,18 +262,16 @@ export default function MaterialDetail() {
                     </div>
                   ) : (
                     <>
-                      {/* 비로그인도 자유롭게 입력 가능 */}
+                      {/* 비로그인도 입력 가능 */}
                       <input
                         value={message}
                         onChange={(e) => setMessage(e.target.value)}
-                        placeholder={
-                          isWanted ? "Offer your note/material…" : "Say hello and ask about the material…"
-                        }
+                        placeholder={isWanted ? "Offer your note/material…" : "Say hello and ask about the material…"}
                         className="mb-2 w-full rounded-lg border px-3 py-2 text-sm"
                         disabled={checking || sending}
                       />
                       <button
-                        onClick={handleSend}  // ✅ 클릭 시점에 로그인 유도
+                        onClick={handleSend}  // ✅ 클릭 시점 게이트
                         disabled={checking || sending || !message.trim()}
                         className={
                           "w-full rounded-lg px-3 py-2 text-sm font-semibold text-white " +
@@ -303,6 +295,7 @@ export default function MaterialDetail() {
     </div>
   );
 }
+
 
 
 

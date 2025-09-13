@@ -27,7 +27,7 @@ export async function listMaterials({
   sort = "new",
   page = 1,
   limit = 50,
-  type = "all", // sale|wanted|all
+  type = "all",
 }) {
   const qs = new URLSearchParams({
     course: course || "",
@@ -46,7 +46,7 @@ export async function listMaterials({
   return res.json();
 }
 
-// ✅ NEW: GET /api/public/:school/materials/:id  (no auth)
+// ✅ NEW: 공개 상세 (no auth)
 export async function getPublicMaterial({ school, id }) {
   const res = await apiFetch(
     `${API}/public/${encodeURIComponent(school)}/materials/${encodeURIComponent(id)}`
@@ -55,7 +55,7 @@ export async function getPublicMaterial({ school, id }) {
   return res.json();
 }
 
-// GET /api/:school/materials/:id (protected)
+// 보호 상세 (auth)
 export async function getMaterial({ school, token, id }) {
   const res = await apiFetch(
     `${API}/${encodeURIComponent(school)}/materials/${encodeURIComponent(id)}`,
@@ -65,7 +65,7 @@ export async function getMaterial({ school, token, id }) {
   return res.json();
 }
 
-// GET /materials/recent (auth) /public/materials/recent (no auth)
+// 공개/보호 recent (기존 그대로)
 export async function listRecentMaterials({
   school,
   token,
@@ -93,8 +93,7 @@ export async function listRecentMaterials({
   return res.json();
 }
 
-/* ---------------- Requests (CourseHub 전용) ---------------- */
-
+/* -------- Requests (기존 유지) -------- */
 export async function checkMaterialRequest({ school, token, materialId, reqType = "coursehub" }) {
   const qs = new URLSearchParams({
     type: String(reqType || "coursehub"),
@@ -106,7 +105,7 @@ export async function checkMaterialRequest({ school, token, materialId, reqType 
     { headers: { Authorization: `Bearer ${token}` } }
   );
   if (!res.ok) return { alreadySent: false };
-  return res.json(); // { alreadySent, conversationId? }
+  return res.json();
 }
 
 export async function sendMaterialRequest({ school, token, materialId, message, reqType = "coursehub" }) {
@@ -128,6 +127,7 @@ export async function sendMaterialRequest({ school, token, materialId, message, 
   if (res.status === 409) return { alreadySent: true, ...data };
   throw new Error(data?.message || "request failed");
 }
+
 
 
 

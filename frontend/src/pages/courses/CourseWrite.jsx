@@ -6,6 +6,7 @@ import { useSchool } from "../../contexts/SchoolContext";
 import { useSchoolPath } from "../../utils/schoolPath";
 import CourseCodePicker from "../../components/CourseCodePicker";
 import { postJson } from "../../api/http";
+import { useLoginGate } from "../../hooks/useLoginGate"; // ✅ 추가
 
 const termOfMonth = (m) => (m >= 8 ? "fall" : m >= 5 ? "summer" : "spring");
 const currentSemester = () => {
@@ -16,6 +17,7 @@ const currentSemester = () => {
 
 export default function CourseWrite() {
   const { token } = useAuth();
+  const { ensureAuth } = useLoginGate();       // ✅ 클릭 시점 게이트
   const { school, schoolTheme } = useSchool();
   const schoolPath = useSchoolPath();
   const navigate = useNavigate();
@@ -73,11 +75,7 @@ export default function CourseWrite() {
     );
   }, []);
 
-  async function onSubmit(e) {
-    e.preventDefault();
-    setErr("");
-    if (!token) return;
-
+  async function actuallySubmit() {
     if (!courseCode?.trim()) return setErr("Please select a course code.");
     if (!semester) return setErr("Please select a semester.");
     const prof = professor.trim();
@@ -106,9 +104,9 @@ export default function CourseWrite() {
         courseCode: courseCode.toUpperCase(),
         courseTitle: "",
         semester,
-        kind,                 // internal category
-        materialType,         // always "personalMaterial"
-        listingType,          // 'sale' | 'wanted'
+        kind,
+        materialType,
+        listingType,
         isFree,
         price,
         sharePreference,
@@ -118,16 +116,21 @@ export default function CourseWrite() {
         offerings,
       };
       await postJson(`${API}/${encodeURIComponent(school)}/materials`, payload);
-
-      // ✅ 생성 후 CourseHub 메인으로 이동
       navigate(schoolPath(`/courses`));
-      // 기존(코스별 자료 목록 이동) 경로:
-      // navigate(schoolPath(`/courses/${encodeURIComponent(courseCode.toUpperCase())}/materials?sem=${encodeURIComponent(semester)}`));
     } catch {
       setErr("Failed to create your posting. Please try again.");
     } finally {
       setBusy(false);
     }
+  }
+
+  async function onSubmit(e) {
+    e.preventDefault();
+    setErr("");
+    // ✅ 여기서만 로그인 요구: ensureAuth로 감싸기
+    ensureAuth(async () => {
+      await actuallySubmit();
+    });
   }
 
   // price 입력 핸들러: 숫자만 허용
@@ -288,9 +291,7 @@ export default function CourseWrite() {
 
           {/* Share preference */}
           <div>
-            <label className="mb-1 block text-sm font-semibold">
-              How would you like to share?
-            </label>
+            <label className="mb-1 block text-sm font-semibold">How would you like to share?</label>
             <div className="flex flex-wrap items-center gap-3">
               <label className="flex items-center gap-2 text-sm">
                 <input
@@ -320,38 +321,43 @@ export default function CourseWrite() {
                   checked={sharePreference === "either"}
                   onChange={(e) => setSharePreference(e.target.value)}
                 />
-                Doesn't matter
+                Either
               </label>
             </div>
           </div>
 
-          {err && (
-            <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-              {err}
-            </div>
-          )}
-
-          <div className="flex items-center justify-end gap-2">
+          <div className="flex items-center justify-between gap-3">
             <button
               type="button"
-              onClick={() => navigate(-1)}
-              className="rounded-xl border px-4 py-2 text-sm"
+              onClick={() => navigate(schoolPath(`/courses`))}
+              className="rounded-xl border px-4 py-2 text-sm hover:bg-gray-50"
+              disabled={busy}
             >
               Cancel
             </button>
             <button
               type="submit"
+              className={
+                "rounded-xl px-4 py-2 text-sm font-semibold text-white " +
+                (busy ? "bg-gray-400" : "bg-violet-600 hover:bg-violet-700")
+              }
               disabled={busy}
-              className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
             >
-              {busy ? "Creating…" : "Create"}
+              {busy ? "Submitting…" : "Submit"}
             </button>
           </div>
+
+          {err && (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+              {err}
+            </div>
+          )}
         </form>
       </div>
     </div>
   );
 }
+
 
 
 

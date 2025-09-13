@@ -128,18 +128,19 @@ export default function Courses() {
     };
   }, [school, token, page, q, prof, hasLoadedOnce, type]);
 
+  
+
+
+  // ✅ Create: 비로그인도 글쓰기 페이지로 이동 (Submit 때만 게이트)
   const onCreate = () => {
-    if (!token) {
-      navigate(`/login?next=${encodeURIComponent(schoolPath("/courses/write"))}`);
-    } else {
-      navigate(schoolPath("/courses/write"));
-    }
+    navigate(schoolPath("/courses/write"));
   };
-  const goDetail = (id) =>
-    navigate(schoolPath(`/courses/materials/${encodeURIComponent(id)}`));
+
+  const goDetail = (id) => navigate(schoolPath(`/courses/materials/${encodeURIComponent(id)}`));
 
   const showSkeleton = loading && !hasLoadedOnce;
   const empty = !showSkeleton && !isSearching && !items.length && !err;
+
 
   const SegBtn = ({ active, children, onClick }) => (
     <button
