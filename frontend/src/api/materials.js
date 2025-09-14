@@ -5,13 +5,15 @@ const API = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
 
 // POST /api/:school/materials
 export async function createMaterial({ school, token, payload }) {
+  // strip legacy field
+  const { materialType, ...rest } = payload || {};
   const res = await apiFetch(`${API}/${encodeURIComponent(school)}/materials`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(rest),
   });
   if (!res.ok) throw new Error("Failed to create material");
   return res.json();
@@ -46,7 +48,7 @@ export async function listMaterials({
   return res.json();
 }
 
-// ✅ NEW: 공개 상세 (no auth)
+// Public detail (no auth)
 export async function getPublicMaterial({ school, id }) {
   const res = await apiFetch(
     `${API}/public/${encodeURIComponent(school)}/materials/${encodeURIComponent(id)}`
@@ -55,7 +57,7 @@ export async function getPublicMaterial({ school, id }) {
   return res.json();
 }
 
-// 보호 상세 (auth)
+// Protected detail (auth)
 export async function getMaterial({ school, token, id }) {
   const res = await apiFetch(
     `${API}/${encodeURIComponent(school)}/materials/${encodeURIComponent(id)}`,
@@ -65,7 +67,7 @@ export async function getMaterial({ school, token, id }) {
   return res.json();
 }
 
-// 공개/보호 recent (기존 그대로)
+// Recent list (public or protected)
 export async function listRecentMaterials({
   school,
   token,
@@ -93,7 +95,7 @@ export async function listRecentMaterials({
   return res.json();
 }
 
-/* -------- Requests (기존 유지) -------- */
+/* Requests */
 export async function checkMaterialRequest({ school, token, materialId, reqType = "coursehub" }) {
   const qs = new URLSearchParams({
     type: String(reqType || "coursehub"),
@@ -127,6 +129,7 @@ export async function sendMaterialRequest({ school, token, materialId, message, 
   if (res.status === 409) return { alreadySent: true, ...data };
   throw new Error(data?.message || "request failed");
 }
+
 
 
 

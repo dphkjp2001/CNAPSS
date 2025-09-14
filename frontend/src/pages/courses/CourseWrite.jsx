@@ -1,362 +1,285 @@
 // frontend/src/pages/courses/CourseWrite.jsx
 import React, { useMemo, useState } from "react";
-import { useNavigate, useSearchParams, useParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { useSchool } from "../../contexts/SchoolContext";
 import { useSchoolPath } from "../../utils/schoolPath";
+import { createMaterial } from "../../api/materials";
 import CourseCodePicker from "../../components/CourseCodePicker";
-import { postJson } from "../../api/http";
-import { useLoginGate } from "../../hooks/useLoginGate"; // ✅ 추가
 
-const termOfMonth = (m) => (m >= 8 ? "fall" : m >= 5 ? "summer" : "spring");
-const currentSemester = () => {
-  const now = new Date();
-  const y = now.getFullYear();
-  return `${y}-${termOfMonth(now.getMonth() + 1)}`;
-};
+const SEMESTERS = ["2025-spring", "2025-summer", "2025-fall", "2025-winter"];
 
 export default function CourseWrite() {
   const { token } = useAuth();
-  const { ensureAuth } = useLoginGate();       // ✅ 클릭 시점 게이트
   const { school, schoolTheme } = useSchool();
+  const nav = useNavigate();
   const schoolPath = useSchoolPath();
-  const navigate = useNavigate();
-  const params = useParams();
-  const [sp] = useSearchParams();
 
-  const [courseCode, setCourseCode] = useState(
-    decodeURIComponent(params.courseId || "")
-  );
-  const [semester, setSemester] = useState(sp.get("sem") || currentSemester());
-
-  // REQUIRED
+  const [listingType, setListingType] = useState("sale"); // sale|wanted
+  const [courseCode, setCourseCode] = useState("");
+  const [courseTitle, setCourseTitle] = useState("");
   const [professor, setProfessor] = useState("");
+  const [semester, setSemester] = useState("2025-fall");
 
-  // Listing type: 'sale' | 'wanted'
-  const [listingType, setListingType] = useState("sale");
+  // optional meta
+  const [offerings, setOfferings] = useState([]); // ["syllabus","exam","general","other"]
+  const [regarding, setRegarding] = useState("");
 
-  // Always personalMaterial
-  const materialType = "personalMaterial";
+  const [isFree, setIsFree] = useState(true);
+  const [price, setPrice] = useState(0);
+  const [sharePreference, setSharePreference] = useState("either"); // in_person | online | either
 
-  // offerings (multi check)
-  const OFFERING_OPTIONS = [
-    { value: "syllabus", label: "Syllabus" },
-    { value: "exam", label: "Exams" },
-    { value: "general", label: "General course content" },
-    { value: "other", label: "Others" },
-  ];
-  const [offerings, setOfferings] = useState([]);
-  const toggleOffering = (v) =>
+  const [submitting, setSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
+
+  const titleAuto = useMemo(() => {
+    const base = [courseCode, courseTitle].filter(Boolean).join(" — ");
+    return base || courseCode || "";
+  }, [courseCode, courseTitle]);
+
+  const onToggleOffering = (key) => {
     setOfferings((prev) =>
-      prev.includes(v) ? prev.filter((x) => x !== v) : [...prev, v]
+      prev.includes(key) ? prev.filter((v) => v !== key) : [...prev, key]
     );
-
-  // kind은 내부 분류용 → 개인노트 기본
-  const [kind] = useState("note");
-
-  // Price & share
-  const [priceStr, setPriceStr] = useState("");
-  const [sharePreference, setSharePreference] = useState("either");
-
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState("");
-
-  const semesterOptions = useMemo(() => {
-    const now = new Date();
-    const y = now.getFullYear();
-    return Array.from(
-      new Set([
-        `${y - 1}-fall`,
-        `${y}-spring`,
-        `${y}-summer`,
-        `${y}-fall`,
-        `${y + 1}-spring`,
-      ])
-    );
-  }, []);
-
-  async function actuallySubmit() {
-    if (!courseCode?.trim()) return setErr("Please select a course code.");
-    if (!semester) return setErr("Please select a semester.");
-    const prof = professor.trim();
-    if (!prof) return setErr("Please enter the professor name.");
-
-    // For Sale → price required and >= 1
-    let price = 0;
-    let isFree = true;
-    if (listingType === "sale") {
-      if (!priceStr.trim()) return setErr("Please enter a price.");
-      const n = Number(priceStr);
-      if (!Number.isFinite(n) || n < 1) {
-        return setErr("Please enter a valid price (≥ 1).");
-      }
-      price = Math.floor(n);
-      isFree = false;
-    } else {
-      price = 0;
-      isFree = true;
-    }
-
-    try {
-      setBusy(true);
-      const API = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
-      const payload = {
-        courseCode: courseCode.toUpperCase(),
-        courseTitle: "",
-        semester,
-        kind,
-        materialType,
-        listingType,
-        isFree,
-        price,
-        sharePreference,
-        professor: prof,
-        url: "",
-        title: courseCode.toUpperCase(),
-        offerings,
-      };
-      await postJson(`${API}/${encodeURIComponent(school)}/materials`, payload);
-      navigate(schoolPath(`/courses`));
-    } catch {
-      setErr("Failed to create your posting. Please try again.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function onSubmit(e) {
-    e.preventDefault();
-    setErr("");
-    // ✅ 여기서만 로그인 요구: ensureAuth로 감싸기
-    ensureAuth(async () => {
-      await actuallySubmit();
-    });
-  }
-
-  // price 입력 핸들러: 숫자만 허용
-  const onPriceChange = (e) => {
-    const v = e.target.value;
-    const cleaned = v.replace(/[^\d]/g, "");
-    setPriceStr(cleaned);
   };
 
-  const onChangeListing = (t) => {
-    setListingType(t);
-    setPriceStr("");
+  const onSubmit = async (e) => {
+    e.preventDefault();
+    setErrorMsg("");
+    if (!courseCode || !professor || !semester) {
+      setErrorMsg("Please fill in required fields.");
+      return;
+    }
+    try {
+      setSubmitting(true);
+      const payload = {
+        listingType,
+        courseCode: String(courseCode).toUpperCase(),
+        courseTitle: courseTitle || "",
+        professor,
+        semester,
+        // kind는 서버에서 기본값 처리(note/other)
+        title: titleAuto || courseCode,
+        isFree: !!isFree,
+        price: isFree ? 0 : Math.max(1, Number(price || 0)),
+        sharePreference,
+        offerings,
+        regarding,
+      };
+      const res = await createMaterial({ school, token, payload });
+      if (res?.id) {
+        nav(schoolPath(`/courses/materials/${res.id}`));
+      } else {
+        nav(schoolPath(`/courses`));
+      }
+    } catch (e2) {
+      console.error(e2);
+      setErrorMsg(e2?.message || "Failed to submit.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
     <div
-      className="min-h-screen"
+      className="min-h-screen px-4 py-10"
       style={{ backgroundColor: schoolTheme?.bg || "#f6f3ff" }}
     >
-      <div className="mx-auto max-w-2xl p-6">
-        <h1 className="mb-2 text-xl font-semibold">Create a posting</h1>
-        <p className="mb-4 text-sm text-gray-600">
-          This posting does not require a file. You can share details later through messages.
-        </p>
+      <form
+        onSubmit={onSubmit}
+        className="mx-auto max-w-3xl space-y-6 rounded-3xl border border-gray-200 bg-white p-6 sm:p-8 shadow-sm"
+      >
+        <h1 className="text-2xl font-bold text-gray-900">Create a listing</h1>
 
-        <form
-          onSubmit={onSubmit}
-          className="space-y-5 rounded-2xl border bg-white p-5 shadow-sm"
-        >
-          {/* Listing type */}
-          <div>
-            <label className="mb-1 block text-sm font-semibold">Listing type</label>
-            <div className="flex flex-wrap items-center gap-3">
-              <label className="flex items-center gap-2 text-sm">
+        {/* listing type */}
+        <div>
+          <div className="mb-2 text-sm font-medium text-gray-900">Listing type</div>
+          <div className="flex gap-6 text-sm">
+            {["sale", "wanted"].map((t) => (
+              <label key={t} className="inline-flex items-center gap-2">
                 <input
                   type="radio"
                   name="listingType"
-                  checked={listingType === "sale"}
-                  onChange={() => onChangeListing("sale")}
+                  value={t}
+                  checked={listingType === t}
+                  onChange={() => setListingType(t)}
                 />
-                For Sale
+                <span className="capitalize">{t}</span>
               </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="radio"
-                  name="listingType"
-                  checked={listingType === "wanted"}
-                  onChange={() => onChangeListing("wanted")}
-                />
-                Wanted
-              </label>
+            ))}
+          </div>
+        </div>
+
+        {/* course */}
+        <div>
+          <label htmlFor="course" className="mb-1 block text-sm font-medium text-gray-900">
+            Course code *
+          </label>
+          <CourseCodePicker
+            id="course"
+            school={school}
+            value={courseCode}
+            onChange={(v) => setCourseCode(String(v || "").toUpperCase())}
+            onSelect={(item) => {
+              // item: { code, title }
+              setCourseCode(String(item?.code || "").toUpperCase());
+              setCourseTitle(item?.title || "");
+            }}
+            placeholder="Search course code or title (e.g., CAMS-UA 148, Calculus)"
+            required
+          />
+          <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-900">Course title</label>
+              <input
+                value={courseTitle}
+                onChange={(e) => setCourseTitle(e.target.value)}
+                placeholder="e.g., Introduction to Film"
+                className="w-full rounded-lg border px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-900">Professor *</label>
+              <input
+                value={professor}
+                onChange={(e) => setProfessor(e.target.value)}
+                placeholder="e.g., Jonathan Hopper"
+                required
+                className="w-full rounded-lg border px-3 py-2 text-sm"
+              />
             </div>
           </div>
+        </div>
 
-          {/* Course code */}
-          <div>
-            <label htmlFor="courseCodeInput" className="mb-1 block text-sm font-semibold">
-              Course code <span className="text-red-600">*</span>
-            </label>
-            <CourseCodePicker
-              id="courseCodeInput"
-              school={school}
-              value={courseCode}
-              onChange={setCourseCode}
-              required
-            />
-          </div>
+        {/* semester */}
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-900">Semester *</label>
+          <select
+            value={semester}
+            onChange={(e) => setSemester(e.target.value)}
+            className="w-full rounded-lg border px-3 py-2 text-sm"
+            required
+          >
+            {SEMESTERS.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </div>
 
-          {/* Professor */}
+        {/* offerings/regarding */}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
-            <label className="mb-1 block text-sm font-semibold">
-              Professor <span className="text-red-600">*</span>
-            </label>
-            <input
-              type="text"
-              value={professor}
-              onChange={(e) => setProfessor(e.target.value)}
-              placeholder="e.g., Jonathan Hopper"
-              maxLength={80}
-              required
-              className="w-full rounded-lg border px-3 py-2 text-sm"
-            />
-          </div>
-
-          {/* Semester */}
-          <div>
-            <label className="mb-1 block text-sm font-semibold">Semester</label>
-            <select
-              value={semester}
-              onChange={(e) => setSemester(e.target.value)}
-              className="w-full rounded-lg border px-3 py-2 text-sm"
-            >
-              {semesterOptions.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* I'm offering … (multi check) */}
-          <div>
-            <div className="mb-1 text-sm font-semibold">What are you offering?</div>
-            <div className="mb-2 text-sm text-gray-700">
-              I’m offering my <span className="font-medium">personal course materials</span> regarding,
-            </div>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {OFFERING_OPTIONS.map((opt) => (
-                <label key={opt.value} className="flex items-center gap-2 text-sm">
+            <div className="mb-1 block text-sm font-medium text-gray-900">What are you offering?</div>
+            <div className="flex flex-wrap gap-3 text-sm">
+              {[
+                ["syllabus", "Syllabus"],
+                ["exam", "Exams"],
+                ["general", "General course content"],
+                ["other", "Others"],
+              ].map(([k, label]) => (
+                <label key={k} className="inline-flex items-center gap-2">
                   <input
                     type="checkbox"
-                    checked={offerings.includes(opt.value)}
-                    onChange={() => toggleOffering(opt.value)}
+                    checked={offerings.includes(k)}
+                    onChange={() => onToggleOffering(k)}
                   />
-                  {opt.label}
+                  <span>{label}</span>
                 </label>
               ))}
             </div>
           </div>
-
-          {/* Warning */}
           <div>
-            <div className="mb-1 text-sm font-semibold">Warning</div>
-            <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-3 text-xs leading-relaxed text-yellow-900">
-              Professor-created materials are copyrighted by the professor.
-              Please <b>do not buy or sell copyrighted materials</b> (e.g., full syllabus PDFs).
-              Only share your own personal notes or summaries.
-            </div>
+            <label className="mb-1 block text-sm font-medium text-gray-900">Regarding</label>
+            <input
+              value={regarding}
+              onChange={(e) => setRegarding(e.target.value)}
+              placeholder="Topic/keywords…"
+              className="w-full rounded-lg border px-3 py-2 text-sm"
+            />
           </div>
+        </div>
 
-          {/* Price */}
+        {/* price/share */}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
-            <label className="mb-1 block text-sm font-semibold">Price</label>
-            {listingType === "wanted" ? (
-              <div className="rounded-lg border bg-gray-50 px-3 py-2 text-xs text-gray-600">
-                This is a <b>Wanted</b> post. Price is not required.
-              </div>
-            ) : (
-              <div className="flex items-center gap-4">
-                <div className="relative">
+            <div className="mb-1 block text-sm font-medium text-gray-900">Price</div>
+            <div className="flex items-center gap-3">
+              <label className="inline-flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={isFree}
+                  onChange={(e) => setIsFree(e.target.checked)}
+                />
+                <span>Free</span>
+              </label>
+              {!isFree && (
+                <div className="flex items-center gap-2">
+                  <span className="rounded-md border px-2 py-1 text-sm text-gray-600">$</span>
                   <input
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    minLength={1}
-                    value={priceStr}
-                    onChange={onPriceChange}
+                    type="number"
+                    min={1}
+                    value={price}
+                    onChange={(e) => setPrice(e.target.value)}
+                    className="w-28 rounded-lg border px-3 py-2 text-sm"
                     placeholder="Amount"
-                    className="w-32 rounded-lg border px-3 py-2 pr-8 text-sm"
                   />
-                  <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-sm text-gray-500">
-                    $
-                  </span>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
-
-          {/* Share preference */}
           <div>
-            <label className="mb-1 block text-sm font-semibold">How would you like to share?</label>
-            <div className="flex flex-wrap items-center gap-3">
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="radio"
-                  name="sharePref"
-                  value="in_person"
-                  checked={sharePreference === "in_person"}
-                  onChange={(e) => setSharePreference(e.target.value)}
-                />
-                In person
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="radio"
-                  name="sharePref"
-                  value="online"
-                  checked={sharePreference === "online"}
-                  onChange={(e) => setSharePreference(e.target.value)}
-                />
-                Online
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="radio"
-                  name="sharePref"
-                  value="either"
-                  checked={sharePreference === "either"}
-                  onChange={(e) => setSharePreference(e.target.value)}
-                />
-                Either
-              </label>
+            <div className="mb-1 block text-sm font-medium text-gray-900">How would you like to share?</div>
+            <div className="flex gap-6 text-sm">
+              {[
+                ["in_person", "In person"],
+                ["online", "Online"],
+                ["either", "Either"],
+              ].map(([k, label]) => (
+                <label key={k} className="inline-flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="sharePreference"
+                    value={k}
+                    checked={sharePreference === k}
+                    onChange={() => setSharePreference(k)}
+                  />
+                  <span>{label}</span>
+                </label>
+              ))}
             </div>
           </div>
+        </div>
 
-          <div className="flex items-center justify-between gap-3">
-            <button
-              type="button"
-              onClick={() => navigate(schoolPath(`/courses`))}
-              className="rounded-xl border px-4 py-2 text-sm hover:bg-gray-50"
-              disabled={busy}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className={
-                "rounded-xl px-4 py-2 text-sm font-semibold text-white " +
-                (busy ? "bg-gray-400" : "bg-violet-600 hover:bg-violet-700")
-              }
-              disabled={busy}
-            >
-              {busy ? "Submitting…" : "Submit"}
-            </button>
+        {/* CTA */}
+        {errorMsg && (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            {errorMsg}
           </div>
-
-          {err && (
-            <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-              {err}
-            </div>
-          )}
-        </form>
-      </div>
+        )}
+        <div className="flex items-center justify-end gap-3">
+          <button
+            type="button"
+            onClick={() => nav(schoolPath("/courses"))}
+            className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={submitting}
+            className="rounded-xl px-4 py-2 text-sm font-semibold text-white shadow disabled:opacity-60"
+            style={{ backgroundColor: schoolTheme?.primary || "#6b46c1" }}
+          >
+            {submitting ? "Submitting…" : "Submit"}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }
+
 
 
 

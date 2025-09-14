@@ -236,7 +236,6 @@ router.post("/", async (req, res) => {
     fileMime: "",
     fileSize: 0,
     hash: "",
-    materialType,
     isFree,
     price,
     sharePreference,

@@ -6,11 +6,11 @@ import { useSchool } from "../../contexts/SchoolContext";
 import { useSchoolPath } from "../../utils/schoolPath";
 import {
   getMaterial,
-  getPublicMaterial,     // ✅ 추가
+  getPublicMaterial,
   checkMaterialRequest,
   sendMaterialRequest,
 } from "../../api/materials";
-import { useLoginGate } from "../../hooks/useLoginGate"; // ✅ Send 시점 게이트
+import { useLoginGate } from "../../hooks/useLoginGate";
 
 const currency = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -29,7 +29,7 @@ export default function MaterialDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { token, user } = useAuth();
-  const { ensureAuth } = useLoginGate();    // ✅
+  const { ensureAuth } = useLoginGate();
   const { school, schoolTheme } = useSchool();
   const schoolPath = useSchoolPath();
 
@@ -53,7 +53,7 @@ export default function MaterialDetail() {
 
   const isWanted = (mat?.listingType || "sale") === "wanted";
 
-  // ✅ 상세 로딩: 토큰 있으면 보호, 없으면 공개
+  // load detail (public if no token)
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -74,7 +74,7 @@ export default function MaterialDetail() {
     };
   }, [school, token, id]);
 
-  // 로그인 상태일 때만 중복 요청 체크
+  // check existing request (only when logged in & not owner)
   useEffect(() => {
     if (!token || !mat || isOwner) {
       setChecking(false);
@@ -103,7 +103,6 @@ export default function MaterialDetail() {
     };
   }, [mat, isOwner, school, token, id, isWanted]);
 
-  // ✅ Send: 클릭 시점에만 로그인 유도
   const handleSend = () => {
     const text = String(message || "").trim();
     if (!text) return alert("Please enter a message.");
@@ -152,25 +151,21 @@ export default function MaterialDetail() {
   }
 
   const priceText = mat.isFree ? "Free" : currency.format(Number(mat.price || 0));
-  const meta1 = [mat.courseCode, mat.semester, mat.professor ? `Prof. ${mat.professor}` : null]
+  const headerTitle = [mat.courseCode, mat.courseTitle].filter(Boolean).join(" — ");
+  const metaLine = [mat.semester, mat.professor ? `Prof. ${mat.professor}` : null]
     .filter(Boolean)
     .join(" • ");
-  const meta2 = [
-    (mat.listingType ? (mat.listingType === "wanted" ? "Wanted" : "For Sale") : null),
-    mat.kind ? `${mat.kind}` : null,
-    mat.materialType ? `${mat.materialType}` : null,
-    mat.sharePreference ? `${mat.sharePreference}` : null,
-  ]
-    .filter(Boolean)
-    .join(" • ");
-
   const hasOfferings = Array.isArray(mat.offerings) && mat.offerings.length > 0;
 
   return (
-    <div className="min-h-screen px-4 py-8" style={{ backgroundColor: schoolTheme?.bg || "#f6f3ff" }}>
-      <div className="mx-auto max-w-4xl">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <button onClick={() => navigate(-1)} className="rounded-xl border px-3 py-1.5 text-sm hover:bg-white">
+    <div className="min-h-screen px-4 py-10" style={{ backgroundColor: schoolTheme?.bg || "#f6f3ff" }}>
+      <div className="mx-auto max-w-6xl">
+        {/* top bar */}
+        <div className="mb-6 flex items-center justify-between gap-3">
+          <button
+            onClick={() => navigate(-1)}
+            className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+          >
             Back
           </button>
           {isOwner && (
@@ -180,27 +175,27 @@ export default function MaterialDetail() {
           )}
         </div>
 
-        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-          {/* Header */}
-          <div className="border-b border-gray-100 p-5 sm:p-6">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">{mat.title || mat.courseCode}</h1>
-                <div className="mt-1 text-sm text-gray-600">{meta1}</div>
-                {meta2 && <div className="mt-1 text-xs text-gray-500">{meta2}</div>}
-
+        {/* card */}
+        <div className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm">
+          {/* header */}
+          <div className="border-b border-gray-100 p-6 sm:p-8">
+            <div className="flex items-start justify-between gap-6">
+              <div className="min-w-0">
+                <h1 className="truncate text-3xl font-extrabold tracking-tight text-gray-900">
+                  {headerTitle || mat.title || mat.courseCode}
+                </h1>
+                {metaLine && <div className="mt-2 text-sm text-gray-600">{metaLine}</div>}
                 {mat.regarding && (
-                  <div className="mt-2 text-sm text-gray-800">
+                  <div className="mt-3 text-sm text-gray-800">
                     <span className="font-medium">Regarding:</span> {mat.regarding}
                   </div>
                 )}
-
                 {hasOfferings && (
-                  <div className="mt-2 flex flex-wrap gap-2">
+                  <div className="mt-3 flex flex-wrap gap-2">
                     {mat.offerings.map((o) => (
                       <span
                         key={o}
-                        className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700"
+                        className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700"
                       >
                         {OFFERING_LABEL[o] || o}
                       </span>
@@ -208,36 +203,49 @@ export default function MaterialDetail() {
                   </div>
                 )}
               </div>
-              <div className="shrink-0 rounded-xl bg-gray-900 px-3 py-1.5 text-sm font-semibold text-white">
+              <div className="shrink-0 rounded-2xl bg-gray-900 px-4 py-2 text-base font-bold text-white">
                 {priceText}
               </div>
             </div>
           </div>
 
-          {/* Body */}
-          <div className="grid grid-cols-1 gap-6 p-5 sm:grid-cols-3 sm:p-6">
-            <div className="sm:col-span-2 space-y-4">
-              <div className="rounded-xl border border-gray-200 p-4 text-sm text-gray-800">
-                <div className="mb-1 font-medium text-gray-900">Before you trade</div>
-                <ul className="list-disc pl-5 text-gray-700 space-y-1">
+          {/* body */}
+          <div className="grid grid-cols-1 gap-8 p-6 sm:grid-cols-3 sm:p-8">
+            {/* left */}
+            <div className="sm:col-span-2 space-y-5">
+              <div className="rounded-2xl border border-gray-200 p-5 text-sm text-gray-800">
+                <div className="mb-2 text-base font-semibold text-gray-900">Before you trade</div>
+                <ul className="list-disc space-y-1 pl-5 text-gray-700">
                   <li>Only personal class notes/materials are allowed.</li>
                   <li>Do not share or sell copyrighted materials (e.g., full syllabus PDFs).</li>
-                  <li>Discuss delivery (in person / online) via chat after {isWanted ? "fulfilling this request" : "sending a request"}.</li>
+                  <li>
+                    Discuss delivery (in person / online) via chat after{" "}
+                    {isWanted ? "fulfilling this request" : "sending a request"}.
+                  </li>
                 </ul>
               </div>
+
+              {mat.description ? (
+                <div className="rounded-2xl border border-gray-200 p-5">
+                  <div className="mb-2 text-base font-semibold text-gray-900">Description</div>
+                  <div className="whitespace-pre-wrap text-sm text-gray-800">{mat.description}</div>
+                </div>
+              ) : null}
             </div>
 
-            {/* Right */}
-            <div className="space-y-3">
-              <div className="rounded-xl border border-gray-200 p-4 text-sm">
+            {/* right */}
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-gray-200 p-5 text-sm">
                 <div className="text-gray-500">Posted by</div>
                 <div className="mt-0.5 font-medium text-gray-900">{mat.authorName || "Unknown"}</div>
-                <div className="mt-2 text-xs text-gray-400">{new Date(mat.createdAt).toLocaleString()}</div>
+                <div className="mt-2 text-xs text-gray-400">
+                  {mat.createdAt ? new Date(mat.createdAt).toLocaleString() : ""}
+                </div>
               </div>
 
               {!isOwner && (
-                <div className="rounded-xl border border-gray-200 p-4 text-sm">
-                  <div className="mb-2 font-medium text-gray-900">
+                <div className="rounded-2xl border border-gray-200 p-5 text-sm">
+                  <div className="mb-2 font-semibold text-gray-900">
                     {isWanted ? "Fulfill this request" : "Contact the uploader"}
                   </div>
 
@@ -262,19 +270,20 @@ export default function MaterialDetail() {
                     </div>
                   ) : (
                     <>
-                      {/* 비로그인도 입력 가능 */}
                       <input
                         value={message}
                         onChange={(e) => setMessage(e.target.value)}
-                        placeholder={isWanted ? "Offer your note/material…" : "Say hello and ask about the material…"}
-                        className="mb-2 w-full rounded-lg border px-3 py-2 text-sm"
+                        placeholder={
+                          isWanted ? "Offer your note/material…" : "Say hello and ask about the material…"
+                        }
+                        className="mb-2 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900/10"
                         disabled={checking || sending}
                       />
                       <button
-                        onClick={handleSend}  // ✅ 클릭 시점 게이트
+                        onClick={handleSend}
                         disabled={checking || sending || !message.trim()}
                         className={
-                          "w-full rounded-lg px-3 py-2 text-sm font-semibold text-white " +
+                          "w-full rounded-xl px-4 py-2 text-sm font-semibold text-white shadow " +
                           (checking || sending || !message.trim()
                             ? "bg-gray-400"
                             : isWanted
@@ -284,6 +293,11 @@ export default function MaterialDetail() {
                       >
                         {sending ? (isWanted ? "Offering…" : "Sending…") : isWanted ? "Fulfill" : "Send"}
                       </button>
+                      {!token && (
+                        <p className="mt-1 text-[11px] text-gray-500">
+                          You can type freely. We’ll ask you to log in only when you press “Send”.
+                        </p>
+                      )}
                     </>
                   )}
                 </div>
@@ -295,6 +309,7 @@ export default function MaterialDetail() {
     </div>
   );
 }
+
 
 
 
