@@ -25,21 +25,22 @@ export async function listMaterials({
   token,
   course,
   semester,
-  kind = "all",
+  kind = "all",       // server doesn't need "all" explicitly
   sort = "new",
   page = 1,
   limit = 50,
-  type = "all",
-}) {
-  const qs = new URLSearchParams({
-    course: course || "",
-    semester: semester || "",
-    kind,
-    sort,
-    page: String(page),
-    limit: String(limit),
-  });
-  if (type && type !== "all") qs.set("type", type);
+  type = "all",       // sale|wanted|all (some servers use "type")
+} = {}) {
+  const qs = new URLSearchParams();
+
+  // ✅ only set when truthy/non-default
+  if (course) qs.set("course", String(course));
+  if (semester) qs.set("semester", String(semester));
+  if (kind && kind !== "all") qs.set("kind", String(kind));
+  if (type && type !== "all") qs.set("type", String(type));
+  if (sort) qs.set("sort", String(sort));
+  qs.set("page", String(Math.max(1, page)));
+  qs.set("limit", String(Math.max(1, Math.min(100, limit))));
 
   const res = await apiFetch(`${API}/${encodeURIComponent(school)}/materials?${qs.toString()}`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -129,6 +130,7 @@ export async function sendMaterialRequest({ school, token, materialId, message, 
   if (res.status === 409) return { alreadySent: true, ...data };
   throw new Error(data?.message || "request failed");
 }
+
 
 
 

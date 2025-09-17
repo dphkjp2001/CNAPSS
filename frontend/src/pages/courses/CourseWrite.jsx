@@ -1,5 +1,5 @@
 // frontend/src/pages/courses/CourseWrite.jsx
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { useSchool } from "../../contexts/SchoolContext";
@@ -11,31 +11,53 @@ const SEMESTERS = ["2025-spring", "2025-summer", "2025-fall", "2025-winter"];
 
 export default function CourseWrite() {
   const { token } = useAuth();
-  const { school, schoolTheme } = useSchool();
+  const { school } = useSchool();
   const nav = useNavigate();
   const schoolPath = useSchoolPath();
 
-  const [listingType, setListingType] = useState("sale"); // sale|wanted
+  // sale = Offering, wanted = Needed
+  const [listingType, setListingType] = useState("sale"); // "sale" | "wanted"
+
   const [courseCode, setCourseCode] = useState("");
   const [courseTitle, setCourseTitle] = useState("");
   const [professor, setProfessor] = useState("");
   const [semester, setSemester] = useState("2025-fall");
 
-  // optional meta
+  // categories (공통) – seller는 "내가 제공", buyer는 "내가 찾는"
   const [offerings, setOfferings] = useState([]); // ["syllabus","exam","general","other"]
   const [regarding, setRegarding] = useState("");
 
+  // price (Needed일 때는 숨김)
   const [isFree, setIsFree] = useState(true);
   const [price, setPrice] = useState(0);
-  const [sharePreference, setSharePreference] = useState("either"); // in_person | online | either
 
+  const [sharePreference, setSharePreference] = useState("either"); // in_person | online | either
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
-  const titleAuto = useMemo(() => {
-    const base = [courseCode, courseTitle].filter(Boolean).join(" — ");
-    return base || courseCode || "";
-  }, [courseCode, courseTitle]);
+  // 문구를 listingType에 맞게 자동 생성
+  const copy = useMemo(() => {
+    if (listingType === "wanted") {
+      return {
+        title: "What are you looking for?",
+        subtitle: "I am looking for personal course materials regarding...",
+        chipsTitle: "What are you looking for?",
+      };
+    }
+    return {
+      title: "What are you offering?",
+      subtitle: "I am offering personal course materials regarding...",
+      chipsTitle: "What are you offering?",
+    };
+  }, [listingType]);
+
+  // Needed로 전환 시 가격 값 정리(표시도 안 되지만 값도 맞춰줌)
+  useEffect(() => {
+    if (listingType === "wanted") {
+      setIsFree(true);
+      setPrice(0);
+    }
+  }, [listingType]);
 
   const onToggleOffering = (key) => {
     setOfferings((prev) =>
@@ -53,25 +75,21 @@ export default function CourseWrite() {
     try {
       setSubmitting(true);
       const payload = {
-        listingType,
+        listingType, // "sale" | "wanted"
         courseCode: String(courseCode).toUpperCase(),
         courseTitle: courseTitle || "",
         professor,
         semester,
-        // kind는 서버에서 기본값 처리(note/other)
-        title: titleAuto || courseCode,
-        isFree: !!isFree,
-        price: isFree ? 0 : Math.max(1, Number(price || 0)),
+        title: [courseCode, courseTitle].filter(Boolean).join(" — ") || courseCode,
+        isFree: listingType === "wanted" ? true : !!isFree,
+        price: listingType === "wanted" ? 0 : (isFree ? 0 : Math.max(1, Number(price || 0))),
         sharePreference,
         offerings,
         regarding,
       };
       const res = await createMaterial({ school, token, payload });
-      if (res?.id) {
-        nav(schoolPath(`/courses/materials/${res.id}`));
-      } else {
-        nav(schoolPath(`/courses`));
-      }
+      if (res?.id) nav(schoolPath(`/courses/materials/${res.id}`));
+      else nav(schoolPath(`/courses`));
     } catch (e2) {
       console.error(e2);
       setErrorMsg(e2?.message || "Failed to submit.");
@@ -81,36 +99,43 @@ export default function CourseWrite() {
   };
 
   return (
-    <div
-      className="min-h-screen px-4 py-10"
-      style={{ backgroundColor: schoolTheme?.bg || "#f6f3ff" }}
-    >
+    <div className="min-h-screen px-4 py-10 bg-white">
       <form
         onSubmit={onSubmit}
         className="mx-auto max-w-3xl space-y-6 rounded-3xl border border-gray-200 bg-white p-6 sm:p-8 shadow-sm"
       >
-        <h1 className="text-2xl font-bold text-gray-900">Create a listing</h1>
+        {/* 헤더 문구 (동적) */}
+        <h1 className="text-2xl font-bold text-gray-900">{copy.title}</h1>
+        <p className="text-sm text-gray-600">{copy.subtitle}</p>
 
-        {/* listing type */}
+        {/* Listing type */}
         <div>
           <div className="mb-2 text-sm font-medium text-gray-900">Listing type</div>
           <div className="flex gap-6 text-sm">
-            {["sale", "wanted"].map((t) => (
-              <label key={t} className="inline-flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="listingType"
-                  value={t}
-                  checked={listingType === t}
-                  onChange={() => setListingType(t)}
-                />
-                <span className="capitalize">{t}</span>
-              </label>
-            ))}
+            <label className="inline-flex items-center gap-2">
+              <input
+                type="radio"
+                name="listingType"
+                value="sale"
+                checked={listingType === "sale"}
+                onChange={() => setListingType("sale")}
+              />
+              <span>Offering</span>
+            </label>
+            <label className="inline-flex items-center gap-2">
+              <input
+                type="radio"
+                name="listingType"
+                value="wanted"
+                checked={listingType === "wanted"}
+                onChange={() => setListingType("wanted")}
+              />
+              <span>Needed</span>
+            </label>
           </div>
         </div>
 
-        {/* course */}
+        {/* Course */}
         <div>
           <label htmlFor="course" className="mb-1 block text-sm font-medium text-gray-900">
             Course code *
@@ -121,7 +146,6 @@ export default function CourseWrite() {
             value={courseCode}
             onChange={(v) => setCourseCode(String(v || "").toUpperCase())}
             onSelect={(item) => {
-              // item: { code, title }
               setCourseCode(String(item?.code || "").toUpperCase());
               setCourseTitle(item?.title || "");
             }}
@@ -151,7 +175,7 @@ export default function CourseWrite() {
           </div>
         </div>
 
-        {/* semester */}
+        {/* Semester */}
         <div>
           <label className="mb-1 block text-sm font-medium text-gray-900">Semester *</label>
           <select
@@ -168,10 +192,12 @@ export default function CourseWrite() {
           </select>
         </div>
 
-        {/* offerings/regarding */}
+        {/* Offerings / Regarding */}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
-            <div className="mb-1 block text-sm font-medium text-gray-900">What are you offering?</div>
+            <div className="mb-1 block text-sm font-medium text-gray-900">
+              {copy.chipsTitle}
+            </div>
             <div className="flex flex-wrap gap-3 text-sm">
               {[
                 ["syllabus", "Syllabus"],
@@ -201,36 +227,41 @@ export default function CourseWrite() {
           </div>
         </div>
 
-        {/* price/share */}
+        {/* Price (Needed이면 숨김) + Share preference */}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div>
-            <div className="mb-1 block text-sm font-medium text-gray-900">Price</div>
-            <div className="flex items-center gap-3">
-              <label className="inline-flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={isFree}
-                  onChange={(e) => setIsFree(e.target.checked)}
-                />
-                <span>Free</span>
-              </label>
-              {!isFree && (
-                <div className="flex items-center gap-2">
-                  <span className="rounded-md border px-2 py-1 text-sm text-gray-600">$</span>
+          {listingType !== "wanted" && (
+            <div>
+              <div className="mb-1 block text-sm font-medium text-gray-900">Price</div>
+              <div className="flex items-center gap-3">
+                <label className="inline-flex items-center gap-2 text-sm">
                   <input
-                    type="number"
-                    min={1}
-                    value={price}
-                    onChange={(e) => setPrice(e.target.value)}
-                    className="w-28 rounded-lg border px-3 py-2 text-sm"
-                    placeholder="Amount"
+                    type="checkbox"
+                    checked={isFree}
+                    onChange={(e) => setIsFree(e.target.checked)}
                   />
-                </div>
-              )}
+                  <span>Free</span>
+                </label>
+                {!isFree && (
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-md border px-2 py-1 text-sm text-gray-600">$</span>
+                    <input
+                      type="number"
+                      min={1}
+                      value={price}
+                      onChange={(e) => setPrice(e.target.value)}
+                      className="w-28 rounded-lg border px-3 py-2 text-sm"
+                      placeholder="Amount"
+                    />
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
+          )}
+
           <div>
-            <div className="mb-1 block text-sm font-medium text-gray-900">How would you like to share?</div>
+            <div className="mb-1 block text-sm font-medium text-gray-900">
+              How would you like to share?
+            </div>
             <div className="flex gap-6 text-sm">
               {[
                 ["in_person", "In person"],
@@ -269,8 +300,7 @@ export default function CourseWrite() {
           <button
             type="submit"
             disabled={submitting}
-            className="rounded-xl px-4 py-2 text-sm font-semibold text-white shadow disabled:opacity-60"
-            style={{ backgroundColor: schoolTheme?.primary || "#6b46c1" }}
+            className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow disabled:opacity-60"
           >
             {submitting ? "Submitting…" : "Submit"}
           </button>
@@ -279,6 +309,8 @@ export default function CourseWrite() {
     </div>
   );
 }
+
+
 
 
 

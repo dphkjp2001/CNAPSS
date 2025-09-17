@@ -37,7 +37,6 @@ export default function MaterialDetail() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
 
-  // request/chat states
   const [checking, setChecking] = useState(true);
   const [alreadySent, setAlreadySent] = useState(false);
   const [conversationId, setConversationId] = useState(null);
@@ -50,10 +49,8 @@ export default function MaterialDetail() {
       user.email.toLowerCase() === String(mat.uploaderEmail).toLowerCase(),
     [user, mat]
   );
-
   const isWanted = (mat?.listingType || "sale") === "wanted";
 
-  // load detail (public if no token)
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -74,7 +71,6 @@ export default function MaterialDetail() {
     };
   }, [school, token, id]);
 
-  // check existing request (only when logged in & not owner)
   useEffect(() => {
     if (!token || !mat || isOwner) {
       setChecking(false);
@@ -138,7 +134,6 @@ export default function MaterialDetail() {
       </div>
     );
   }
-
   if (err || !mat) {
     return (
       <div
@@ -152,7 +147,10 @@ export default function MaterialDetail() {
 
   const priceText = mat.isFree ? "Free" : currency.format(Number(mat.price || 0));
   const headerTitle = [mat.courseCode, mat.courseTitle].filter(Boolean).join(" — ");
-  const metaLine = [mat.semester, mat.professor ? `Prof. ${mat.professor}` : null]
+  const subline = [
+    mat.professor ? `Prof. ${mat.professor}` : null,
+    mat.semester || null,
+  ]
     .filter(Boolean)
     .join(" • ");
   const hasOfferings = Array.isArray(mat.offerings) && mat.offerings.length > 0;
@@ -160,7 +158,6 @@ export default function MaterialDetail() {
   return (
     <div className="min-h-screen px-4 py-10" style={{ backgroundColor: schoolTheme?.bg || "#f6f3ff" }}>
       <div className="mx-auto max-w-6xl">
-        {/* top bar */}
         <div className="mb-6 flex items-center justify-between gap-3">
           <button
             onClick={() => navigate(-1)}
@@ -175,16 +172,19 @@ export default function MaterialDetail() {
           )}
         </div>
 
-        {/* card */}
         <div className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm">
-          {/* header */}
+          {/* Header */}
           <div className="border-b border-gray-100 p-6 sm:p-8">
             <div className="flex items-start justify-between gap-6">
               <div className="min-w-0">
-                <h1 className="truncate text-3xl font-extrabold tracking-tight text-gray-900">
+                <h1 className="min-w-0 truncate text-3xl font-extrabold tracking-tight text-gray-900 sm:text-4xl">
                   {headerTitle || mat.title || mat.courseCode}
                 </h1>
-                {metaLine && <div className="mt-2 text-sm text-gray-600">{metaLine}</div>}
+                {subline && (
+                  <div className="mt-2 truncate text-base font-medium text-gray-600">
+                    {subline}
+                  </div>
+                )}
                 {mat.regarding && (
                   <div className="mt-3 text-sm text-gray-800">
                     <span className="font-medium">Regarding:</span> {mat.regarding}
@@ -209,10 +209,16 @@ export default function MaterialDetail() {
             </div>
           </div>
 
-          {/* body */}
+          {/* Body */}
           <div className="grid grid-cols-1 gap-8 p-6 sm:grid-cols-3 sm:p-8">
-            {/* left */}
             <div className="sm:col-span-2 space-y-5">
+              {mat.description ? (
+                <div className="rounded-2xl border border-gray-200 p-5">
+                  <div className="mb-2 text-base font-semibold text-gray-900">Description</div>
+                  <div className="whitespace-pre-wrap text-sm text-gray-800">{mat.description}</div>
+                </div>
+              ) : null}
+
               <div className="rounded-2xl border border-gray-200 p-5 text-sm text-gray-800">
                 <div className="mb-2 text-base font-semibold text-gray-900">Before you trade</div>
                 <ul className="list-disc space-y-1 pl-5 text-gray-700">
@@ -224,16 +230,8 @@ export default function MaterialDetail() {
                   </li>
                 </ul>
               </div>
-
-              {mat.description ? (
-                <div className="rounded-2xl border border-gray-200 p-5">
-                  <div className="mb-2 text-base font-semibold text-gray-900">Description</div>
-                  <div className="whitespace-pre-wrap text-sm text-gray-800">{mat.description}</div>
-                </div>
-              ) : null}
             </div>
 
-            {/* right */}
             <div className="space-y-4">
               <div className="rounded-2xl border border-gray-200 p-5 text-sm">
                 <div className="text-gray-500">Posted by</div>
@@ -309,6 +307,7 @@ export default function MaterialDetail() {
     </div>
   );
 }
+
 
 
 

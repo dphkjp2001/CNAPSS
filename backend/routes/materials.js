@@ -64,6 +64,7 @@ router.get("/recent", async (req, res) => {
 
   const itemsFilled = await attachAuthorNames(itemsRaw);
 
+  // ✅ offerings / regarding 포함
   const items = itemsFilled.map((m) => ({
     id: m._id,
     courseCode: m.courseCode,
@@ -77,6 +78,8 @@ router.get("/recent", async (req, res) => {
     uploaderEmail: m.uploaderEmail, // internal use only in FE
     listingType: m.listingType || "sale",
     createdAt: m.createdAt,
+    offerings: Array.isArray(m.offerings) ? m.offerings : [], // ✅ add
+    regarding: m.regarding || "",                               // ✅ add
   }));
 
   res.json({
@@ -151,6 +154,8 @@ router.get("/", async (req, res) => {
       listingType: m.listingType || "sale",
       createdAt: m.createdAt,
       updatedAt: m.updatedAt,
+      offerings: Array.isArray(m.offerings) ? m.offerings : [], // ✅ add
+      regarding: m.regarding || "",                               // ✅ add
     })),
   });
 });
@@ -241,8 +246,8 @@ router.post("/", async (req, res) => {
     sharePreference,
     status: "active",
     listingType,
-    offerings,   // ✅ NEW
-    regarding,   // ✅ NEW
+    offerings,   // ✅
+    regarding,   // ✅
     uploaderId: user?._id,
     uploaderEmail: low(user?.email || ""),
     authorName,
@@ -269,6 +274,7 @@ router.delete("/:id", async (req, res) => {
 });
 
 module.exports = router;
+
 
 
 
