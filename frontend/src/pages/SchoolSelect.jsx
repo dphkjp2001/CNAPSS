@@ -1,19 +1,23 @@
 // frontend/src/pages/SchoolSelect.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { useSchool } from "../contexts/SchoolContext";
 
-/* Light theme tokens (match current landing) */
+/* ====== Tokens (Toss-like bands, roomy type) ====== */
 const TOKENS = {
-  bg: "#FFFFFF",
-  text: "#111111",
-  sub: "#6B7280",
-  red: "#EF4444",
-  border: "rgba(0,0,0,0.1)",
-  soft: "rgba(17,17,17,0.05)",
+  pageBg: "#F7F8FA",
+  bandGray: "#F3F6F9",
+  text: "#0F172A",
+  sub: "#475569",
+  red: "#EF4444",          // hero base
+  redSoft: "#F87171",      // hero gradient soft
+  border: "rgba(15,23,42,0.16)",
+  white: "#FFFFFF",
+  green: "#10B981",
+  blue: "#2563EB",
+  sky: "#0EA5E9",
 };
 
-/* Enable/disable schools here */
+/* ====== Mock schools ====== */
 const SCHOOLS = [
   { key: "nyu", short: "NYU", name: "New York University", enabled: true,  domains: ["nyu.edu"] },
   { key: "columbia", short: "Columbia", name: "Columbia University", enabled: false, domains: ["columbia.edu"] },
@@ -21,7 +25,6 @@ const SCHOOLS = [
 ];
 
 export default function SchoolSelect() {
-  const nav = useNavigate();
   const { setSchool } = useSchool();
 
   const [selected, setSelected] = useState("nyu");
@@ -30,18 +33,14 @@ export default function SchoolSelect() {
     [selected]
   );
 
-  // ===== Waitlist form state =====
+  // waitlist
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [msg, setMsg] = useState({ type: "", text: "" });
   const inputRef = useRef(null);
 
-  useEffect(() => {
-    // reset message when school switches
-    setMsg({ type: "", text: "" });
-  }, [selected]);
+  useEffect(() => { setMsg({ type: "", text: "" }); }, [selected]);
 
-  // Basic domain check against the selected school
   const emailLooksValidForSchool = (e, school) => {
     if (!e || !e.includes("@")) return false;
     const dom = e.split("@").pop().toLowerCase();
@@ -87,54 +86,171 @@ export default function SchoolSelect() {
       });
       setEmail("");
     } catch {
-      setMsg({
-        type: "error",
-        text: "Something went wrong. Please try again a bit later.",
-      });
+      setMsg({ type: "error", text: "Something went wrong. Please try again later." });
     } finally {
       setSubmitting(false);
     }
   };
 
-  const goPreview = () => {
-    setSchool?.(selectedInfo.key);
-    nav(`/${encodeURIComponent(selectedInfo.key)}/dashboard`);
-  };
-
   return (
-    <div className="min-h-screen" style={{ background: TOKENS.bg }}>
-      <main className="mx-auto max-w-6xl px-4">
-        {/* ===== HERO (clean, no phone preview on top) ===== */}
-        <section className="py-12 sm:py-16">
-          <h1 className="text-3xl sm:text-6xl font-black tracking-tight text-black">
-            Your campus, <span className="text-red-600">closer</span>
-            <br className="hidden sm:block" /> than ever.
+    <div className="min-h-screen" style={{ background: TOKENS.pageBg }}>
+      {/* ====== Sc1. HERO ====== */}
+      <HeroRed>
+        <div className="mx-auto max-w-6xl px-4">
+          <h1 className="mt-1 text-[54px] leading-[1.06] sm:text-[80px] font-black text-white">
+            Your Campus,<br className="hidden sm:block" /> Closer than ever
           </h1>
-          <p className="mt-4 text-lg sm:text-xl leading-relaxed" style={{ color: TOKENS.sub }}>
-            CNAPSS is a private community app for your university. Share materials, post on the free
-            board, buy & sell on the marketplace, and connect with classmates — all verified by school email.
+        </div>
+      </HeroRed>
+
+      {/* ====== Sc2. Why CNAPSS (익명 + 인증 강조) ====== */}
+      <Band bg="white">
+        <div className="mx-auto max-w-6xl px-4">
+          <p className="text-[18px] font-extrabold tracking-wide text-red-600">
+            Why CNAPSS
+          </p>
+          <h2 className="mt-3 max-w-4xl text-[44px] sm:text-[52px] font-black leading-[1.08]" style={{ color: TOKENS.text }}>
+            Real students. Real voices. Always anonymous.
+          </h2>
+          <p className="mt-6 max-w-3xl text-[18px] leading-[1.9]" style={{ color: TOKENS.sub }}>
+            Only verified students can join — so you know it’s your peers. Share freely,
+            ask openly, stay anonymous.
+          </p>
+        </div>
+      </Band>
+
+      {/* ====== Sc3. Campus Boards (카피/보드명 교체) ====== */}
+      <Band bg="gray">
+        <div className="mx-auto max-w-6xl px-4">
+          <div className="max-w-4xl">
+            <p className="text-[18px] font-extrabold tracking-wide text-red-600">
+              Campus Board
+            </p>
+            <h2 className="mt-3 text-[44px] sm:text-[52px] font-black leading-[1.08]" style={{ color: TOKENS.text }}>
+              Ask anything — campus life & academics, all anonymous
+            </h2>
+            <p className="mt-6 text-[20px] leading-[1.9]" style={{ color: TOKENS.sub }}>
+              Campus Boards combine everyday conversations and academic discussions — all under the safety of anonymity.
+              From casual tips to course advice and career paths, connect with peers freely.
+            </p>
+          </div>
+
+          {/* 보드 카드: General / Academic */}
+          <div className="mt-12 grid grid-cols-1 gap-6 sm:grid-cols-2">
+            <BoardCard
+              accent={TOKENS.blue}
+              title="General Board"
+              threads={[
+                { title: "Best late-night study spots on campus?", meta: "24 replies · 1h ago" },
+                { title: "Anyone up for basketball tomorrow? 🏀", meta: "8 replies · 3h ago" },
+                { title: "Can I bring an air fryer to dorms?", meta: "5 replies · 5h ago" },
+              ]}
+            />
+            <BoardCard
+              accent={TOKENS.sky}
+              title="Academic Board"
+              threads={[
+                { title: "NYC SWE internships: prep for tech screens?", meta: "Thread · 9 replies" },
+                { title: "Share your behavioral interview notes", meta: "6 replies · 1d ago" },
+                { title: "CS-UY networking events this week", meta: "3 replies · 20m ago" },
+              ]}
+            />
+          </div>
+        </div>
+      </Band>
+
+      {/* ====== Sc4. CourseHub — phone mock (이전 유지) ====== */}
+      <Band bg="white">
+        <div className="mx-auto grid max-w-6xl grid-cols-1 items-center gap-16 px-4 md:grid-cols-12">
+          <div className="md:col-span-6 max-w-xl">
+            <p className="text-[18px] font-extrabold tracking-wide text-red-600">CourseHub</p>
+            <h2 className="mt-3 text-[44px] sm:text-[52px] font-black leading-[1.08]" style={{ color: TOKENS.text }}>
+              Find classmates by course. <br className="hidden sm:block"/>Connect in chat — not in storage.
+            </h2>
+            <p className="mt-6 max-w-2xl text-[18px] leading-[1.95]" style={{ color: TOKENS.sub }}>
+              Discover threads and people for a specific class. CNAPSS doesn’t host or sell files —
+              it simply connects you so you can coordinate how to share and discuss.
+            </p>
+          </div>
+
+          <div className="md:col-span-6 justify-self-center">
+            <PhoneFrame3D>
+              <CoursehubChatScreen />
+            </PhoneFrame3D>
+          </div>
+        </div>
+      </Band>
+
+      {/* ====== Sc5. Marketplace (유지) ====== */}
+      <Band bg="gray">
+        <div className="mx-auto grid max-w-6xl grid-cols-1 items-start gap-16 px-4 md:grid-cols-12">
+          <div className="md:col-span-6 max-w-xl">
+            <p className="text-[18px] font-extrabold tracking-wide text-red-600">Marketplace</p>
+            <h2 className="mt-3 text-[44px] sm:text-[52px] font-black leading-[1.08]" style={{ color: TOKENS.text }}>
+              Meet the right buyer or seller
+            </h2>
+            <p className="mt-6 max-w-2xl text-[18px] leading-[1.95]" style={{ color: TOKENS.sub }}>
+              Students match — then agree on price, place, and details in chat.
+              No in-app payment or escrow. Simple, direct, student to student.
+            </p>
+          </div>
+
+          <div className="md:col-span-6">
+            <DealCard
+              headline="Match found"
+              lines={[
+                "Item · MATH-UA 120 Textbook — $15",
+                "Next steps · Decide time & place in chat",
+              ]}
+              bubbles={[
+                { who: "You",  text: "Union Square works for me. 6pm today?" },
+                { who: "Alex", text: "Perfect — NYU Bookstore entrance?" },
+                { who: "You",  text: "Sounds good. I’ll pay via Venmo." },
+              ]}
+              badges={["Student verified", "No in-app payment"]}
+            />
+          </div>
+        </div>
+      </Band>
+
+      {/* ====== Sc6. Meet the Founders (신규) ====== */}
+      <Band bg="white">
+        <div className="mx-auto max-w-6xl px-4">
+          <p className="text-[18px] font-extrabold tracking-wide text-red-600">
+            Meet the Founders
+          </p>
+          <h2 className="mt-3 max-w-4xl text-[44px] sm:text-[52px] font-black leading-[1.08]" style={{ color: TOKENS.text }}>
+            We’re students — just like you
+          </h2>
+          <p className="mt-6 max-w-3xl text-[18px] leading-[1.9]" style={{ color: TOKENS.sub }}>
+            CNAPSS was born from our own campus experience. As fellow students, we wanted a space
+            to connect, ask, and share safely.
+          </p>
+        </div>
+      </Band>
+
+      {/* ====== Sc7. WAITLIST (유지, Founders 뒤) ====== */}
+      <Band bg="white">
+        <div className="mx-auto max-w-6xl px-4">
+          <h2 className="text-center text-[34px] sm:text-[42px] font-black" style={{ color: TOKENS.text }}>
+            Join the waitlist
+          </h2>
+          <p className="mt-4 text-center text-[16px]" style={{ color: TOKENS.sub }}>
+            Choose your school and enter your school email. We’ll notify you when it’s ready.
           </p>
 
-          {/* ===== Waitlist box ===== */}
-          <div className="mt-7 rounded-2xl border bg-white p-5" style={{ borderColor: TOKENS.border }}>
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="text-sm font-extrabold text-black">Join the waitlist</div>
-                <p className="mt-1 text-sm" style={{ color: TOKENS.sub }}>
-                  Choose your school and enter your school email. We’ll notify you when it’s ready.
-                </p>
-              </div>
-            </div>
-
-            {/* school choices */}
-            <div className="mt-3 flex flex-wrap gap-2">
+          <div
+            className="mx-auto mt-10 w-full max-w-2xl rounded-2xl bg-white p-6 sm:p-8 shadow-sm ring-1"
+            style={{ borderColor: TOKENS.border }}
+          >
+            <div className="flex flex-wrap justify-center gap-2">
               {SCHOOLS.map((s) => {
                 const active = selected === s.key;
                 return (
                   <button
                     key={s.key}
                     onClick={() => setSelected(s.key)}
-                    className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                    className={`rounded-full border px-3 py-1.5 text-sm font-semibold transition ${
                       active ? "bg-red-50 border-red-200 text-red-700" : "bg-white hover:bg-black/5"
                     } ${!s.enabled ? "opacity-60" : ""}`}
                     style={{ borderColor: TOKENS.border }}
@@ -146,8 +262,7 @@ export default function SchoolSelect() {
               })}
             </div>
 
-            {/* email + join */}
-            <form onSubmit={handleJoin} className="mt-4 flex flex-col sm:flex-row gap-3">
+            <form onSubmit={handleJoin} className="mt-6 flex flex-col sm:flex-row gap-4">
               <div className="relative flex-1">
                 <input
                   ref={inputRef}
@@ -157,10 +272,13 @@ export default function SchoolSelect() {
                   placeholder={`Enter your ${selectedInfo.short} school email`}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full rounded-xl border bg-white px-4 py-3 text-sm outline-none focus:ring-2"
+                  className="w-full rounded-xl border bg-white px-4 py-3.5 text-[15px] outline-none focus:ring-2"
                   style={{ borderColor: TOKENS.border }}
                 />
-                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: TOKENS.sub }}>
+                <span
+                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs"
+                  style={{ color: TOKENS.sub }}
+                >
                   @{selectedInfo.domains[0]}
                 </span>
               </div>
@@ -169,21 +287,11 @@ export default function SchoolSelect() {
               </Primary>
             </form>
 
-            {/* helper row */}
-            <div className="mt-3 flex flex-wrap items-center gap-3 text-xs" style={{ color: TOKENS.sub }}>
-              <button type="button" onClick={goPreview} className="underline underline-offset-2">
-                Or explore the web preview
-              </button>
-              <span className="opacity-60">·</span>
-              <span>We only accept verified school emails.</span>
-            </div>
-
-            {/* message */}
             {msg.text && (
               <div
                 role="status"
                 aria-live="polite"
-                className={`mt-3 rounded-lg px-3 py-2 text-sm ${
+                className={`mt-5 rounded-xl px-3 py-2 text-sm ${
                   msg.type === "success" ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
                 }`}
               >
@@ -191,93 +299,93 @@ export default function SchoolSelect() {
               </div>
             )}
           </div>
-        </section>
-
-        {/* ===== What you can do (feature + phone previews) ===== */}
-        <section className="pb-12">
-          <h2 className="text-2xl sm:text-3xl font-black text-black">What you can do</h2>
-
-          <FeatureRow
-            title="CourseHub"
-            desc="Find and share materials by course, professor, or semester."
-            cta="Browse CourseHub"
-            onClick={() => goPreview()} // lightweight path; full experience in app
-            phone={<PhoneCoursehub />}
-          />
-
-          <FeatureRow
-            title="Free Board"
-            desc="Ask questions, swap tips, and keep up with your campus."
-            cta="Open Free Board"
-            onClick={() => goPreview()}
-            reverse
-            phone={<PhoneFreeboard />}
-          />
-
-          <FeatureRow
-            title="Marketplace"
-            desc="Buy & sell textbooks, furniture, and more — student to student."
-            cta="Explore Marketplace"
-            onClick={() => goPreview()}
-            phone={<PhoneMarket />}
-          />
-
-          <p className="mt-8 text-center text-xs" style={{ color: TOKENS.sub }}>
-            * Web provides a limited preview. Use the mobile app for the full experience.
-          </p>
-        </section>
-      </main>
+        </div>
+      </Band>
     </div>
   );
 }
 
-/* ========================= Shared UI Bits ========================= */
-function Primary({ children, onClick, type = "button", disabled }) {
+/* ================== Layout helpers ================== */
+function Band({ children, bg = "white" }) {
+  const isGray = bg === "gray";
   return (
-    <button
-      type={type}
-      onClick={onClick}
-      disabled={disabled}
-      className={`rounded-xl px-5 py-3 text-xs font-bold uppercase tracking-wide text-white shadow-sm transition
-                  ${disabled ? "opacity-60 cursor-not-allowed" : "hover:shadow"} `}
-      style={{ background: TOKENS.red }}
+    <section className="w-full" style={{ background: isGray ? TOKENS.bandGray : TOKENS.white }}>
+      <div className="py-24 sm:py-28">{children}</div>
+    </section>
+  );
+}
+
+/* HERO: red gradient + soft white radial (no eyebrow) */
+function HeroRed({ children }) {
+  return (
+    <section
+      className="w-full relative"
+      style={{ background: `linear-gradient(180deg, ${TOKENS.red} 0%, ${TOKENS.redSoft} 100%)` }}
     >
-      {children}
-    </button>
+      <div
+        aria-hidden
+        className="pointer-events-none absolute left-1/2 top-[-160px] h-[420px] w-[860px] -translate-x-1/2 rounded-full blur-3xl opacity-30"
+        style={{
+          background: "radial-gradient(60% 60% at 50% 50%, rgba(255,255,255,0.6) 0%, rgba(255,255,255,0) 70%)",
+        }}
+      />
+      <div className="py-24 sm:py-28">{children}</div>
+    </section>
   );
 }
 
-function ArrowRight() {
+/* ================== Reusable cards & mocks ================== */
+function VerifyCard({ icon, title, desc }) {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden>
-      <path d="M7 12h10M13 7l5 5-5 5" stroke="currentColor" strokeWidth="2" fill="none" />
-    </svg>
-  );
-}
-
-function FeatureRow({ title, desc, cta, onClick, phone, reverse = false }) {
-  return (
-    <div className={`mt-8 grid grid-cols-1 md:grid-cols-2 gap-8 items-center ${reverse ? "md:[&>*:first-child]:order-2" : ""}`}>
-      <div>
-        <div className="text-xl font-extrabold text-black">{title}</div>
-        <p className="mt-1 text-sm" style={{ color: TOKENS.sub }}>
-          {desc}
-        </p>
-        <button onClick={onClick} className="mt-4 inline-flex items-center gap-1 text-sm font-bold" style={{ color: TOKENS.red }}>
-          {cta} <ArrowRight />
-        </button>
+    <div className="rounded-2xl bg-white p-6 shadow-sm ring-1" style={{ borderColor: TOKENS.border }}>
+      <div className="flex items-center gap-3">
+        {icon}
+        <h3 className="text-[18px] font-bold" style={{ color: TOKENS.text }}>{title}</h3>
       </div>
-      <div className="justify-self-center">{phone}</div>
+      <p className="mt-2 text-[15px]" style={{ color: TOKENS.sub }}>{desc}</p>
     </div>
   );
 }
 
-/* ========================= Phone mocks ========================= */
-function PhoneFrame({ children }) {
+function BoardCard({ accent = TOKENS.blue, title, threads = [] }) {
   return (
-    <div className="relative w-[280px] sm:w-[320px]">
-      <div className="rounded-[36px] border bg-white p-4 shadow-sm" style={{ borderColor: TOKENS.border }}>
-        <div className="mx-auto h-[540px] w-full overflow-hidden rounded-[28px] border" style={{ borderColor: TOKENS.border }}>
+    <div className="rounded-2xl bg-white p-6 shadow-sm ring-1" style={{ borderColor: TOKENS.border }}>
+      <div className="flex items-center gap-2 text-sm font-bold" style={{ color: accent }}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+          <path d="M4 15v5l4-4h8a4 4 0 0 0 4-4V7a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v8z" stroke="currentColor" strokeWidth="2"/>
+        </svg>
+        {title}
+      </div>
+      <ul className="mt-3 divide-y" style={{ borderColor: TOKENS.border }}>
+        {threads.map((t, i) => (
+          <li key={i} className="py-3">
+            <p className="text-[15px] font-semibold text-slate-900 line-clamp-1">“{t.title}”</p>
+            <p className="mt-1 text-xs text-slate-500">{t.meta}</p>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/* Phone with darker, strong borders everywhere + reversed tilt (kept from prior tweak) */
+function PhoneFrame3D({ children }) {
+  return (
+    <div style={{ perspective: "1200px" }}>
+      <div
+        className="relative w-[300px] sm:w-[340px]"
+        style={{
+          transform: "rotateY(-12deg) rotateX(3deg)",
+          transformStyle: "preserve-3d",
+          borderRadius: "34px",
+          background: "linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%)",
+          boxShadow: "0 30px 80px rgba(15,23,42,0.25), inset 0 0 0 2px rgba(15,23,42,0.85)",
+        }}
+      >
+        <div
+          className="mx-auto my-4 h-[560px] w-[92%] overflow-hidden rounded-[28px] bg-white ring-1"
+          style={{ borderColor: "rgba(15,23,42,0.85)", boxShadow: "inset 0 0 0 1px rgba(15,23,42,0.85)" }}
+        >
           {children}
         </div>
       </div>
@@ -285,86 +393,96 @@ function PhoneFrame({ children }) {
   );
 }
 
-function PhoneCoursehub() {
+/* ====== CourseHub chat screen (buyer starts; You = seller) ====== */
+function CoursehubChatScreen() {
   return (
-    <PhoneFrame>
-      <div className="h-12 w-full bg-red-50 flex items-center justify-center text-red-700 text-xs font-bold">CourseHub</div>
-      <ul className="divide-y" style={{ borderColor: TOKENS.border }}>
-        {[
-          { code: "CS-UY 1114", title: "Intro to CS", sub: "Prof. Smith · Fall 2024", price: "$10" },
-          { code: "MATH-UA 120", title: "Calculus II", sub: "Prof. Lee · Spring 2024", price: "Free" },
-          { code: "DS-UA 201", title: "Data Structures", sub: "Prof. Chen · Fall 2024", price: "$5" },
-        ].map((m, i) => (
-          <li key={i} className="p-3 flex items-center justify-between">
-            <div className="min-w-0">
-              <div className="text-[13px] font-semibold text-black line-clamp-1">
-                {m.code} — {m.title}
-              </div>
-              <div className="text-[11px]" style={{ color: TOKENS.sub }}>{m.sub}</div>
-            </div>
-            <span className="shrink-0 rounded px-2 py-0.5 text-[11px] font-bold text-white" style={{ background: TOKENS.red }}>
-              {m.price}
+    <div className="h-full w-full">
+      {/* top bar: course only */}
+      <div className="flex h-10 items-center justify-center text-xs font-bold text-red-700 bg-red-50"
+           style={{ boxShadow: "inset 0 -1px 0 0 rgba(15,23,42,0.85)" }}>
+        DS-UA 201
+      </div>
+
+      <div className="space-y-3 p-3">
+        <Bubble who="Alex" tone="neutral">Hi! I’m looking for the “Midterm Notes.” Is it still available?</Bubble>
+        <Bubble who="You"  tone="me">Yep — I’m selling it. If you want, we can meet so you can look through it first.</Bubble>
+        <Bubble who="Alex" tone="neutral">I prefer in-person. Could we meet and I’ll decide after checking the notes?</Bubble>
+        <Bubble who="You"  tone="me">Sure. Bobst Library works for me. When are you free?</Bubble>
+        <Bubble who="Alex" tone="neutral">Tomorrow 3pm at the main entrance?</Bubble>
+        <Bubble who="You"  tone="me">Perfect. See you there. Cash or Venmo both work.</Bubble>
+        <Bubble who="Alex" tone="neutral">Great — I’ll see you then!</Bubble>
+      </div>
+    </div>
+  );
+}
+
+function Bubble({ who, children, tone = "neutral" }) {
+  const common = "max-w-[80%] rounded-2xl px-3 py-2 text-[13px] ring-1";
+  const mine   = "self-end bg-red-50 text-red-900 ring-red-800";
+  const other  = "self-start bg-slate-50 text-slate-900 ring-slate-800";
+  return (
+    <div className={`flex ${tone === "me" ? "justify-end" : "justify-start"}`}>
+      <div className={`${common} ${tone === "me" ? mine : other}`}>
+        <span className="font-bold">{who}: </span>{children}
+      </div>
+    </div>
+  );
+}
+
+/* ====== Marketplace “deal” card ====== */
+function DealCard({ headline, lines = [], bubbles = [], badges = [] }) {
+  return (
+    <div className="rounded-2xl bg-white p-6 shadow-sm ring-1" style={{ borderColor: TOKENS.border }}>
+      <div className="flex items-center gap-2 text-[15px] font-bold text-green-700">
+        <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-green-100">
+          ✓
+        </span>
+        {headline}
+      </div>
+
+      <ul className="mt-2 text-[14px] text-slate-600">
+        {lines.map((l, i) => <li key={i} className="leading-relaxed">{l}</li>)}
+      </ul>
+
+      <div className="mt-4 space-y-2">
+        {bubbles.map((b, i) => (
+          <div key={i} className="flex items-start gap-2">
+            <span className="mt-1 inline-flex h-5 w-5 shrink-0 select-none items-center justify-center rounded-full bg-slate-100 text-[11px] font-bold text-slate-600">
+              {b.who[0]}
             </span>
-          </li>
-        ))}
-      </ul>
-      <div className="mt-auto h-10 w-full border-t bg-white flex items-center justify-center text-[11px]" style={{ borderColor: TOKENS.border, color: TOKENS.sub }}>
-        Preview only · Get the app
-      </div>
-    </PhoneFrame>
-  );
-}
-
-function PhoneFreeboard() {
-  return (
-    <PhoneFrame>
-      <div className="h-12 w-full bg-red-50 flex items-center justify-center text-red-700 text-xs font-bold">Free Board</div>
-      <ul className="divide-y" style={{ borderColor: TOKENS.border }}>
-        {[
-          "Best study spots on campus?",
-          "Selling Calc textbook",
-          "Looking for CS tutor",
-          "Where to eat near library?",
-        ].map((t, i) => (
-          <li key={i} className="p-3">
-            <div className="text-[13px] font-semibold text-black line-clamp-1">{t}</div>
-            <div className="text-[11px]" style={{ color: TOKENS.sub }}>2h ago · by Student {i + 1}</div>
-          </li>
-        ))}
-      </ul>
-      <div className="mt-auto h-10 w-full border-t bg-white flex items-center justify-center text-[11px]" style={{ borderColor: TOKENS.border, color: TOKENS.sub }}>
-        Preview only · Get the app
-      </div>
-    </PhoneFrame>
-  );
-}
-
-function PhoneMarket() {
-  return (
-    <PhoneFrame>
-      <div className="h-12 w-full bg-red-50 flex items-center justify-center text-red-700 text-xs font-bold">Marketplace</div>
-      <ul className="divide-y" style={{ borderColor: TOKENS.border }}>
-        {[
-          { title: "iPad Air (64GB)", price: "$280", who: "Student A" },
-          { title: "Calculus Textbook", price: "$15", who: "Student B" },
-          { title: "Dorm Mini Fridge", price: "$60", who: "Student C" },
-        ].map((m, i) => (
-          <li key={i} className="p-3 flex items-center gap-3">
-            <div className="h-12 w-16 rounded bg-neutral-100" />
-            <div className="min-w-0 grow">
-              <div className="text-[13px] font-semibold text-black line-clamp-1">{m.title}</div>
-              <div className="text-[11px]" style={{ color: TOKENS.sub }}>by {m.who}</div>
+            <div className="rounded-xl bg-slate-50 px-3 py-2 text-[14px] text-slate-900 ring-1" style={{ borderColor: TOKENS.border }}>
+              <span className="font-bold">{b.who}: </span>{b.text}
             </div>
-            <span className="shrink-0 text-[12px] font-bold" style={{ color: TOKENS.red }}>{m.price}</span>
-          </li>
+          </div>
         ))}
-      </ul>
-      <div className="mt-auto h-10 w-full border-t bg-white flex items-center justify-center text-[11px]" style={{ borderColor: TOKENS.border, color: TOKENS.sub }}>
-        Preview only · Get the app
       </div>
-    </PhoneFrame>
+
+      {badges.length > 0 && (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {badges.map((t, i) => (
+            <span key={i} className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600 ring-1"
+                  style={{ borderColor: TOKENS.border }}>
+              {t}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
+
+/* ====== Primary button ====== */
+function Primary({ children, ...rest }) {
+  return (
+    <button
+      {...rest}
+      className="rounded-xl bg-black px-5 py-3 text-white font-semibold hover:bg-black/90 disabled:opacity-50"
+    >
+      {children}
+    </button>
+  );
+}
+
 
 
 

@@ -20,6 +20,10 @@ import Courses from "./pages/courses/Courses.jsx";
 import CourseWrite from "./pages/courses/CourseWrite";
 import MaterialDetail from "./pages/courses/MaterialDetail";
 
+// ✅ RMP pages (NEW)
+import CourseDetail from "./pages/courses/CourseDetail";
+import ProfessorDetail from "./pages/courses/ProfessorDetail";
+
 // Dashboards (lazy)
 const Dashboard = lazy(() => import("./pages/dashboard/Dashboard"));
 const MyPosts = lazy(() => import("./pages/dashboard/MyPosts"));
@@ -137,14 +141,17 @@ export default function App() {
             <Route path="career/:id" element={<CareerBoardDetail />} />
             <Route path="career/write" element={<CareerBoardWrite />} />
 
-            {/* CourseHub — list/write/detail 모두 공개 진입 */}
+            {/* CourseHub — list/write/detail (public entry) */}
             <Route path="courses" element={<Courses />} />
             <Route path="courses/write" element={<CourseWrite />} />
             <Route path="courses/materials/:id" element={<MaterialDetail />} />
 
+            {/* ✅ RMP detail views (NEW) */}
+            <Route path="courses/:courseId" element={<CourseDetail />} />
+            <Route path="professors/:professorId" element={<ProfessorDetail />} />
+
             {/* ✅ Marketplace: 목록/상세 공개, 쓰기/수정 보호 */}
             <Route path="market" element={<MarketList />} />
-            {/* ⬇️ 여기서 RequireAuth 제거 */}
             <Route path="market/:id" element={<MarketDetail />} />
             <Route
               path="market/write"
@@ -226,6 +233,7 @@ export default function App() {
     </AuthGateProvider>
   );
 }
+
 
 
 

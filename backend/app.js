@@ -26,6 +26,8 @@ const publicCareerPostsRouter = require("./routes/public.career.posts");
 // ✅ Public comments (Freeboard/Career 공유)
 const publicCommentsRouter = require("./routes/public.comments");
 
+const reviewsRoutes = require("./routes/reviews");
+
 dotenv.config({
   path: process.env.NODE_ENV === "production" ? ".env.production" : ".env.development",
 });
@@ -80,6 +82,8 @@ app.use("/api/:school/request", requireAuth, schoolGuard, requestRoutes);
 app.use("/api/:school/schedule", requireAuth, schoolGuard, scheduleRoutes);
 app.use("/api/:school/courses", requireAuth, schoolGuard, courseHubRoutes);
 app.use("/api/:school/materials", requireAuth, schoolGuard, materialsRoutes);
+app.use("/api/:school/reviews", requireAuth, schoolGuard, reviewsRoutes); // ✅ 추가
+
 
 /* ----------------------- Misc ----------------------- */
 // (예: places 프록시가 school 스코프가 아니라면 별도 경로로 마운트)

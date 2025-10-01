@@ -3,6 +3,17 @@ import React, { useEffect, useState } from "react";
 import { Outlet, Link, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 
+function SideLink({ to, children }) {
+  return (
+    <Link
+      to={to}
+      className="block rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
+    >
+      {children}
+    </Link>
+  );
+}
+
 export default function PublicLayout() {
   const { user, logout } = useAuth();
   const location = useLocation();
@@ -12,7 +23,6 @@ export default function PublicLayout() {
     const f = location.state?.flash;
     if (f) {
       setFlash(f);
-      // drop history state (so it doesn't reappear on back/forward)
       try {
         const { pathname, search, hash } = window.location;
         window.history.replaceState({}, "", pathname + search + hash);
@@ -23,69 +33,73 @@ export default function PublicLayout() {
   }, [location.state]);
 
   return (
-    <div className="min-h-screen flex flex-col bg-white">
-      {/* Top */}
-      <header className="w-full bg-white border-b">
-        <div className="mx-auto max-w-6xl px-4 h-14 flex items-center justify-between gap-3">
-          <Link to="/" className="font-extrabold text-xl tracking-tight text-gray-900">
-            CNAPSS
+    <div className="min-h-screen flex bg-gray-50">
+      {/* Left Sidebar */}
+      <aside className="hidden md:flex md:w-60 flex-col border-r bg-white">
+        <div className="p-4 border-b">
+          <Link to="/" className="inline-flex items-center gap-2">
+            <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-red-600 text-white font-black">C</span>
+            <span className="text-lg font-extrabold tracking-tight text-gray-900">
+              CNAPSS
+            </span>
           </Link>
-
-          <nav className="flex items-center gap-1">
-            {user?.email ? (
-              <>
-                <Link
-                  to={`/${encodeURIComponent(user.school || "")}/dashboard`}
-                  className="px-3 py-2 text-sm text-gray-700 hover:text-violet-700 hover:bg-violet-50 rounded-md"
-                >
-                  Go to dashboard
-                </Link>
-                <button
-                  onClick={logout}
-                  className="px-3 py-2 text-sm text-red-600 hover:bg-violet-50 rounded-md"
-                >
-                  Log out
-                </button>
-              </>
-            ) : (
-              <>
-                <Link
-                  to="/login"
-                  className="px-3 py-2 text-sm text-gray-700 hover:text-violet-700 hover:bg-violet-50 rounded-md"
-                >
-                  Log in
-                </Link>
-                <Link
-                  to="/register"
-                  className="px-3 py-2 text-sm text-gray-700 hover:text-violet-700 hover:bg-violet-50 rounded-md"
-                >
-                  Register
-                </Link>
-              </>
-            )}
-          </nav>
         </div>
+        <nav className="p-3 space-y-1">
+          <SideLink to="/about">About</SideLink>
+          {user?.email ? (
+            <SideLink to={`/${encodeURIComponent(user.school || "")}/dashboard`}>Go to dashboard</SideLink>
+          ) : null}
+        </nav>
+        <div className="mt-auto p-3">
+          {user?.email ? (
+            <button
+              onClick={logout}
+              className="w-full rounded-lg px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+            >
+              Log out
+            </button>
+          ) : (
+            <div className="flex flex-col gap-2">
+              <Link
+                to="/login"
+                className="rounded-lg px-3 py-2 text-center text-sm text-white bg-red-600 hover:bg-red-700"
+              >
+                Log in
+              </Link>
+              <Link
+                to="/register"
+                className="rounded-lg px-3 py-2 text-center text-sm border text-gray-700 hover:bg-gray-100"
+              >
+                Register
+              </Link>
+            </div>
+          )}
+        </div>
+      </aside>
 
-        {/* 🔔 flash banner */}
+      {/* Right column */}
+      <div className="flex-1 min-w-0 flex flex-col">
+        {/* Top (flash only) */}
         {flash && (
-          <div className="border-t bg-amber-50 text-amber-900">
+          <div className="border-b bg-amber-50 text-amber-900">
             <div className="mx-auto max-w-6xl px-4 py-2 text-sm">{flash.message}</div>
           </div>
         )}
-      </header>
 
-      <main className="flex-1">
-        <Outlet />
-      </main>
+        <main className="flex-1">
+          <Outlet />
+        </main>
 
-      <footer className="px-6 py-6 text-center text-sm text-gray-500">
-        <Link to="/about" className="underline">
-          About
-        </Link>
-      </footer>
+        <footer className="px-6 py-6 text-center text-sm text-gray-500">
+          <Link to="/about" className="underline">
+            About
+          </Link>
+        </footer>
+      </div>
     </div>
   );
 }
+
 
 
 

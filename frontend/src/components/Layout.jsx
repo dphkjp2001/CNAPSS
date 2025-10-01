@@ -18,6 +18,19 @@ function Initials({ name = "GU", bg = "#f1ecff" }) {
   );
 }
 
+function NavItem({ to, children }) {
+  return (
+    <NavLink
+      to={to}
+      className={({ isActive }) =>
+        `block rounded-lg px-3 py-2 text-sm ${isActive ? "bg-red-50 text-red-600 font-semibold" : "text-gray-700 hover:bg-gray-100"}`
+      }
+    >
+      {children}
+    </NavLink>
+  );
+}
+
 export default function Layout() {
   const { user, logout } = useAuth();
   const { school, schoolTheme } = useSchool();
@@ -29,14 +42,11 @@ export default function Layout() {
     user?.email,
     5000,
     60000,
-    5 // keep: correct numeric arg
+    5
   );
 
   const [showNoti, setShowNoti] = useState(false);
-
-  // profile dropdown
   const [showProfile, setShowProfile] = useState(false);
-
   const [bump, setBump] = useState(false);
   const prevCountRef = useRef(count);
   useEffect(() => {
@@ -48,10 +58,6 @@ export default function Layout() {
     prevCountRef.current = count;
   }, [count]);
 
-  const linkCls =
-    "px-3 py-2 text-sm text-gray-700 hover:text-violet-700 hover:bg-violet-50 rounded-md";
-  const activeCls = "text-violet-700 font-medium bg-violet-50";
-
   const onLogout = async () => {
     await logout();
     navigate("/login");
@@ -60,56 +66,45 @@ export default function Layout() {
   const nickname = user?.nickname || (user?.email ? user.email.split("@")[0] : "GU");
 
   return (
-    <div className="min-h-screen flex flex-col">
-      {/* Top Nav */}
-      <header className="w-full border-b bg-white">
-        <div className="mx-auto max-w-6xl px-4 h-14 flex items-center justify-between gap-3">
-          <Link to={school ? schoolPath("/dashboard") : "/"} className="font-bold text-xl">
-            CNAPSS
+    <div className="min-h-screen flex bg-gray-50">
+      {/* === Left Sidebar (global nav) === */}
+      <aside className="hidden md:flex md:w-60 flex-col border-r bg-white">
+        <div className="p-4 border-b">
+          <Link to={school ? schoolPath("/dashboard") : "/"} className="inline-flex items-center gap-2">
+            <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-red-600 text-white font-black">C</span>
+            <span className="text-lg font-extrabold tracking-tight">CNAPSS</span>
           </Link>
+          {school && (
+            <div className="mt-1 text-xs text-gray-500 truncate">{String(school)}</div>
+          )}
+        </div>
 
-          <nav className="flex items-center gap-1">
-            <NavLink
-              to={schoolPath("/freeboard")}
-              className={({ isActive }) => `${linkCls} ${isActive ? activeCls : ""}`}
-            >
-              Free Board
-            </NavLink>
+        <nav className="p-3 space-y-1">
+          <NavItem to={schoolPath("/dashboard")}>Dashboard</NavItem>
+          <NavItem to={schoolPath("/freeboard")}>Free Board</NavItem>
+          <NavItem to={schoolPath("/career")}>Career Board</NavItem>
+          <NavItem to={schoolPath("/courses")}>Course Hub</NavItem>
+          <NavItem to={schoolPath("/market")}>Marketplace</NavItem>
+          <NavItem to={schoolPath("/messages")}>Messages</NavItem>
+          <NavItem to={schoolPath("/foodmap")}>Food Map</NavItem>
+          <div className="mt-4 border-t pt-3">
+            <NavItem to={schoolPath("/myposts")}>My Posts</NavItem>
+            <NavItem to={schoolPath("/liked")}>Liked</NavItem>
+            <NavItem to={schoolPath("/commented")}>Commented</NavItem>
+          </div>
+        </nav>
 
-            {/* ✅ New: Career Board (added next to Free Board) */}
-            <NavLink
-              to={schoolPath("/career")}
-              className={({ isActive }) => `${linkCls} ${isActive ? activeCls : ""}`}
-            >
-              Career Board
-            </NavLink>
+        {/* bottom hint */}
+        <div className="mt-auto p-3 text-[11px] text-gray-400">
+          Stay anonymous. Be kind.
+        </div>
+      </aside>
 
-            <NavLink
-              to={schoolPath("/courses")}
-              className={({ isActive }) => `${linkCls} ${isActive ? activeCls : ""}`}
-            >
-              Course Hub
-            </NavLink>
-
-            {/* Schedule Grid entry was removed previously */}
-
-            <NavLink
-              to={schoolPath("/market")}
-              className={({ isActive }) => `${linkCls} ${isActive ? activeCls : ""}`}
-            >
-              Marketplace
-            </NavLink>
-
-
-            {/* Messages accessible anywhere*/}
-            <NavLink
-              to={schoolPath("/messages")}
-              className={({ isActive }) => `${linkCls} ${isActive ? activeCls : ""}`}
-            >
-              Messages
-            </NavLink>
-
-
+      {/* === Main column === */}
+      <div className="flex-1 min-w-0 flex flex-col">
+        {/* Top bar: keep notifications + profile only */}
+        <header className="w-full border-b bg-white">
+          <div className="mx-auto max-w-6xl px-4 h-14 flex items-center justify-end gap-2">
             {/* Notifications */}
             <button
               type="button"
@@ -121,7 +116,7 @@ export default function Layout() {
               aria-label="Notifications"
               title="Notifications"
             >
-              <span className="i-bell">🔔</span>
+              <span>🔔</span>
               {count > 0 && (
                 <span
                   className={`absolute -top-1.5 -right-1.5 inline-flex items-center justify-center
@@ -157,7 +152,6 @@ export default function Layout() {
 
                 {showProfile && (
                   <>
-                    {/* click-away */}
                     <div className="fixed inset-0 z-40" onClick={() => setShowProfile(false)} />
                     <div className="absolute right-0 z-50 mt-2 w-56 rounded-xl border bg-white shadow-lg">
                       <div className="px-3 py-2 border-b">
@@ -201,68 +195,68 @@ export default function Layout() {
               </div>
             ) : (
               <>
-                <Link to="/login" className={linkCls}>
+                <Link to="/login" className="px-3 py-2 text-sm text-gray-700 hover:text-violet-700 hover:bg-violet-50 rounded-md">
                   Log in
                 </Link>
-                <Link to="/register" className={`${linkCls} sm:ml-1`} title="Create an account">
+                <Link to="/register" className="px-3 py-2 text-sm text-gray-700 hover:text-violet-700 hover:bg-violet-50 rounded-md">
                   Register
                 </Link>
               </>
             )}
-          </nav>
-        </div>
-      </header>
+          </div>
+        </header>
 
-      {/* Notifications modal */}
-      {showNoti && (
-        <div
-          className="fixed inset-0 z-40 bg-black/30 flex items-start justify-end p-4"
-          onClick={() => setShowNoti(false)}
-        >
+        {/* Notifications modal */}
+        {showNoti && (
           <div
-            className="bg-white rounded-xl shadow-xl w-full max-w-sm"
-            onClick={(e) => e.stopPropagation()}
+            className="fixed inset-0 z-40 bg-black/30 flex items-start justify-end p-4"
+            onClick={() => setShowNoti(false)}
           >
-            <div className="px-4 py-3 border-b flex items-center justify-between">
-              <div className="font-medium">Notifications</div>
-              <button
-                className="text-sm text-violet-600 hover:underline"
-                onClick={() => {
-                  markAllAsRead();
-                  setShowNoti(false);
-                }}
-              >
-                Mark all as read
-              </button>
-            </div>
-            <div className="max-h-[60vh] overflow-auto">
-              {items.length === 0 ? (
-                <div className="p-4 text-sm text-gray-500">No notifications</div>
-              ) : (
-                items.map((n) => (
-                  <div key={n._id} className="p-4 border-b text-sm">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="font-medium">{n.title || "Notification"}</div>
-                      <button
-                        className="text-violet-600 hover:underline"
-                        onClick={() => markAsRead(n._id)}
-                      >
-                        Read
-                      </button>
+            <div
+              className="bg-white rounded-xl shadow-xl w-full max-w-sm"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="px-4 py-3 border-b flex items-center justify-between">
+                <div className="font-medium">Notifications</div>
+                <button
+                  className="text-sm text-violet-600 hover:underline"
+                  onClick={() => {
+                    markAllAsRead();
+                    setShowNoti(false);
+                  }}
+                >
+                  Mark all as read
+                </button>
+              </div>
+              <div className="max-h-[60vh] overflow-auto">
+                {items.length === 0 ? (
+                  <div className="p-4 text-sm text-gray-500">No notifications</div>
+                ) : (
+                  items.map((n) => (
+                    <div key={n._id} className="p-4 border-b text-sm">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="font-medium">{n.title || "Notification"}</div>
+                        <button
+                          className="text-violet-600 hover:underline"
+                          onClick={() => markAsRead(n._id)}
+                        >
+                          Read
+                        </button>
+                      </div>
+                      {n.message && <div className="mt-1 text-gray-600">{n.message}</div>}
                     </div>
-                    {n.message && <div className="mt-1 text-gray-600">{n.message}</div>}
-                  </div>
-                ))
-              )}
+                  ))
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Content */}
-      <main className="flex-1">
-        <Outlet />
-      </main>
+        {/* Routed pages */}
+        <main className="flex-1">
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 }
@@ -274,6 +268,7 @@ function MenuItem({ to, children, onClick }) {
     </Link>
   );
 }
+
 
 
 
