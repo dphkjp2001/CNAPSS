@@ -33,14 +33,14 @@ export async function getPost({ school, id }) {
   return getJson(url);
 }
 
-export async function createPost({ school, title, content }) {
+export async function createPost({ school, title, content, images = [] }) {
   const url = `${API_URL}/${school}/posts`;
-  return postJson(url, { title, content });
+  return postJson(url, { title, content, images }); // ✅ 이미지 함께 전송
 }
 
-export async function updatePost({ school, id, title, content }) {
+export async function updatePost({ school, id, title, content, images }) {
   const url = `${API_URL}/${school}/posts/${id}`;
-  return putJson(url, { title, content });
+  return putJson(url, { title, content, images });
 }
 
 export async function deletePost({ school, id }) {
@@ -70,6 +70,8 @@ export async function fetchPostById(id, school) { return getPost({ school, id })
 export async function togglePostLike(id, school) { return toggleThumbs({ school, id }); }
 export async function fetchLikedPosts(email, school) { return listLiked({ school, email }); }
 export async function fetchCommentedPosts(email, school) { return listCommented({ school, email }); }
+
+
 
 
 

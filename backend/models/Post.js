@@ -6,6 +6,9 @@ const postSchema = new mongoose.Schema(
     title: { type: String, required: true },
     content: { type: String, required: true },
 
+    // ✅ 이미지 URL 배열
+    images: { type: [String], default: [] },
+
     nickname: { type: String, required: true }, // display
     email: { type: String, required: true },    // author identity
     thumbsUpUsers: { type: [String], default: [] },
@@ -18,8 +21,6 @@ const postSchema = new mongoose.Schema(
       enum: ["nyu", "columbia", "boston"],
       index: true,
     },
-
-    createdAt: { type: Date, default: Date.now },
   },
   { timestamps: true }
 );
@@ -28,5 +29,6 @@ const postSchema = new mongoose.Schema(
 postSchema.index({ school: 1, createdAt: -1 });
 
 module.exports = mongoose.model("Post", postSchema);
+
 
 

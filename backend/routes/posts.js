@@ -15,7 +15,7 @@ router.use(requireAuth, schoolGuard);
  * GET /
  * Returns:
  *  { items, page, limit, total }
- *  each item includes: _id, title, createdAt, likesCount, commentsCount
+ *  each item includes: _id, title, content, images, createdAt, likesCount, commentsCount
  */
 router.get("/", async (req, res) => {
   try {
@@ -43,6 +43,8 @@ router.get("/", async (req, res) => {
         $project: {
           _id: 1,
           title: 1,
+          content: 1,     // ✅ 미리보기용 본문
+          images: 1,      // ✅ 이미지 포함
           createdAt: 1,
           school: 1,
           likesCount: { $size: { $ifNull: ["$thumbsUpUsers", []] } },
@@ -120,7 +122,10 @@ router.get("/commented/:email", async (req, res) => {
 // 단건 조회
 router.get("/:id", async (req, res) => {
   try {
-    const post = await Post.findOne({ _id: req.params.id, school: req.user.school });
+    const post = await Post.findOne(
+      { _id: req.params.id, school: req.user.school },
+      "_id title content images createdAt email nickname thumbsUpUsers"
+    );
     if (!post) return res.status(404).json({ message: "Post not found." });
     res.json(post);
   } catch (err) {
@@ -132,18 +137,26 @@ router.get("/:id", async (req, res) => {
 // 생성
 router.post("/", async (req, res) => {
   try {
-    const me = await User.findOne({ email: req.user.email });
+    const me = await require("../models/User").findOne({ email: req.user.email });
     if (!me || !me.isVerified) {
       return res.status(403).json({ message: "Only verified users can write posts." });
     }
-    const { title = "", content = "" } = req.body || {};
+
+    const { title = "", content = "", images = [] } = req.body || {};
+    // ✅ 배열/문자 모두 허용 → 배열로 정규화
+    const normImages = Array.isArray(images)
+      ? images.filter(Boolean).map(String)
+      : (images ? [String(images)] : []);
+
     const doc = await Post.create({
       title: String(title || "").trim(),
       content: String(content || "").trim(),
+      images: normImages,                 // ✅ 저장
       email: req.user.email,
-      nickname: me.nickname,             // ✅ 추가: required 필드 채움
+      nickname: me.nickname,
       school: req.user.school,
     });
+
     res.status(201).json({ message: "Post created successfully.", post: doc });
   } catch (err) {
     console.error("Create post error:", err);
@@ -154,7 +167,7 @@ router.post("/", async (req, res) => {
 // 수정
 router.put("/:id", async (req, res) => {
   try {
-    const { title = "", content = "" } = req.body || {};
+    const { title = "", content = "", images } = req.body || {};
     const post = await Post.findOne({ _id: req.params.id, school: req.user.school });
     if (!post) return res.status(404).json({ message: "Post not found." });
 
@@ -164,6 +177,13 @@ router.put("/:id", async (req, res) => {
 
     post.title = String(title || "").trim();
     post.content = String(content || "").trim();
+    if (typeof images !== "undefined") {
+      const normImages = Array.isArray(images)
+        ? images.filter(Boolean).map(String)
+        : (images ? [String(images)] : []);
+      post.images = normImages;
+    }
+
     await post.save();
     res.json({ message: "Post updated successfully.", post });
   } catch (err) {

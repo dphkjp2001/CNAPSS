@@ -23,7 +23,9 @@ function NavItem({ to, children }) {
     <NavLink
       to={to}
       className={({ isActive }) =>
-        `block rounded-lg px-3 py-2 text-sm ${isActive ? "bg-red-50 text-red-600 font-semibold" : "text-gray-700 hover:bg-gray-100"}`
+        `block rounded-lg px-3 py-2 text-sm ${
+          isActive ? "bg-red-50 text-red-600 font-semibold" : "text-gray-700 hover:bg-gray-100"
+        }`
       }
     >
       {children}
@@ -47,6 +49,7 @@ export default function Layout() {
 
   const [showNoti, setShowNoti] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [showQuick, setShowQuick] = useState(false);
   const [bump, setBump] = useState(false);
   const prevCountRef = useRef(count);
   useEffect(() => {
@@ -65,18 +68,33 @@ export default function Layout() {
 
   const nickname = user?.nickname || (user?.email ? user.email.split("@")[0] : "GU");
 
+  // ✅ Quick Actions → Reviews 허브/보드 분리 반영
+  const goReviewsHub = () => {
+    if (!school) return navigate("/select-school");
+    navigate(schoolPath("/reviews"));
+    setShowQuick(false);
+  };
+  const goAskQuestion = () => {
+    if (!school) return navigate("/select-school");
+    navigate(schoolPath("/freeboard/write"), { state: { intent: "ASK_ACADEMIC" } });
+    setShowQuick(false);
+  };
+  const goLookingFor = () => {
+    if (!school) return navigate("/select-school");
+    navigate(schoolPath("/courses"), { state: { intent: "NEW_REQUEST" } });
+    setShowQuick(false);
+  };
+
   return (
     <div className="min-h-screen flex bg-gray-50">
-      {/* === Left Sidebar (global nav) === */}
+      {/* === Left Sidebar === */}
       <aside className="hidden md:flex md:w-60 flex-col border-r bg-white">
         <div className="p-4 border-b">
           <Link to={school ? schoolPath("/dashboard") : "/"} className="inline-flex items-center gap-2">
             <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-red-600 text-white font-black">C</span>
             <span className="text-lg font-extrabold tracking-tight">CNAPSS</span>
           </Link>
-          {school && (
-            <div className="mt-1 text-xs text-gray-500 truncate">{String(school)}</div>
-          )}
+          {school && <div className="mt-1 text-xs text-gray-500 truncate">{String(school)}</div>}
         </div>
 
         <nav className="p-3 space-y-1">
@@ -84,6 +102,7 @@ export default function Layout() {
           <NavItem to={schoolPath("/freeboard")}>Free Board</NavItem>
           <NavItem to={schoolPath("/career")}>Career Board</NavItem>
           <NavItem to={schoolPath("/courses")}>Course Hub</NavItem>
+          <NavItem to={schoolPath("/reviews")}>Reviews</NavItem> {/* ✅ 추가 */}
           <NavItem to={schoolPath("/market")}>Marketplace</NavItem>
           <NavItem to={schoolPath("/messages")}>Messages</NavItem>
           <NavItem to={schoolPath("/foodmap")}>Food Map</NavItem>
@@ -94,22 +113,69 @@ export default function Layout() {
           </div>
         </nav>
 
-        {/* bottom hint */}
-        <div className="mt-auto p-3 text-[11px] text-gray-400">
-          Stay anonymous. Be kind.
-        </div>
+        <div className="mt-auto p-3 text-[11px] text-gray-400">Stay anonymous. Be kind.</div>
       </aside>
 
       {/* === Main column === */}
       <div className="flex-1 min-w-0 flex flex-col">
-        {/* Top bar: keep notifications + profile only */}
+        {/* Top bar */}
         <header className="w-full border-b bg-white">
           <div className="mx-auto max-w-6xl px-4 h-14 flex items-center justify-end gap-2">
+            {/* Quick Actions */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowQuick((v) => !v);
+                  setShowProfile(false);
+                  setShowNoti(false);
+                }}
+                className="px-3 py-2 text-sm rounded-md border hover:bg-gray-50"
+                title="Quick Actions"
+                aria-label="Quick Actions"
+              >
+                ⭐ Quick
+              </button>
+              {showQuick && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowQuick(false)} />
+                  <div className="absolute right-0 z-50 mt-2 w-56 rounded-xl border bg-white shadow-lg">
+                    <div className="p-1 text-sm">
+                      <button
+                        className="w-full text-left rounded-lg px-3 py-2 hover:bg-gray-100"
+                        onClick={goReviewsHub}
+                      >
+                        ⭐ Rate Course / Professor
+                      </button>
+                      <button
+                        className="w-full text-left rounded-lg px-3 py-2 hover:bg-gray-100"
+                        onClick={goAskQuestion}
+                      >
+                        ❓ Ask Academic Question
+                      </button>
+                      <div className="my-1 border-t" />
+                      <button
+                        className="w-full text-left rounded-lg px-3 py-2 hover:bg-gray-100"
+                        onClick={goLookingFor}
+                      >
+                        📥 Post “Looking For”
+                      </button>
+                    </div>
+                    <div className="px-3 py-2 border-t text-[11px] text-gray-500">
+                      No public links; exchange via DMs.
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
             {/* Notifications */}
             <button
               type="button"
               onClick={() => {
                 setShowNoti((v) => !v);
+                setShowProfile(false);
+                setShowQuick(false);
                 if (!showNoti && count > 0) markAllAsRead();
               }}
               className="relative ml-1 px-3 py-2 text-sm rounded-md hover:bg-violet-50"
@@ -120,8 +186,7 @@ export default function Layout() {
               {count > 0 && (
                 <span
                   className={`absolute -top-1.5 -right-1.5 inline-flex items-center justify-center
-                    min-w-[18px] h-[18px] px-1 rounded-full text-[11px] text-white
-                    ${bump ? "animate-ping-once" : ""}`}
+                    min-w-[18px] h-[18px] px-1 rounded-full text-[11px] text-white`}
                   style={{ backgroundColor: "#7c3aed" }}
                 >
                   {count}
@@ -134,18 +199,16 @@ export default function Layout() {
               <div className="relative">
                 <button
                   type="button"
-                  onClick={() => setShowProfile((v) => !v)}
+                  onClick={() => {
+                    setShowProfile((v) => !v);
+                    setShowNoti(false);
+                    setShowQuick(false);
+                  }}
                   className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-violet-50"
                 >
                   <Initials name={nickname} bg={schoolTheme?.bg || "#f1ecff"} />
-                  <span className="hidden sm:inline text-sm font-medium text-gray-700">
-                    {nickname}
-                  </span>
-                  <svg
-                    className={`h-4 w-4 text-gray-500 transition ${showProfile ? "rotate-180" : ""}`}
-                    viewBox="0 0 20 20"
-                    fill="currentColor"
-                  >
+                  <span className="hidden sm:inline text-sm font-medium text-gray-700">{nickname}</span>
+                  <svg className={`h-4 w-4 text-gray-500 transition ${showProfile ? "rotate-180" : ""}`} viewBox="0 0 20 20" fill="currentColor">
                     <path d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.25a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" />
                   </svg>
                 </button>
@@ -182,10 +245,7 @@ export default function Layout() {
                         </MenuItem>
                       </div>
                       <div className="border-t p-1">
-                        <button
-                          onClick={onLogout}
-                          className="w-full rounded-lg px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
-                        >
+                        <button onClick={onLogout} className="w-full rounded-lg px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50">
                           Log out
                         </button>
                       </div>
@@ -212,19 +272,10 @@ export default function Layout() {
             className="fixed inset-0 z-40 bg-black/30 flex items-start justify-end p-4"
             onClick={() => setShowNoti(false)}
           >
-            <div
-              className="bg-white rounded-xl shadow-xl w-full max-w-sm"
-              onClick={(e) => e.stopPropagation()}
-            >
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
               <div className="px-4 py-3 border-b flex items-center justify-between">
                 <div className="font-medium">Notifications</div>
-                <button
-                  className="text-sm text-violet-600 hover:underline"
-                  onClick={() => {
-                    markAllAsRead();
-                    setShowNoti(false);
-                  }}
-                >
+                <button className="text-sm text-violet-600 hover:underline" onClick={() => { markAllAsRead(); setShowNoti(false); }}>
                   Mark all as read
                 </button>
               </div>
@@ -236,10 +287,7 @@ export default function Layout() {
                     <div key={n._id} className="p-4 border-b text-sm">
                       <div className="flex items-center justify-between gap-2">
                         <div className="font-medium">{n.title || "Notification"}</div>
-                        <button
-                          className="text-violet-600 hover:underline"
-                          onClick={() => markAsRead(n._id)}
-                        >
+                        <button className="text-violet-600 hover:underline" onClick={() => markAsRead(n._id)}>
                           Read
                         </button>
                       </div>
@@ -268,6 +316,8 @@ function MenuItem({ to, children, onClick }) {
     </Link>
   );
 }
+
+
 
 
 

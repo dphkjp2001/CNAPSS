@@ -20,9 +20,10 @@ import Courses from "./pages/courses/Courses.jsx";
 import CourseWrite from "./pages/courses/CourseWrite";
 import MaterialDetail from "./pages/courses/MaterialDetail";
 
-// ✅ RMP pages (NEW)
+// ✅ RMP pages
 import CourseDetail from "./pages/courses/CourseDetail";
 import ProfessorDetail from "./pages/courses/ProfessorDetail";
+import ReviewsHub from "./pages/reviews/ReviewsHub";
 
 // Dashboards (lazy)
 const Dashboard = lazy(() => import("./pages/dashboard/Dashboard"));
@@ -118,7 +119,7 @@ export default function App() {
           {/* Normalize */}
           <Route path="/dashboard/*" element={<NormalizeDashboard />} />
 
-          {/* School-scoped (NYU only) */}
+          {/* School-scoped */}
           <Route
             path="/:school"
             element={
@@ -130,109 +131,55 @@ export default function App() {
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard" element={<Dashboard />} />
 
-            {/* FreeBoard — public */}
+            {/* FreeBoard */}
             <Route path="freeboard" element={<FreeBoardList />} />
             <Route path="freeboard/:id" element={<FreeBoardDetail />} />
             <Route path="freeboard/write" element={<FreeBoardWrite />} />
             <Route path="freeboard/edit/:id" element={<EditToDetailRedirect />} />
 
-            {/* CareerBoard — public */}
+            {/* CareerBoard */}
             <Route path="career" element={<CareerBoardList />} />
             <Route path="career/:id" element={<CareerBoardDetail />} />
             <Route path="career/write" element={<CareerBoardWrite />} />
 
-            {/* CourseHub — list/write/detail (public entry) */}
+            {/* CourseHub */}
             <Route path="courses" element={<Courses />} />
             <Route path="courses/write" element={<CourseWrite />} />
             <Route path="courses/materials/:id" element={<MaterialDetail />} />
 
-            {/* ✅ RMP detail views (NEW) */}
+            {/* ✅ Reviews */}
+            <Route path="reviews" element={<ReviewsHub />} />
             <Route path="courses/:courseId" element={<CourseDetail />} />
             <Route path="professors/:professorId" element={<ProfessorDetail />} />
 
-            {/* ✅ Marketplace: 목록/상세 공개, 쓰기/수정 보호 */}
+            {/* Marketplace */}
             <Route path="market" element={<MarketList />} />
             <Route path="market/:id" element={<MarketDetail />} />
-            <Route
-              path="market/write"
-              element={
-                <RequireAuth>
-                  <MarketWrite />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="market/edit/:id"
-              element={
-                <RequireAuth>
-                  <MarketEdit />
-                </RequireAuth>
-              }
-            />
+            <Route path="market/write" element={<RequireAuth><MarketWrite /></RequireAuth>} />
+            <Route path="market/edit/:id" element={<RequireAuth><MarketEdit /></RequireAuth>} />
 
-            {/* Protected sub-pages */}
-            <Route
-              path="myposts"
-              element={
-                <RequireAuth>
-                  <MyPosts />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="liked"
-              element={
-                <RequireAuth>
-                  <LikedPosts />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="commented"
-              element={
-                <RequireAuth>
-                  <CommentedPosts />
-                </RequireAuth>
-              }
-            />
-
-            <Route
-              path="messages"
-              element={
-                <RequireAuth>
-                  <Messages />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="schedule"
-              element={
-                <RequireAuth>
-                  <PersonalSchedule />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="group-availability"
-              element={
-                <RequireAuth>
-                  <GroupAvailability />
-                </RequireAuth>
-              }
-            />
+            {/* Protected pages */}
+            <Route path="myposts" element={<RequireAuth><MyPosts /></RequireAuth>} />
+            <Route path="liked" element={<RequireAuth><LikedPosts /></RequireAuth>} />
+            <Route path="commented" element={<RequireAuth><CommentedPosts /></RequireAuth>} />
+            <Route path="messages" element={<RequireAuth><Messages /></RequireAuth>} />
+            <Route path="schedule" element={<RequireAuth><PersonalSchedule /></RequireAuth>} />
+            <Route path="group-availability" element={<RequireAuth><GroupAvailability /></RequireAuth>} />
             <Route path="foodmap" element={<FoodMap />} />
 
-            {/* Legacy redirects */}
+            {/* Legacy */}
             <Route path="materials" element={<LegacyCourseMaterialsRedirect />} />
           </Route>
 
-          {/* 404 → home */}
+          {/* 404 */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
     </AuthGateProvider>
   );
 }
+
+
 
 
 

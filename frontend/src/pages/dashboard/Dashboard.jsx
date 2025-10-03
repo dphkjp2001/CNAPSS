@@ -527,7 +527,7 @@ function Segmented({ value, onChange }) {
       `}</style>
       <div className="w-full flex justify-center">
         <div className="relative inline-flex items-center gap-2 p-1 rounded-full">
-          {/* sliding outline (transparent fill) */}
+          {/* sliding outline */}
           <span
             aria-hidden
             className="absolute top-1 bottom-1 rounded-full transition-transform duration-300 ease-out pointer-events-none"
@@ -552,9 +552,7 @@ function Segmented({ value, onChange }) {
             aria-pressed={isGeneral}
           >
             <span className={`inline-block mr-1 ${wiggle === "general" ? "emoji-wiggle" : ""}`} aria-hidden>💬</span>
-            <span className="transition-[font-weight] duration-200" style={{ fontWeight: isGeneral ? 700 : 600 }}>
-              Freeboard
-            </span>
+            <span style={{ fontWeight: isGeneral ? 700 : 600 }}>Freeboard</span>
           </button>
           <button
             ref={rightRef}
@@ -567,9 +565,7 @@ function Segmented({ value, onChange }) {
             aria-pressed={!isGeneral}
           >
             <span className={`inline-block mr-1 ${wiggle === "academic" ? "emoji-wiggle" : ""}`} aria-hidden>🎓</span>
-            <span className="transition-[font-weight] duration-200" style={{ fontWeight: !isGeneral ? 700 : 600 }}>
-              Academic
-            </span>
+            <span style={{ fontWeight: !isGeneral ? 700 : 600 }}>Academic</span>
           </button>
         </div>
       </div>
@@ -577,18 +573,113 @@ function Segmented({ value, onChange }) {
   );
 }
 
-/* ===== Phone Frame UI for composer ===== */
-function PhoneFrame({ children }) {
+/* ===== Airbnb-like Card (no outer stroke) ===== */
+function CardBox({ children }) {
   return (
-    <div className="mx-auto w-[360px]">
-      <div className="relative rounded-[36px] border-[10px] border-black/90 bg-black/90 shadow-2xl">
-        {/* notch */}
-        <div className="absolute left-1/2 -translate-x-1/2 top-0 h-6 w-24 rounded-b-2xl bg-black/70" />
-        {/* inner screen */}
-        <div className="m-2 rounded-[26px] overflow-hidden bg-white">
-          {children}
+    <div className="rounded-2xl bg-white shadow-lg overflow-hidden">
+      {children}
+    </div>
+  );
+}
+
+/* ===== Course search dropdown (code or name, both shown) ===== */
+function CourseCombo({ valueCode, setValueCode, valueName, setValueName, placeholder = "Type code or name" }) {
+  const [all, setAll] = useState([]);
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+
+  // load once from public json (NYU example)
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch("/NYU_course_DATA.json");
+        const data = await res.json();
+        if (!alive) return;
+        const norm = (Array.isArray(data) ? data : []).map((x, i) => {
+          const code = x.code || x.course_code || x.courseCode || x.id || "";
+          const name = x.name || x.course_name || x.title || "";
+          return { id: `${code}-${i}`, code: String(code || "").trim(), name: String(name || "").trim() };
+        }).filter(v => v.code || v.name);
+        setAll(norm);
+      } catch {
+        setAll([]);
+      }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  // filtered options (supports code or name)
+  const opts = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    if (!term) return all.slice(0, 12);
+    return all.filter(({ code, name }) =>
+      code.toLowerCase().includes(term) || name.toLowerCase().includes(term)
+    ).slice(0, 12);
+  }, [q, all]);
+
+  const select = (item) => {
+    setValueCode(item.code);
+    setValueName(item.name);
+    setQ(`${item.code} — ${item.name}`);
+    setOpen(false);
+  };
+
+  // sync input display when outside value changes
+  useEffect(() => {
+    if (valueCode || valueName) {
+      setQ(`${valueCode || ""}${valueCode && valueName ? " — " : ""}${valueName || ""}`);
+    } else if (!open) {
+      setQ("");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [valueCode, valueName]);
+
+  return (
+    <div className="relative">
+      <input
+        type="text"
+        value={q}
+        onChange={(e) => { setQ(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        placeholder={placeholder}
+        className="w-full rounded-xl border bg-white px-3.5 py-2.5 text-[15px] outline-none focus:ring-2"
+        style={{ borderColor: TOKENS.border }}
+        aria-autocomplete="list"
+        aria-expanded={open}
+      />
+      {open && (
+        <div className="absolute z-20 mt-1 w-full rounded-xl border bg-white shadow-lg max-h-72 overflow-auto" style={{ borderColor: TOKENS.border }}>
+          {opts.length ? opts.map((it) => (
+            <button
+              key={it.id}
+              type="button"
+              onClick={() => select(it)}
+              className="w-full text-left px-3.5 py-2 hover:bg-slate-50"
+            >
+              <div className="text-[14px] font-semibold text-slate-900">{it.code || "—"}</div>
+              <div className="text-[13px] text-slate-600">{it.name || ""}</div>
+            </button>
+          )) : (
+            <div className="px-3.5 py-3 text-[13px] text-slate-500">No matches.</div>
+          )}
         </div>
-      </div>
+      )}
+      {/* click-away to close */}
+      {open && (
+        <button
+          type="button"
+          className="fixed inset-0 cursor-default"
+          aria-hidden
+          onClick={() => setOpen(false)}
+          style={{ background: "transparent" }}
+        />
+      )}
+      {(valueCode || valueName) && (
+        <p className="mt-1 text-[12px] text-slate-500">
+          Selected: <span className="font-medium">{valueCode || "—"}</span>{valueCode && valueName ? " — " : " "}{valueName || ""}
+        </p>
+      )}
     </div>
   );
 }
@@ -647,12 +738,13 @@ function FreeboardForm({ title, setTitle, content, setContent, images, setImages
   );
 }
 
-/* ===== Academic form: Question vs Looking for ===== */
+/* ===== Academic form: Question vs Looking for (with CourseCombo) ===== */
 function AcademicForm({
   mode, setMode,
   title, setTitle,
   content, setContent,
   courseCode, setCourseCode,
+  courseName, setCourseName,
   materialType, setMaterialType,
   extraNote, setExtraNote,
 }) {
@@ -708,16 +800,13 @@ function AcademicForm({
         <>
           <div className="mt-3 grid grid-cols-1 gap-3">
             <div>
-              <label className="block text-[12px] font-medium text-slate-600 mb-1">Course</label>
-              {/* simple input (you can swap to your CourseCodePicker here) */}
-              <input
-                type="text"
-                inputMode="text"
-                value={courseCode}
-                onChange={(e) => setCourseCode(e.target.value)}
-                placeholder="e.g. DS-UA 201"
-                className="w-full rounded-xl border bg-white px-3.5 py-2.5 text-[15px] outline-none focus:ring-2"
-                style={{ borderColor: TOKENS.border }}
+              <label className="block text-[12px] font-medium text-slate-600 mb-1">Course (code or name)</label>
+              <CourseCombo
+                valueCode={courseCode}
+                setValueCode={setCourseCode}
+                valueName={courseName}
+                setValueName={setCourseName}
+                placeholder="Start typing course code or name…"
               />
             </div>
             <div>
@@ -740,9 +829,56 @@ function AcademicForm({
             className="mt-3 w-full resize-y rounded-xl border bg-white px-3.5 py-2.5 text-[15px] outline-none focus:ring-2"
             style={{ borderColor: TOKENS.border }}
           />
-          <p className="mt-2 text-[11px] text-slate-500">This post will be highlighted as <strong>Looking for</strong> in the feed.</p>
+          <p className="mt-2 text-[11px] text-slate-500">
+            This post will be highlighted as <strong>Looking for</strong> in the feed.
+          </p>
         </>
       )}
+    </div>
+  );
+}
+
+/* ===== Media grid (Instagram-like) ===== */
+function MediaGrid({ images = [] }) {
+  if (!images.length) return null;
+  const shown = images.slice(0, 4);
+  const extra = images.length - shown.length;
+
+  if (shown.length === 1) {
+    return (
+      <div className="mt-3 overflow-hidden rounded-xl">
+        <img src={shown[0]} alt="" className="w-full max-h-[520px] object-cover" loading="lazy" />
+      </div>
+    );
+  }
+
+  if (shown.length === 2) {
+    return (
+      <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl overflow-hidden">
+        {shown.map((src, i) => (
+          <img key={i} src={src} alt="" className="aspect-square w-full object-cover" loading="lazy" />
+        ))}
+      </div>
+    );
+  }
+
+  // 3 or 4
+  return (
+    <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl overflow-hidden">
+      <img src={shown[0]} alt="" className="col-span-2 aspect-[2/1] w-full object-cover" loading="lazy" />
+      {shown.slice(1).map((src, i) => {
+        const isLast = i === shown.slice(1).length - 1 && extra > 0;
+        return (
+          <div key={i} className="relative">
+            <img src={src} alt="" className="aspect-square w-full object-cover" loading="lazy" />
+            {isLast && (
+              <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                <span className="text-white text-lg font-semibold">+{extra}</span>
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -767,7 +903,7 @@ function FeedSkeleton({ rows = 8 }) {
   );
 }
 
-/* ===== Post row (full-clickable) ===== */
+/* ===== Post row (full-clickable) with images ===== */
 function PostRow({ post, onOpenDetail }) {
   return (
     <article
@@ -792,7 +928,10 @@ function PostRow({ post, onOpenDetail }) {
         <div className="mt-2 flex items-start gap-2 flex-wrap">
           {post.lookingFor && (
             <span className="inline-flex items-center text-white text-[11px] font-semibold px-2 py-0.5 rounded-full bg-gradient-to-r from-[#FF6B8A] to-[#FF7A70]">
-              Looking for{post.courseCode ? ` · ${post.courseCode}` : ""}
+              Looking for
+              {post.courseCode || post.courseName
+                ? ` · ${post.courseCode || ""}${post.courseCode && post.courseName ? " — " : ""}${post.courseName || ""}`
+                : ""}
             </span>
           )}
           {post.title ? (
@@ -809,12 +948,15 @@ function PostRow({ post, onOpenDetail }) {
           </span>
         )}
 
-        {/* preview */}
+        {/* preview text */}
         {post.preview && (
           <p className="mt-1 text-[14px] text-slate-800 whitespace-pre-line break-words">
             {post.preview}
           </p>
         )}
+
+        {/* images (Instagram-like) */}
+        <MediaGrid images={post.images} />
 
         {/* meta */}
         <div className="mt-3 flex items-center gap-6 text-[13px] text-slate-600">
@@ -860,6 +1002,7 @@ export default function Dashboard() {
   // academic only
   const [mode, setMode] = useState("question"); // "question" | "looking_for"
   const [courseCode, setCourseCode] = useState("");
+  const [courseName, setCourseName] = useState("");
   const [materialType, setMaterialType] = useState("");
   const [extraNote, setExtraNote] = useState("");
 
@@ -908,7 +1051,7 @@ export default function Dashboard() {
     navigate(to);
   };
 
-  /* compose handlers */
+  /* compose guards */
   const canPostGeneral = isAuthed && title.trim() && (content.trim() || images.length);
   const canPostAcademic =
     isAuthed &&
@@ -947,7 +1090,7 @@ export default function Dashboard() {
           school: schoolKey,
           title: title.trim(),
           content: content.trim(),
-          images: imageUrls,
+          images: imageUrls, // <-- 저장
         });
         setMsg({ type: "success", text: "Posted to Freeboard! Redirecting…" });
         setTimeout(goGeneral, 400);
@@ -966,8 +1109,9 @@ export default function Dashboard() {
             lookingFor: true,
             isLookingFor: true,
             courseCode: courseCode.trim(),
+            courseName: courseName.trim(),
             materialType: materialType.trim(),
-            meta: { courseCode: courseCode.trim(), materialType: materialType.trim() },
+            meta: { courseCode: courseCode.trim(), courseName: courseName.trim(), materialType: materialType.trim() },
           });
         }
         setMsg({ type: "success", text: "Posted to Academic! Redirecting…" });
@@ -978,6 +1122,7 @@ export default function Dashboard() {
       setContent("");
       setImages([]);
       setCourseCode("");
+      setCourseName("");
       setMaterialType("");
       setExtraNote("");
       setMode("question");
@@ -990,17 +1135,13 @@ export default function Dashboard() {
 
   const placeholders = useMemo(() => {
     return active === "general"
-      ? {
-          footer: <>Posting to <strong>Freeboard</strong> as anonymous.</>,
-        }
-      : {
-          footer: <>Posting to <strong>Academic Board</strong> as anonymous.</>,
-        };
+      ? { footer: <>Posting to <strong>Freeboard</strong> as anonymous.</> }
+      : { footer: <>Posting to <strong>Academic Board</strong> as anonymous.</> };
   }, [active]);
 
   return (
     <div className="min-h-screen" style={{ background: TOKENS.pageBg }}>
-      {/* Two columns: feed + phone composer */}
+      {/* Two columns: feed + Airbnb-like composer */}
       <main className="mx-auto max-w-6xl px-4 py-6 grid grid-cols-1 md:grid-cols-[minmax(620px,700px)_380px] gap-10">
         {/* FEED */}
         <section className="md:col-start-1">
@@ -1029,9 +1170,9 @@ export default function Dashboard() {
           )}
         </section>
 
-        {/* PHONE COMPOSER (right) */}
+        {/* COMPOSER (right, AirBnB-like card) */}
         <aside className="md:col-start-2 md:sticky md:top-[24px] self-start">
-          <PhoneFrame>
+          <CardBox>
             <form onSubmit={submitPost}>
               {active === "general" ? (
                 <FreeboardForm
@@ -1045,12 +1186,13 @@ export default function Dashboard() {
                   title={title} setTitle={setTitle}
                   content={content} setContent={setContent}
                   courseCode={courseCode} setCourseCode={setCourseCode}
+                  courseName={courseName} setCourseName={setCourseName}
                   materialType={materialType} setMaterialType={setMaterialType}
                   extraNote={extraNote} setExtraNote={setExtraNote}
                 />
               )}
 
-              {/* footer actions inside phone */}
+              {/* footer actions */}
               <div className="px-4 pb-4 pt-2 flex items-center justify-between">
                 <span className="text-xs text-slate-500">{placeholders.footer}</span>
                 <div className="flex gap-2">
@@ -1058,7 +1200,8 @@ export default function Dashboard() {
                     type="button"
                     onClick={() => {
                       setTitle(""); setContent(""); setImages([]);
-                      setCourseCode(""); setMaterialType(""); setExtraNote(""); setMode("question");
+                      setCourseCode(""); setCourseName("");
+                      setMaterialType(""); setExtraNote(""); setMode("question");
                       setMsg({ type: "", text: "" });
                     }}
                     className="rounded-xl border px-3.5 py-2 text-sm font-semibold hover:bg-black/5"
@@ -1087,14 +1230,14 @@ export default function Dashboard() {
                 </div>
               )}
             </form>
-          </PhoneFrame>
+          </CardBox>
         </aside>
       </main>
     </div>
   );
 }
 
-/* ===== helpers (normalizer shows the L/F badge) ===== */
+/* ===== helpers (normalizer now collects images) ===== */
 function normalizePosts(res) {
   const arr =
     (Array.isArray(res?.items) && res.items) ||
@@ -1128,6 +1271,19 @@ function normalizePosts(res) {
       p.postType === "looking_for" ||
       p.type === "looking_for";
 
+    const courseCode = p.courseCode || p.course || p.course_code || p?.meta?.courseCode || "";
+    const courseName = p.courseName || p.course_name || p?.meta?.courseName || "";
+
+    // collect possible image fields
+    const rawImgs =
+      (Array.isArray(p.images) && p.images) ||
+      (Array.isArray(p.imageUrls) && p.imageUrls) ||
+      (Array.isArray(p.media) && p.media) ||
+      [];
+    const images = rawImgs
+      .map((x) => (typeof x === "string" ? x : x?.url || x?.secure_url || ""))
+      .filter(Boolean);
+
     return {
       _id: p._id || p.id || Math.random().toString(36).slice(2),
       slug: p.slug,
@@ -1138,7 +1294,9 @@ function normalizePosts(res) {
       likes,
       ago: p.createdAt ? timeAgo(p.createdAt) : "",
       lookingFor: !!lookingFor,
-      courseCode: p.courseCode || p.course || p.course_code || "",
+      courseCode,
+      courseName,
+      images,
     };
   });
 }

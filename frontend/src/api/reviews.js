@@ -2,11 +2,10 @@
 import { apiFetch } from "./http";
 
 export async function createReview(school, payload) {
-  // payload: { courseId, professorId, term, overall, difficulty, workload, gradingStrictness, usefulness, wouldTakeAgain, comment }
   return apiFetch(`/reviews`, {
     method: "POST",
     body: payload,
-    schoolScoped: true, // apiFetch 래퍼가 지원한다면 사용. 아니면 URL prefix에서 처리됨.
+    schoolScoped: true,
   });
 }
 
@@ -25,7 +24,7 @@ export async function getCourseSummary(school, courseId) {
   });
 }
 
-export async function listCourseReviews(school, courseId, { professorId, page = 1, limit = 20 } = {}) {
+export async function listCourseReviews(school, courseId, { professorId, page = 1, limit = 10 } = {}) {
   const qs = new URLSearchParams({ page, limit });
   if (professorId) qs.set("professorId", professorId);
   return apiFetch(`/reviews/course/${courseId}/list?${qs.toString()}`, {
@@ -42,7 +41,7 @@ export async function getProfessorBreakdown(school, professorId) {
   });
 }
 
-export async function listProfessorReviews(school, professorId, { courseId, page = 1, limit = 20 } = {}) {
+export async function listProfessorReviews(school, professorId, { courseId, page = 1, limit = 10 } = {}) {
   const qs = new URLSearchParams({ page, limit });
   if (courseId) qs.set("courseId", courseId);
   return apiFetch(`/reviews/professor/${professorId}/list?${qs.toString()}`, {
@@ -50,3 +49,4 @@ export async function listProfessorReviews(school, professorId, { courseId, page
     schoolScoped: true,
   });
 }
+
