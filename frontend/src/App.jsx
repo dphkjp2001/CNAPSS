@@ -31,14 +31,8 @@ const MyPosts = lazy(() => import("./pages/dashboard/MyPosts"));
 const LikedPosts = lazy(() => import("./pages/dashboard/LikedPosts"));
 const CommentedPosts = lazy(() => import("./pages/dashboard/CommentedPosts"));
 
-// FreeBoard (lazy)
-const FreeBoardList = lazy(() => import("./pages/freeboard/FreeBoardList"));
-const FreeBoardWrite = lazy(() => import("./pages/freeboard/FreeBoardWrite"));
+// ✅ 상세 페이지만 유지
 const FreeBoardDetail = lazy(() => import("./pages/freeboard/FreeBoardDetail"));
-
-// CareerBoard (lazy)
-const CareerBoardList = lazy(() => import("./pages/careerboard/CareerBoardList"));
-const CareerBoardWrite = lazy(() => import("./pages/careerboard/CareerBoardWrite"));
 const CareerBoardDetail = lazy(() => import("./pages/careerboard/CareerBoardDetail"));
 
 // Market (lazy)
@@ -59,11 +53,6 @@ function NormalizeDashboard() {
   const { user } = useAuth();
   if (user?.school) return <Navigate to={`/${user.school}/dashboard`} replace />;
   return <Navigate to="/" replace />;
-}
-
-function EditToDetailRedirect() {
-  const { id } = useParams();
-  return <Navigate to={`../freeboard/${id}`} replace />;
 }
 
 function LegacyCourseMaterialsRedirect() {
@@ -131,16 +120,13 @@ export default function App() {
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard" element={<Dashboard />} />
 
-            {/* FreeBoard */}
-            <Route path="freeboard" element={<FreeBoardList />} />
-            <Route path="freeboard/:id" element={<FreeBoardDetail />} />
-            <Route path="freeboard/write" element={<FreeBoardWrite />} />
-            <Route path="freeboard/edit/:id" element={<EditToDetailRedirect />} />
+            {/* ✅ 리스트 페이지 제거 → 대시보드 탭으로 리다이렉트 */}
+            <Route path="freeboard" element={<Navigate to="../dashboard?tab=free" replace />} />
+            <Route path="career" element={<Navigate to="../dashboard?tab=academic" replace />} />
 
-            {/* CareerBoard */}
-            <Route path="career" element={<CareerBoardList />} />
+            {/* ✅ 상세 페이지만 유지 */}
+            <Route path="freeboard/:id" element={<FreeBoardDetail />} />
             <Route path="career/:id" element={<CareerBoardDetail />} />
-            <Route path="career/write" element={<CareerBoardWrite />} />
 
             {/* CourseHub */}
             <Route path="courses" element={<Courses />} />
@@ -178,6 +164,7 @@ export default function App() {
     </AuthGateProvider>
   );
 }
+
 
 
 

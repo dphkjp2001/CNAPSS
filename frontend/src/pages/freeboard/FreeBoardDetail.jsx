@@ -34,13 +34,8 @@ export default function FreeBoardDetail() {
 
   const loadPost = async () => {
     try {
-      // 🔓 비로그인: 공개 API, 🔒 로그인: 보호 API
-      const data = token
-        ? await getPost({ school, id })
-        : await getPublicPost({ school, id });
-
+      const data = token ? await getPost({ school, id }) : await getPublicPost({ school, id });
       setPost(data);
-      // 편집 폼 값 동기화
       setEditTitle(data?.title || "");
       setEditContent(data?.content || "");
     } catch (err) {
@@ -66,14 +61,12 @@ export default function FreeBoardDetail() {
           headers: { "Content-Type": "application/json" },
           body: { commentId: nid, email: user.email },
         });
-      } catch {
-        // ignore
-      }
+      } catch {}
     }
     markRead();
   }, [location.search, user?.email, school]);
 
-  // 🔎 스크롤/하이라이트 대상 comment id 추출 (#comment-.. or ?nid=..)
+  // 🔎 스크롤/하이라이트 대상 comment id 추출
   const highlightId = useMemo(() => {
     const hash = location.hash || "";
     const fromHash = hash.startsWith("#comment-") ? hash.slice("#comment-".length) : null;
@@ -91,18 +84,16 @@ export default function FreeBoardDetail() {
     try {
       await deletePost({ school, id: post._id });
       alert("Post deleted.");
-      navigate(schoolPath("/freeboard"));
+      navigate(schoolPath("/dashboard?tab=free")); // ✅ 변경
     } catch (err) {
       alert("Delete failed: " + (err.message || "Unknown error"));
     }
   };
 
   const handleThumb = async () => {
-    // ✋ 요구사항: 비로그인은 좋아요 포함 “다른 기능” 불가 → 아무 것도 안 함(게이트도 열지 않음)
-    if (!user) return;
+    if (!user) return; // 게스트는 비활성
     try {
       await toggleThumbs({ school, id: post._id });
-      // 낙관적 업데이트
       setPost((p) =>
         !p
           ? p
@@ -115,14 +106,12 @@ export default function FreeBoardDetail() {
                 : [...(p.thumbsUpUsers || []), (user?.email || "").toLowerCase()],
             }
       );
-      // 서버 기준으로 다시 동기화
       await loadPost();
     } catch (err) {
       alert("Failed to like: " + (err.message || "Unknown error"));
     }
   };
 
-  // ✏️ 인라인 저장
   const handleSaveEdit = async () => {
     const title = editTitle.trim();
     const content = editContent.trim();
@@ -208,7 +197,7 @@ export default function FreeBoardDetail() {
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <button
                 onClick={handleThumb}
-                disabled={!user || isAuthor} // ← 비로그인/자기글이면 비활성화(게이트 안 뜸)
+                disabled={!user || isAuthor}
                 className="rounded-xl border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-800 shadow-sm hover:bg-gray-50 disabled:opacity-60"
                 aria-label="like post"
                 title={
@@ -227,7 +216,7 @@ export default function FreeBoardDetail() {
                   <button
                     onClick={() => setIsEditing(true)}
                     className="rounded-xl px-4 py-2 text-sm font-semibold text-white shadow"
-                    style={{ backgroundColor: schoolTheme?.primary || "#6b46c1" }}
+                    style={{ backgroundColor: "#6b46c1" }}
                   >
                     Edit
                   </button>
@@ -259,7 +248,7 @@ export default function FreeBoardDetail() {
               )}
 
               <Link
-                to={schoolPath("/freeboard")}
+                to={schoolPath("/dashboard?tab=free")} // ✅ 변경
                 className="ml-auto text-sm font-medium text-blue-600 underline underline-offset-2"
               >
                 ← Back to List
@@ -270,7 +259,6 @@ export default function FreeBoardDetail() {
 
         {post?._id && (
           <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
-            {/* 🎯 페이지 진입 시 해당 댓글로 스크롤 + 하이라이트 */}
             <CommentSection
               postId={post._id}
               authorEmail={post.email}
@@ -282,6 +270,7 @@ export default function FreeBoardDetail() {
     </div>
   );
 }
+
 
 
 

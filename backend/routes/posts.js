@@ -1,245 +1,290 @@
 // backend/routes/posts.js
 const express = require("express");
-const router = express.Router({ mergeParams: true });
-const Post = require("../models/Post");
-const User = require("../models/User");
-const Comment = require("../models/Comment");
+const router = express.Router();
 
 const requireAuth = require("../middleware/requireAuth");
 const schoolGuard = require("../middleware/schoolGuard");
 
-// 🔒 모든 posts 라우트 보호 + 테넌트 일치 강제
-router.use(requireAuth, schoolGuard);
+const Post = require("../models/Post");
+const Comment = require("../models/Comment");
 
-/**
- * GET /
- * Returns:
- *  { items, page, limit, total }
- *  each item includes: _id, title, content, images, createdAt, likesCount, commentsCount
- */
-router.get("/", async (req, res) => {
+// ---------------------------------------------
+// Helpers: normalize inbound flags into 'mode'
+// ---------------------------------------------
+function resolveMode({ board, mode, kind, type, lookingFor }) {
+  const inbound = mode || kind || type || (lookingFor ? "looking_for" : null);
+  const normalized =
+    inbound === "looking_for" || inbound === "looking" || inbound === "lf"
+      ? "looking_for"
+      : "general";
+  return board === "academic" ? normalized : "general";
+}
+
+// Ensure FE compatibility keys always exist in response
+function serializePost(doc) {
+  const obj = doc.toJSON ? doc.toJSON() : { ...doc };
+  // prefer stored mode; fallback to resolver
+  const m = obj.mode || resolveMode(obj);
+
+  const modeFinal = obj.board === "academic" ? m : "general";
+
+  return {
+    ...obj,
+    mode: modeFinal,
+    kind: obj.kind || modeFinal,
+    type: obj.type || modeFinal,
+    lookingFor:
+      typeof obj.lookingFor === "boolean" ? obj.lookingFor : modeFinal === "looking_for",
+    // convenience counts
+    likesCount: Array.isArray(obj.likes) ? obj.likes.length : 0,
+  };
+}
+
+// ---------------------------------------------
+// GET /:school/posts
+// Protected list (board scoped, paging, q, sorting)
+// ---------------------------------------------
+router.get("/:school/posts", requireAuth, schoolGuard, async (req, res, next) => {
   try {
-    const school = req.user.school;
-    const page = Math.max(parseInt(req.query.page || "1", 10), 1);
-    const limit = Math.min(Math.max(parseInt(req.query.limit || "20", 10), 1), 50);
-    const q = (req.query.q || "").trim();
-    const sortOpt = String(req.query.sort || "new").toLowerCase();
-    const sortStage = sortOpt === "old" ? { createdAt: 1, _id: 1 } : { createdAt: -1, _id: -1 };
+    const { school } = req.params;
 
-    const match = { school };
-    if (q) {
-      const regex = new RegExp(q, "i");
-      match.$or = [{ title: regex }, { content: regex }];
+    const {
+      board, // 'free' | 'academic'
+      mode, // 'general' | 'looking_for'
+      q, // search query on title/content
+      page = 1,
+      limit = 20,
+      sort = "recent", // 'recent' | 'mostLiked'
+    } = req.query;
+
+    const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+    const limitNum = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
+
+    const filter = { school };
+    if (board) filter.board = board;
+
+    // If client requests a mode filter, respect it (only meaningful for academic)
+    if (mode === "general" || mode === "looking_for") {
+      filter.mode = mode;
     }
 
-    const total = await Post.countDocuments(match);
+    if (q && typeof q === "string" && q.trim()) {
+      const rx = new RegExp(q.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+      filter.$or = [{ title: rx }, { content: rx }];
+    }
 
-    const items = await Post.aggregate([
-      { $match: match },
-      { $sort: sortStage },
-      { $skip: (page - 1) * limit },
-      { $limit: limit },
-      {
-        $project: {
-          _id: 1,
-          title: 1,
-          content: 1,     // ✅ 미리보기용 본문
-          images: 1,      // ✅ 이미지 포함
-          createdAt: 1,
-          school: 1,
-          likesCount: { $size: { $ifNull: ["$thumbsUpUsers", []] } },
-        },
-      },
-      {
-        $lookup: {
-          from: "comments",
-          let: { pid: "$_id", sch: "$school" },
-          pipeline: [
-            {
-              $match: {
-                $expr: { $and: [{ $eq: ["$postId", "$$pid"] }, { $eq: ["$school", "$$sch"] }] },
-              },
-            },
-            { $count: "c" },
-          ],
-          as: "cc",
-        },
-      },
-      { $addFields: { commentsCount: { $ifNull: [{ $arrayElemAt: ["$cc.c", 0] }, 0] } } },
-      { $project: { cc: 0, school: 0 } },
+    let sortObj = { createdAt: -1 };
+    if (sort === "mostLiked") sortObj = { "likes.length": -1, createdAt: -1 };
+
+    const [items, total] = await Promise.all([
+      Post.find(filter)
+        .sort(sortObj)
+        .skip((pageNum - 1) * limitNum)
+        .limit(limitNum)
+        .lean(),
+      Post.countDocuments(filter),
     ]);
 
-    res.json({ items, page, limit, total });
+    const data = items.map(serializePost);
+
+    res.json({
+      data,
+      paging: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        hasMore: pageNum * limitNum < total,
+      },
+    });
   } catch (err) {
-    console.error("Failed to load posts:", err);
-    res.status(500).json({ message: "Failed to load posts." });
+    next(err);
   }
 });
 
-// 👍 내가 좋아요 누른 글
-router.get("/liked/:email", async (req, res) => {
-  const paramEmail = String(req.params.email).toLowerCase().trim();
-  if (req.user.role !== "superadmin" && paramEmail !== req.user.email) {
-    return res.status(403).json({ message: "Forbidden." });
-  }
+// ---------------------------------------------
+// GET /:school/posts/:id  (detail)
+// ---------------------------------------------
+router.get("/:school/posts/:id", requireAuth, schoolGuard, async (req, res, next) => {
   try {
-    const likedPosts = await Post.find({
-      thumbsUpUsers: paramEmail,
-      school: req.user.school,
-    }).sort({ createdAt: -1 });
-    res.json(likedPosts);
+    const { school, id } = req.params;
+    const post = await Post.findOne({ _id: id, school }).lean();
+    if (!post) return res.status(404).json({ message: "Post not found" });
+
+    const serialized = serializePost(post);
+    res.json(serialized);
   } catch (err) {
-    console.error("Load liked posts error:", err);
-    res.status(500).json({ message: "Failed to load liked posts." });
+    next(err);
   }
 });
 
-// 💬 내가 댓글 단 게시글
-router.get("/commented/:email", async (req, res) => {
-  const paramEmail = String(req.params.email).toLowerCase().trim();
-  if (req.user.role !== "superadmin" && paramEmail !== req.user.email) {
-    return res.status(403).json({ message: "Forbidden." });
-  }
+// ---------------------------------------------
+// POST /:school/posts  (create)
+// ---------------------------------------------
+router.post("/:school/posts", requireAuth, schoolGuard, async (req, res, next) => {
   try {
-    const comments = await Comment.find({ email: paramEmail, school: req.user.school });
-    if (!comments?.length) return res.json([]);
+    const { school } = req.params;
 
-    const postIds = [...new Set(comments.map((c) => c.postId?.toString()).filter(Boolean))];
-    if (!postIds.length) return res.json([]);
+    // Whitelist but allow aliases (mode/kind/type/lookingFor)
+    const {
+      title,
+      content,
+      board = "free",
+      images = [],
+      anonymous = false,
+      mode,
+      kind,
+      type,
+      lookingFor,
+    } = req.body;
 
-    const posts = await Post.find({
-      _id: { $in: postIds },
-      school: req.user.school,
-    }).sort({ createdAt: -1 });
-
-    res.json(posts);
-  } catch (err) {
-    console.error("Load commented posts error:", err);
-    res.status(500).json({ message: "Failed to load commented posts." });
-  }
-});
-
-// 단건 조회
-router.get("/:id", async (req, res) => {
-  try {
-    const post = await Post.findOne(
-      { _id: req.params.id, school: req.user.school },
-      "_id title content images createdAt email nickname thumbsUpUsers"
-    );
-    if (!post) return res.status(404).json({ message: "Post not found." });
-    res.json(post);
-  } catch (err) {
-    console.error("Get post error:", err);
-    res.status(500).json({ message: "Failed to load post." });
-  }
-});
-
-// 생성
-router.post("/", async (req, res) => {
-  try {
-    const me = await require("../models/User").findOne({ email: req.user.email });
-    if (!me || !me.isVerified) {
-      return res.status(403).json({ message: "Only verified users can write posts." });
+    if (!title || typeof title !== "string") {
+      return res.status(400).json({ message: "title is required" });
     }
 
-    const { title = "", content = "", images = [] } = req.body || {};
-    // ✅ 배열/문자 모두 허용 → 배열로 정규화
-    const normImages = Array.isArray(images)
-      ? images.filter(Boolean).map(String)
-      : (images ? [String(images)] : []);
+    const finalMode = resolveMode({ board, mode, kind, type, lookingFor });
 
-    const doc = await Post.create({
-      title: String(title || "").trim(),
-      content: String(content || "").trim(),
-      images: normImages,                 // ✅ 저장
-      email: req.user.email,
-      nickname: me.nickname,
-      school: req.user.school,
+    const post = await Post.create({
+      school,
+      board,
+      title: title.trim(),
+      content: content || "",
+      images: Array.isArray(images) ? images : [],
+      anonymous: !!anonymous,
+      author: req.user._id,
+      mode: finalMode,
+      // keep aliases for backward compatibility
+      kind,
+      type,
+      lookingFor,
     });
 
-    res.status(201).json({ message: "Post created successfully.", post: doc });
+    res.status(201).json(serializePost(post));
   } catch (err) {
-    console.error("Create post error:", err);
-    res.status(500).json({ message: "Failed to create post." });
+    next(err);
   }
 });
 
-// 수정
-router.put("/:id", async (req, res) => {
+// ---------------------------------------------
+// PATCH /:school/posts/:id  (update)
+// ---------------------------------------------
+router.patch("/:school/posts/:id", requireAuth, schoolGuard, async (req, res, next) => {
   try {
-    const { title = "", content = "", images } = req.body || {};
-    const post = await Post.findOne({ _id: req.params.id, school: req.user.school });
-    if (!post) return res.status(404).json({ message: "Post not found." });
+    const { school, id } = req.params;
 
-    if (post.email !== req.user.email && req.user.role !== "superadmin") {
-      return res.status(403).json({ message: "You can only edit your own posts." });
+    const {
+      title,
+      content,
+      board,
+      images,
+      anonymous,
+      mode,
+      kind,
+      type,
+      lookingFor,
+    } = req.body;
+
+    const post = await Post.findOne({ _id: id, school });
+    if (!post) return res.status(404).json({ message: "Post not found" });
+    if (String(post.author) !== String(req.user._id)) {
+      return res.status(403).json({ message: "Forbidden" });
     }
 
-    post.title = String(title || "").trim();
-    post.content = String(content || "").trim();
-    if (typeof images !== "undefined") {
-      const normImages = Array.isArray(images)
-        ? images.filter(Boolean).map(String)
-        : (images ? [String(images)] : []);
-      post.images = normImages;
-    }
+    if (typeof title !== "undefined") post.title = String(title).trim();
+    if (typeof content !== "undefined") post.content = String(content);
+    if (typeof images !== "undefined") post.images = Array.isArray(images) ? images : [];
+    if (typeof anonymous !== "undefined") post.anonymous = !!anonymous;
+    if (typeof board !== "undefined") post.board = board;
+
+    // accept alias flags from FE
+    if (typeof mode !== "undefined") post.mode = mode;
+    if (typeof kind !== "undefined") post.kind = kind;
+    if (typeof type !== "undefined") post.type = type;
+    if (typeof lookingFor !== "undefined") post.lookingFor = lookingFor;
+
+    // normalize final mode before save
+    post.mode = resolveMode({
+      board: post.board,
+      mode: post.mode,
+      kind: post.kind,
+      type: post.type,
+      lookingFor: post.lookingFor,
+    });
 
     await post.save();
-    res.json({ message: "Post updated successfully.", post });
+    res.json(serializePost(post));
   } catch (err) {
-    console.error("Update post error:", err);
-    res.status(500).json({ message: "Failed to update post.", error: err.message });
+    next(err);
   }
 });
 
-// 🗑️ 삭제
-router.delete("/:id", async (req, res) => {
+// ---------------------------------------------
+// DELETE /:school/posts/:id
+// ---------------------------------------------
+router.delete("/:school/posts/:id", requireAuth, schoolGuard, async (req, res, next) => {
   try {
-    const post = await Post.findOne({ _id: req.params.id, school: req.user.school });
-    if (!post) return res.status(404).json({ message: "Post not found." });
+    const { school, id } = req.params;
 
-    if (post.email !== req.user.email && req.user.role !== "superadmin") {
-      return res.status(403).json({ message: "You can only delete your own posts." });
+    const post = await Post.findOne({ _id: id, school });
+    if (!post) return res.status(404).json({ message: "Post not found" });
+    if (String(post.author) !== String(req.user._id)) {
+      return res.status(403).json({ message: "Forbidden" });
     }
 
-    await Post.deleteOne({ _id: post._id });
-    res.json({ message: "Post deleted successfully." });
+    await Promise.all([
+      Post.deleteOne({ _id: id, school }),
+      // Cascade remove comments for this post (if your Comment schema uses 'post')
+      Comment.deleteMany({ post: id, school }),
+    ]);
+
+    res.json({ ok: true });
   } catch (err) {
-    console.error("Delete post error:", err);
-    res.status(500).json({ message: "Failed to delete post.", error: err.message });
+    next(err);
   }
 });
 
-// 👍 추천 토글 (자기 글 좋아요 금지)
-router.post("/:id/thumbs", async (req, res) => {
-  try {
-    const post = await Post.findOne({ _id: req.params.id, school: req.user.school }).lean();
-    if (!post) return res.status(404).json({ message: "Post not found." });
+// ---------------------------------------------
+// POST /:school/posts/:id/like  (toggle or explicit action)
+// body: { action?: 'like' | 'unlike' }
+// ---------------------------------------------
+router.post(
+  "/:school/posts/:id/like",
+  requireAuth,
+  schoolGuard,
+  async (req, res, next) => {
+    try {
+      const { school, id } = req.params;
+      const { action } = req.body || {};
+      const userId = String(req.user._id);
 
-    const me = String(req.user.email || "").toLowerCase();
-    if (String(post.email || "").toLowerCase() === me) {
-      return res.status(400).json({ message: "You cannot like your own post." });
+      const post = await Post.findOne({ _id: id, school });
+      if (!post) return res.status(404).json({ message: "Post not found" });
+
+      const hasLiked = post.likes.some((u) => String(u) === userId);
+
+      let doLike = !hasLiked;
+      if (action === "like") doLike = true;
+      if (action === "unlike") doLike = false;
+
+      if (doLike && !hasLiked) {
+        post.likes.push(req.user._id);
+      } else if (!doLike && hasLiked) {
+        post.likes = post.likes.filter((u) => String(u) !== userId);
+      }
+
+      await post.save();
+
+      res.json({
+        ...serializePost(post.toObject()),
+        liked: doLike,
+      });
+    } catch (err) {
+      next(err);
     }
-
-    const alreadyLiked = (post.thumbsUpUsers || []).map((e) => String(e).toLowerCase()).includes(me);
-    const update = alreadyLiked
-      ? { $pull: { thumbsUpUsers: me } }
-      : { $addToSet: { thumbsUpUsers: me } };
-
-    const next = await Post.findOneAndUpdate(
-      { _id: req.params.id, school: req.user.school },
-      update,
-      { new: true, lean: true }
-    );
-
-    res.json({ thumbsUpCount: (next.thumbsUpUsers || []).length });
-  } catch (err) {
-    console.error("Toggle like error:", err);
-    res.status(500).json({ message: "Failed to toggle like." });
   }
-});
+);
 
 module.exports = router;
+
 
 
 

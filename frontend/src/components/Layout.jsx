@@ -68,7 +68,7 @@ export default function Layout() {
 
   const nickname = user?.nickname || (user?.email ? user.email.split("@")[0] : "GU");
 
-  // ✅ Quick Actions → Reviews 허브/보드 분리 반영
+  // ✅ Quick Actions → 대시보드 탭으로 이동
   const goReviewsHub = () => {
     if (!school) return navigate("/select-school");
     navigate(schoolPath("/reviews"));
@@ -76,12 +76,12 @@ export default function Layout() {
   };
   const goAskQuestion = () => {
     if (!school) return navigate("/select-school");
-    navigate(schoolPath("/freeboard/write"), { state: { intent: "ASK_ACADEMIC" } });
+    navigate(schoolPath("/dashboard?tab=academic"));
     setShowQuick(false);
   };
   const goLookingFor = () => {
     if (!school) return navigate("/select-school");
-    navigate(schoolPath("/courses"), { state: { intent: "NEW_REQUEST" } });
+    navigate(schoolPath("/dashboard?tab=academic"));
     setShowQuick(false);
   };
 
@@ -99,10 +99,11 @@ export default function Layout() {
 
         <nav className="p-3 space-y-1">
           <NavItem to={schoolPath("/dashboard")}>Dashboard</NavItem>
-          <NavItem to={schoolPath("/freeboard")}>Free Board</NavItem>
-          <NavItem to={schoolPath("/career")}>Career Board</NavItem>
+          {/* ✅ 리스트 메뉴는 탭으로 연결 */}
+          <NavItem to={schoolPath("/dashboard?tab=free")}>Free Board</NavItem>
+          <NavItem to={schoolPath("/dashboard?tab=academic")}>Career Board</NavItem>
           <NavItem to={schoolPath("/courses")}>Course Hub</NavItem>
-          <NavItem to={schoolPath("/reviews")}>Reviews</NavItem> {/* ✅ 추가 */}
+          <NavItem to={schoolPath("/reviews")}>Reviews</NavItem>
           <NavItem to={schoolPath("/market")}>Marketplace</NavItem>
           <NavItem to={schoolPath("/messages")}>Messages</NavItem>
           <NavItem to={schoolPath("/foodmap")}>Food Map</NavItem>
@@ -196,63 +197,14 @@ export default function Layout() {
 
             {/* Auth / Profile */}
             {user?.email ? (
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowProfile((v) => !v);
-                    setShowNoti(false);
-                    setShowQuick(false);
-                  }}
-                  className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-violet-50"
-                >
-                  <Initials name={nickname} bg={schoolTheme?.bg || "#f1ecff"} />
-                  <span className="hidden sm:inline text-sm font-medium text-gray-700">{nickname}</span>
-                  <svg className={`h-4 w-4 text-gray-500 transition ${showProfile ? "rotate-180" : ""}`} viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.25a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" />
-                  </svg>
-                </button>
-
-                {showProfile && (
-                  <>
-                    <div className="fixed inset-0 z-40" onClick={() => setShowProfile(false)} />
-                    <div className="absolute right-0 z-50 mt-2 w-56 rounded-xl border bg-white shadow-lg">
-                      <div className="px-3 py-2 border-b">
-                        <div className="text-sm font-semibold">{nickname}</div>
-                        <div className="text-xs text-gray-500 truncate">{user.email}</div>
-                      </div>
-                      <div className="p-1 text-sm">
-                        <MenuItem to={schoolPath("/dashboard")} onClick={() => setShowProfile(false)}>
-                          Dashboard
-                        </MenuItem>
-                        <MenuItem to={schoolPath("/myposts")} onClick={() => setShowProfile(false)}>
-                          My Posts
-                        </MenuItem>
-                        <MenuItem to={schoolPath("/liked")} onClick={() => setShowProfile(false)}>
-                          Liked
-                        </MenuItem>
-                        <MenuItem to={schoolPath("/commented")} onClick={() => setShowProfile(false)}>
-                          Commented
-                        </MenuItem>
-                        <MenuItem to={schoolPath("/messages")} onClick={() => setShowProfile(false)}>
-                          Messages
-                        </MenuItem>
-                        <MenuItem to={schoolPath("/market")} onClick={() => setShowProfile(false)}>
-                          Marketplace
-                        </MenuItem>
-                        <MenuItem to={schoolPath("/foodmap")} onClick={() => setShowProfile(false)}>
-                          Food Map
-                        </MenuItem>
-                      </div>
-                      <div className="border-t p-1">
-                        <button onClick={onLogout} className="w-full rounded-lg px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50">
-                          Log out
-                        </button>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
+              <ProfileMenu
+                nickname={nickname}
+                email={user.email}
+                onLogout={onLogout}
+                schoolPath={schoolPath}
+                showProfile={showProfile}
+                setShowProfile={setShowProfile}
+              />
             ) : (
               <>
                 <Link to="/login" className="px-3 py-2 text-sm text-gray-700 hover:text-violet-700 hover:bg-violet-50 rounded-md">
@@ -309,6 +261,64 @@ export default function Layout() {
   );
 }
 
+function ProfileMenu({ nickname, email, onLogout, schoolPath, showProfile, setShowProfile }) {
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setShowProfile((v) => !v)}
+        className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-violet-50"
+      >
+        <Initials name={nickname} />
+        <span className="hidden sm:inline text-sm font-medium text-gray-700">{nickname}</span>
+        <svg className={`h-4 w-4 text-gray-500 transition ${showProfile ? "rotate-180" : ""}`} viewBox="0 0 20 20" fill="currentColor">
+          <path d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.25a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" />
+        </svg>
+      </button>
+
+      {showProfile && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setShowProfile(false)} />
+          <div className="absolute right-0 z-50 mt-2 w-56 rounded-xl border bg-white shadow-lg">
+            <div className="px-3 py-2 border-b">
+              <div className="text-sm font-semibold">{nickname}</div>
+              <div className="text-xs text-gray-500 truncate">{email}</div>
+            </div>
+            <div className="p-1 text-sm">
+              <MenuItem to={schoolPath("/dashboard")} onClick={() => setShowProfile(false)}>
+                Dashboard
+              </MenuItem>
+              <MenuItem to={schoolPath("/myposts")} onClick={() => setShowProfile(false)}>
+                My Posts
+              </MenuItem>
+              <MenuItem to={schoolPath("/liked")} onClick={() => setShowProfile(false)}>
+                Liked
+              </MenuItem>
+              <MenuItem to={schoolPath("/commented")} onClick={() => setShowProfile(false)}>
+                Commented
+              </MenuItem>
+              <MenuItem to={schoolPath("/messages")} onClick={() => setShowProfile(false)}>
+                Messages
+              </MenuItem>
+              <MenuItem to={schoolPath("/market")} onClick={() => setShowProfile(false)}>
+                Marketplace
+              </MenuItem>
+              <MenuItem to={schoolPath("/foodmap")} onClick={() => setShowProfile(false)}>
+                Food Map
+              </MenuItem>
+            </div>
+            <div className="border-t p-1">
+              <button onClick={onLogout} className="w-full rounded-lg px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50">
+                Log out
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function MenuItem({ to, children, onClick }) {
   return (
     <Link to={to} onClick={onClick} className="block rounded-lg px-3 py-2 hover:bg-violet-50 text-gray-700">
@@ -316,6 +326,7 @@ function MenuItem({ to, children, onClick }) {
     </Link>
   );
 }
+
 
 
 

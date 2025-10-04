@@ -1,571 +1,104 @@
-// // frontend/src/pages/dashboard/Dashboard.jsx
-// import React, { useEffect, useMemo, useState } from "react";
-// import { useNavigate } from "react-router-dom";
-
-// import { useSchool } from "../../contexts/SchoolContext";
-// import { useAuth } from "../../contexts/AuthContext";
-// import { useSchoolPath } from "../../utils/schoolPath";
-
-// /* APIs */
-// import { listPosts, getPublicPosts, createPost } from "../../api/posts";
-// import {
-//   listCareerPosts,
-//   getPublicCareerPosts,
-//   createCareerPost,
-// } from "../../api/careerPosts";
-
-// /* ====== Tokens ====== */
-// const TOKENS = {
-//   pageBg: "#F7F8FA",
-//   text: "#0F172A",
-//   sub: "#475569",
-//   red: "#EF4444",
-//   redSoft: "#F87171",
-//   border: "rgba(15,23,42,0.16)",
-//   white: "#FFFFFF",
-//   blue: "#2563EB",
-//   sky: "#0EA5E9",
-//   softBlue: "#4F7DF3",
-// };
-
-// /* ===== UI helpers ===== */
-// function Card({ children, className = "" }) {
-//   return (
-//     <div
-//       className={`rounded-2xl bg-white p-5 shadow-sm ring-1 ${className}`}
-//       style={{ borderColor: TOKENS.border }}
-//     >
-//       {children}
-//     </div>
-//   );
-// }
-
-// function ListSkeleton({ rows = 5 }) {
-//   return (
-//     <ul className="animate-pulse space-y-3">
-//       {Array.from({ length: rows }).map((_, i) => (
-//         <li key={i} className="h-4 w-full rounded bg-slate-100" />
-//       ))}
-//     </ul>
-//   );
-// }
-
-// /* ===== PAGE ===== */
-// export default function Dashboard() {
-//   const navigate = useNavigate();
-//   const { school } = useSchool();
-//   const { user } = useAuth();
-//   const schoolPath = useSchoolPath();
-
-//   const isAuthed = !!user;
-//   const schoolKey = school || "nyu";
-
-//   /* lists */
-//   const [general, setGeneral] = useState({ loading: true, items: [] });
-//   const [academic, setAcademic] = useState({ loading: true, items: [] });
-
-//   /* compose */
-//   const [targetBoard, setTargetBoard] = useState("general"); // "general" | "academic"
-//   const [title, setTitle] = useState("");
-//   const [content, setContent] = useState("");
-//   const [posting, setPosting] = useState(false);
-//   const [msg, setMsg] = useState({ type: "", text: "" });
-
-//   /* fetch lists */
-//   useEffect(() => {
-//     let alive = true;
-//     async function run() {
-//       setGeneral((s) => ({ ...s, loading: true }));
-//       setAcademic((s) => ({ ...s, loading: true }));
-//       try {
-//         const [gen, acad] = await Promise.all([
-//           isAuthed
-//             ? listPosts({ school: schoolKey, limit: 5, sort: "new" })
-//             : getPublicPosts({ school: schoolKey, limit: 5, sort: "new" }),
-//           isAuthed
-//             ? listCareerPosts({ school: schoolKey, limit: 5, sort: "new" })
-//             : getPublicCareerPosts({ school: schoolKey, limit: 5, sort: "new" }),
-//         ]);
-//         if (!alive) return;
-//         setGeneral({ loading: false, items: normalizePosts(gen) });
-//         setAcademic({ loading: false, items: normalizePosts(acad) });
-//       } catch {
-//         if (!alive) return;
-//         setGeneral({ loading: false, items: [] });
-//         setAcademic({ loading: false, items: [] });
-//       }
-//     }
-//     run();
-//     return () => { alive = false; };
-//   }, [isAuthed, schoolKey]);
-
-//   /* nav (schoolPath가 prefix를 붙여줌) */
-//   const goGeneral = () => navigate(schoolPath("/freeboard"));
-//   const goAcademic = () => navigate(schoolPath("/career"));
-
-//   /* compose submit */
-//   const canPost = isAuthed && title.trim() && content.trim();
-//   const submitPost = async (e) => {
-//     e.preventDefault();
-//     setMsg({ type: "", text: "" });
-//     if (!isAuthed) {
-//       setMsg({ type: "error", text: "Login required to post." });
-//       return;
-//     }
-//     if (!canPost) {
-//       setMsg({ type: "error", text: "Please enter title and content." });
-//       return;
-//     }
-//     setPosting(true);
-//     try {
-//       if (targetBoard === "general") {
-//         await createPost({ school: schoolKey, title: title.trim(), content: content.trim() });
-//         setMsg({ type: "success", text: "Posted to Freeboard! Redirecting..." });
-//         setTimeout(goGeneral, 400);
-//       } else {
-//         await createCareerPost({ school: schoolKey, title: title.trim(), content: content.trim() });
-//         setMsg({ type: "success", text: "Posted to Academic Board! Redirecting..." });
-//         setTimeout(goAcademic, 400);
-//       }
-//       setTitle("");
-//       setContent("");
-//     } catch {
-//       setMsg({ type: "error", text: "Failed to post. Please try again." });
-//     } finally {
-//       setPosting(false);
-//     }
-//   };
-
-//   /* academic quick templates (유도용) */
-//   const ACADEMIC_TEMPLATES = [
-//     'Anyone has [COURSE] midterm notes?',
-//     'Looking to buy [COURSE] textbook',
-//     'Selling [COURSE] study guide (cheap)',
-//     'Forming study group for [COURSE]',
-//     'Which prof is better for [COURSE]?',
-//   ];
-//   const [selectedTemplate, setSelectedTemplate] = useState("");
-
-//   /* dynamic placeholders */
-//   const placeholders = useMemo(() => {
-//     if (targetBoard === "general") {
-//       return {
-//         title: `e.g. "Best late-night study spots near Bobst?"`,
-//         body: `Share details or ask a follow-up.\nExamples:\n• “Can I bring an air fryer to dorms?”\n• “Any CS-UY networking events this week?”`,
-//         footer: <>Posting to <strong>Freeboard</strong> as anonymous.</>,
-//       };
-//     }
-//     return {
-//       title: `e.g. "NYC SWE internships: prep for tech screens?"`,
-//       body: `Share details or ask a follow-up.\nExamples:\n• “Share your behavioral interview notes”\n• “Which prof is better for DS-UA 201?”`,
-//       footer: <>Posting to <strong>Academic Board</strong> as anonymous.</>,
-//     };
-//   }, [targetBoard]);
-
-//   return (
-//     <div style={{ background: TOKENS.pageBg }}>
-//       {/* ===== Section 1: Compose (centered, compact) ===== */}
-//       <section
-//         className="w-full relative"
-//         style={{ background: `linear-gradient(180deg, ${TOKENS.red} 0%, ${TOKENS.redSoft} 100%)` }}
-//       >
-//         <div
-//           aria-hidden
-//           className="pointer-events-none absolute left-1/2 top-[-120px] h-[320px] w-[720px] -translate-x-1/2 rounded-full blur-3xl opacity-30"
-//           style={{
-//             background:
-//               "radial-gradient(60% 60% at 50% 50%, rgba(255,255,255,0.6) 0%, rgba(255,255,255,0) 70%)",
-//           }}
-//         />
-//         <div className="mx-auto max-w-6xl px-4 py-10 sm:py-12">
-//           {/* 중앙 정렬 래퍼 */}
-//           <div className="mx-auto max-w-4xl text-center">
-//             <p className="text-white/95 text-[18px] sm:text-[20px]">
-//               Ask classmates, share your thoughts, and even earn pocket money by safely trading notes and materials.
-//             </p>
-
-//             {/* board selector – 중앙 정렬 */}
-//             <div
-//               className="mt-5 inline-flex rounded-full bg-white/30 p-1 backdrop-blur"
-//               role="tablist"
-//               aria-label="Select board to post"
-//             >
-//               <button
-//                 role="tab"
-//                 aria-selected={targetBoard === "general"}
-//                 onClick={() => setTargetBoard("general")}
-//                 className={`px-4 py-1.5 text-sm font-semibold rounded-full transition ${
-//                   targetBoard === "general" ? "bg-white text-slate-900 shadow-sm" : "text-white/90 hover:text-white"
-//                 }`}
-//               >
-//                 Freeboard
-//               </button>
-//               <button
-//                 role="tab"
-//                 aria-selected={targetBoard === "academic"}
-//                 onClick={() => setTargetBoard("academic")}
-//                 className={`px-4 py-1.5 text-sm font-semibold rounded-full transition ${
-//                   targetBoard === "academic" ? "bg-white text-slate-900 shadow-sm" : "text-white/90 hover:text-white"
-//                 }`}
-//               >
-//                 Academic Board
-//               </button>
-//             </div>
-//           </div>
-
-//           {/* compose card (centered) */}
-//           <div className="mt-5">
-//             <Card className="mx-auto max-w-3xl p-4">
-//               <form onSubmit={submitPost} className="space-y-3">
-//                 {/* Academic 전용 유도 드롭다운 */}
-//                 {targetBoard === "academic" && (
-//                   <div className="flex flex-wrap items-center gap-2">
-//                     <label className="text-xs text-slate-600">Quick starter</label>
-//                     <select
-//                       value={selectedTemplate}
-//                       onChange={(e) => {
-//                         const v = e.target.value;
-//                         setSelectedTemplate(v);
-//                         if (v) setTitle(v); // 제목 자동 채움
-//                       }}
-//                       className="rounded-full border px-3 py-1.5 text-sm bg-white"
-//                       style={{ borderColor: TOKENS.border }}
-//                     >
-//                       <option value="">Choose a template…</option>
-//                       {ACADEMIC_TEMPLATES.map((t) => (
-//                         <option key={t} value={t}>{t}</option>
-//                       ))}
-//                     </select>
-//                     <span className="text-xs text-slate-500">
-//                       Replace <code>[COURSE]</code> with your code (e.g., <code>DS-UA 201</code>)
-//                     </span>
-//                   </div>
-//                 )}
-
-//                 <input
-//                   type="text"
-//                   value={title}
-//                   onChange={(e) => setTitle(e.target.value)}
-//                   placeholder={placeholders.title}
-//                   className="w-full rounded-xl border bg-white px-3.5 py-2.5 text-[15px] outline-none focus:ring-2"
-//                   style={{ borderColor: TOKENS.border }}
-//                 />
-//                 <textarea
-//                   value={content}
-//                   onChange={(e) => setContent(e.target.value)}
-//                   rows={4}
-//                   placeholder={placeholders.body}
-//                   className="w-full resize-y rounded-xl border bg-white px-3.5 py-2.5 text-[15px] outline-none focus:ring-2"
-//                   style={{ borderColor: TOKENS.border }}
-//                 />
-//                 <div className="flex items-center justify-between">
-//                   <span className="text-xs text-white/80">{placeholders.footer}</span>
-//                   <div className="flex gap-2">
-//                     <button
-//                       type="button"
-//                       onClick={() => { setTitle(""); setContent(""); setMsg({ type: "", text: "" }); }}
-//                       className="rounded-xl border px-3.5 py-2 text-sm font-semibold hover:bg-black/5"
-//                       style={{ borderColor: TOKENS.border }}
-//                     >
-//                       Clear
-//                     </button>
-//                     <button
-//                       type="submit"
-//                       disabled={!canPost || posting}
-//                       className="rounded-xl px-4 py-2 text-white text-sm font-semibold disabled:opacity-50"
-//                       style={{ background: TOKENS.softBlue }}
-//                     >
-//                       {posting ? "Posting..." : "Post"}
-//                     </button>
-//                   </div>
-//                 </div>
-//                 {msg.text && (
-//                   <div
-//                     className={`mt-1 rounded-xl px-3 py-2 text-sm ${
-//                       msg.type === "success" ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
-//                     }`}
-//                   >
-//                     {msg.text}
-//                   </div>
-//                 )}
-//               </form>
-//             </Card>
-//           </div>
-//         </div>
-//       </section>
-
-//       {/* ===== Section 2: Boards preview (white) ===== */}
-//       <section className="w-full">
-//         <div className="mx-auto max-w-6xl px-4 py-10 sm:py-12">
-//           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-//             {/* Freeboard */}
-//             <Card>
-//               <button
-//                 onClick={goGeneral}
-//                 className="group flex items-center gap-2 text-sm font-bold text-left"
-//                 style={{ color: TOKENS.blue }}
-//                 title="Open Freeboard"
-//               >
-//                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
-//                   <path d="M4 15v5l4-4h8a4 4 0 0 0 4-4V7a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v8z" stroke="currentColor" strokeWidth="2" />
-//                 </svg>
-//                 <span className="underline-offset-4 group-hover:underline">Freeboard</span>
-//               </button>
-
-//               <div className="mt-3">
-//                 {general.loading ? (
-//                   <ListSkeleton />
-//                 ) : general.items.length ? (
-//                   <ul className="divide-y" style={{ borderColor: TOKENS.border }}>
-//                     {general.items.map((p) => (
-//                       <li key={p._id} className="py-3">
-//                         <div className="flex items-center justify-between gap-3">
-//                           <p className="text-[15px] font-semibold text-slate-900 line-clamp-1">{p.title}</p>
-//                           <div className="shrink-0 flex items-center gap-3 text-xs text-slate-500">
-//                             <span className="inline-flex items-center gap-1">
-//                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
-//                                 <path d="M4 15v5l4-4h8a4 4 0 0 0 4-4V7a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v8z" stroke="currentColor" strokeWidth="2"/>
-//                               </svg>
-//                               {p.comments}
-//                             </span>
-//                             <span className="inline-flex items-center gap-1">
-//                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
-//                                 <path d="M12 21s-7-4.35-7-10a4 4 0 0 1 7-2 4 4 0 0 1 7 2c0 5.65-7 10-7 10z" stroke="currentColor" strokeWidth="2"/>
-//                               </svg>
-//                               {p.likes}
-//                             </span>
-//                           </div>
-//                         </div>
-//                         <div className="mt-1 text-xs text-slate-500">{p.ago}</div>
-//                       </li>
-//                     ))}
-//                   </ul>
-//                 ) : (
-//                   <p className="text-sm text-slate-500">No recent threads yet.</p>
-//                 )}
-//               </div>
-//             </Card>
-
-//             {/* Academic */}
-//             <Card>
-//               <button
-//                 onClick={goAcademic}
-//                 className="group flex items-center gap-2 text-sm font-bold text-left"
-//                 style={{ color: TOKENS.sky }}
-//                 title="Open Academic Board"
-//               >
-//                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
-//                   <path d="M4 15v5l4-4h8a4 4 0 0 0 4-4V7a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v8z" stroke="currentColor" strokeWidth="2" />
-//                 </svg>
-//                 <span className="underline-offset-4 group-hover:underline">Academic Board</span>
-//               </button>
-
-//               <div className="mt-3">
-//                 {academic.loading ? (
-//                   <ListSkeleton />
-//                 ) : academic.items.length ? (
-//                   <ul className="divide-y" style={{ borderColor: TOKENS.border }}>
-//                     {academic.items.map((p) => (
-//                       <li key={p._id} className="py-3">
-//                         <div className="flex items-center justify-between gap-3">
-//                           <p className="text-[15px] font-semibold text-slate-900 line-clamp-1">{p.title}</p>
-//                           <div className="shrink-0 flex items-center gap-3 text-xs text-slate-500">
-//                             <span className="inline-flex items-center gap-1">
-//                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
-//                                 <path d="M4 15v5l4-4h8a4 4 0 0 0 4-4V7a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v8z" stroke="currentColor" strokeWidth="2"/>
-//                               </svg>
-//                               {p.comments}
-//                             </span>
-//                             <span className="inline-flex items-center gap-1">
-//                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
-//                                 <path d="M12 21s-7-4.35-7-10a4 4 0 0 1 7-2 4 4 0 0 1 7 2c0 5.65-7 10-7 10z" stroke="currentColor" strokeWidth="2"/>
-//                               </svg>
-//                               {p.likes}
-//                             </span>
-//                           </div>
-//                         </div>
-//                         <div className="mt-1 text-xs text-slate-500">{p.ago}</div>
-//                       </li>
-//                     ))}
-//                   </ul>
-//                 ) : (
-//                   <p className="text-sm text-slate-500">No recent threads yet.</p>
-//                 )}
-//               </div>
-//             </Card>
-//           </div>
-//         </div>
-//       </section>
-//     </div>
-//   );
-// }
-
-// /* ===== helpers ===== */
-// function normalizePosts(res) {
-//   const arr =
-//     (Array.isArray(res?.items) && res.items) ||
-//     (Array.isArray(res?.data) && res.data) ||
-//     (Array.isArray(res) && res) ||
-//     [];
-//   return arr.slice(0, 5).map((p) => {
-//     const comments =
-//       (typeof p.commentsCount === "number" && p.commentsCount) ||
-//       (Array.isArray(p.comments) ? p.comments.length : 0) ||
-//       (typeof p.replies === "number" ? p.replies : 0);
-//     const likes =
-//       (typeof p.likesCount === "number" && p.likesCount) ||
-//       (Array.isArray(p.likes) ? p.likes.length : 0) ||
-//       (typeof p.upvotes === "number" ? p.upvotes : 0);
-//     return {
-//       _id: p._id || p.id || Math.random().toString(36).slice(2),
-//       title: p.title || p.content || "Untitled",
-//       comments,
-//       likes,
-//       ago: p.createdAt ? timeAgo(p.createdAt) : "",
-//     };
-//   });
-// }
-
-// function timeAgo(iso) {
-//   try {
-//     const d = new Date(iso);
-//     const s = Math.floor((Date.now() - d.getTime()) / 1000);
-//     if (s < 60) return `${s}s ago`;
-//     if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-//     if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-//     return `${Math.floor(s / 86400)}d ago`;
-//   } catch {
-//     return "";
-//   }
-// }
-
 // frontend/src/pages/dashboard/Dashboard.jsx
 import React, { useEffect, useMemo, useRef, useState, useLayoutEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { createPortal } from "react-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 
 import { useSchool } from "../../contexts/SchoolContext";
 import { useAuth } from "../../contexts/AuthContext";
 import { useSchoolPath } from "../../utils/schoolPath";
-import { uploadToCloudinary } from "../../utils/uploadToCloudinary"; // named export
+import { uploadToCloudinary } from "../../utils/uploadToCloudinary";
 
-/* APIs */
-import { listPosts, getPublicPosts, createPost } from "../../api/posts";
-import {
-  listCareerPosts,
-  getPublicCareerPosts,
-  createCareerPost,
-} from "../../api/careerPosts";
+/* Read / Write API */
+import { createPost, getPublicPosts } from "../../api/posts";
+import { createCareerPost, getPublicCareerPosts } from "../../api/careerPosts";
 
 /* ===== Design tokens ===== */
 const TOKENS = {
   pageBg: "#FAFAFA",
   text: "#0F172A",
   sub: "#64748B",
-  border: "rgba(0,0,0,0.12)",
   primary: "#111827",
   pink: "#FF6B8A",
   red: "#FF7A70",
 };
 
-/* ===== Avatar icon (anonymous unified) ===== */
 function PersonIcon() {
   return (
-    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden>
+    <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden>
       <circle cx="12" cy="8" r="4" fill="#cbd5e1" />
       <path d="M4 20c0-4 4-6 8-6s8 2 8 6" fill="#cbd5e1" />
     </svg>
   );
 }
 
-/* ===== Segmented (outline-only, sliding border, no fill) ===== */
 function Segmented({ value, onChange }) {
   const isGeneral = value === "general";
   const leftRef = useRef(null);
   const rightRef = useRef(null);
-  const [thumb, setThumb] = useState({ w: 0, x: 0 });
-  const [wiggle, setWiggle] = useState(null);
+  const [underline, setUnderline] = useState({ w: 0, x: 0 });
 
   const measure = () => {
-    const gap = 8;
     const l = leftRef.current;
     const r = rightRef.current;
     if (!l || !r) return;
-    const w = (isGeneral ? l.offsetWidth : r.offsetWidth) || 0;
-    const x = isGeneral ? 0 : (l.offsetWidth || 0) + gap;
-    setThumb({ w, x });
+    const el = isGeneral ? l : r;
+    const w = el.offsetWidth;
+    const x = el.offsetLeft - l.offsetLeft;
+    setUnderline({ w, x });
   };
 
   useLayoutEffect(() => {
     measure();
     const ro = new ResizeObserver(measure);
-    if (leftRef.current) ro.observe(leftRef.current);
-    if (rightRef.current) ro.observe(rightRef.current);
+    if (leftRef.current?.parentElement) ro.observe(leftRef.current.parentElement);
     return () => ro.disconnect();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isGeneral]);
-
-  const clickGeneral = () => {
-    onChange("general");
-    setWiggle("general");
-    setTimeout(() => setWiggle(null), 360);
-  };
-  const clickAcademic = () => {
-    onChange("academic");
-    setWiggle("academic");
-    setTimeout(() => setWiggle(null), 360);
-  };
 
   return (
     <>
       <style>{`
-        @keyframes nudge {0%{transform:translateY(0) rotate(0)}
-          28%{transform:translateY(-2px) rotate(-4deg) scale(1.02)}
-          56%{transform:translateY(1px) rotate(3deg)}
-          84%{transform:translateY(-1px) rotate(-2deg) scale(1.01)}
-          100%{transform:translateY(0) rotate(0)}}
-        .emoji-wiggle{animation:nudge 340ms ease-in-out}
+        @keyframes wiggleScale {
+          0% { transform: translateY(0) scale(1); }
+          25% { transform: translateY(-2px) scale(1.03); }
+          50% { transform: translateY(0.5px) scale(1.01); }
+          75% { transform: translateY(-1px) scale(1.02); }
+          100% { transform: translateY(0) scale(1); }
+        }
       `}</style>
       <div className="w-full flex justify-center">
-        <div className="relative inline-flex items-center gap-2 p-1 rounded-full">
-          {/* sliding outline */}
+        <div className="relative inline-flex items-center gap-8">
           <span
             aria-hidden
-            className="absolute top-1 bottom-1 rounded-full transition-transform duration-300 ease-out pointer-events-none"
+            className="absolute -bottom-2 h-[3px] rounded-full transition-transform duration-300 ease-out"
             style={{
-              width: thumb.w || 148,
-              transform: `translateX(${thumb.x || 0}px)`,
-              background: "transparent",
-              borderStyle: "solid",
-              borderWidth: 2,
-              borderImageSlice: 1,
-              borderImageSource: `linear-gradient(90deg, ${TOKENS.pink}, ${TOKENS.red})`,
+              width: underline.w || 0,
+              transform: `translateX(${underline.x || 0}px)`,
+              background: `linear-gradient(90deg, ${TOKENS.pink}, ${TOKENS.red})`,
             }}
           />
           <button
             ref={leftRef}
             type="button"
-            onClick={clickGeneral}
-            className={`relative z-10 h-11 px-5 rounded-full text-[15px] transition-colors ${
-              isGeneral ? "text-slate-900" : "text-slate-600 hover:text-slate-800"
-            }`}
-            style={{ background: "transparent" }}
+            onClick={() => onChange("general")}
+            className={`text-[22px] font-bold flex items-center gap-2 transition-all ${
+              isGeneral ? "text-slate-900" : "text-slate-400 hover:text-slate-600"
+            } ${isGeneral ? "animate-[wiggleScale_360ms_ease-in-out]" : ""}`}
             aria-pressed={isGeneral}
           >
-            <span className={`inline-block mr-1 ${wiggle === "general" ? "emoji-wiggle" : ""}`} aria-hidden>💬</span>
-            <span style={{ fontWeight: isGeneral ? 700 : 600 }}>Freeboard</span>
+            <span aria-hidden>💬</span>
+            <span>Freeboard</span>
           </button>
           <button
             ref={rightRef}
             type="button"
-            onClick={clickAcademic}
-            className={`relative z-10 h-11 px-5 rounded-full text-[15px] transition-colors ${
-              !isGeneral ? "text-slate-900" : "text-slate-600 hover:text-slate-800"
+            onClick={() => onChange("academic")}
+            className={`text-[22px] font-bold flex items-center gap-2 transition-all ${
+              !isGeneral ? "text-slate-900 animate-[wiggleScale_360ms_ease-in-out]" : "text-slate-400 hover:text-slate-600"
             }`}
-            style={{ background: "transparent" }}
             aria-pressed={!isGeneral}
           >
-            <span className={`inline-block mr-1 ${wiggle === "academic" ? "emoji-wiggle" : ""}`} aria-hidden>🎓</span>
-            <span style={{ fontWeight: !isGeneral ? 700 : 600 }}>Academic</span>
+            <span aria-hidden>🎓</span>
+            <span>Academic</span>
           </button>
         </div>
       </div>
@@ -573,414 +106,384 @@ function Segmented({ value, onChange }) {
   );
 }
 
-/* ===== Airbnb-like Card (no outer stroke) ===== */
 function CardBox({ children }) {
-  return (
-    <div className="rounded-2xl bg-white shadow-lg overflow-hidden">
-      {children}
-    </div>
-  );
+  return <div className="rounded-2xl bg-white shadow-lg overflow-hidden">{children}</div>;
 }
 
-/* ===== Course search dropdown (code or name, both shown) ===== */
-function CourseCombo({ valueCode, setValueCode, valueName, setValueName, placeholder = "Type code or name" }) {
-  const [all, setAll] = useState([]);
-  const [open, setOpen] = useState(false);
-  const [q, setQ] = useState("");
-
-  // load once from public json (NYU example)
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const res = await fetch("/NYU_course_DATA.json");
-        const data = await res.json();
-        if (!alive) return;
-        const norm = (Array.isArray(data) ? data : []).map((x, i) => {
-          const code = x.code || x.course_code || x.courseCode || x.id || "";
-          const name = x.name || x.course_name || x.title || "";
-          return { id: `${code}-${i}`, code: String(code || "").trim(), name: String(name || "").trim() };
-        }).filter(v => v.code || v.name);
-        setAll(norm);
-      } catch {
-        setAll([]);
-      }
-    })();
-    return () => { alive = false; };
-  }, []);
-
-  // filtered options (supports code or name)
-  const opts = useMemo(() => {
-    const term = q.trim().toLowerCase();
-    if (!term) return all.slice(0, 12);
-    return all.filter(({ code, name }) =>
-      code.toLowerCase().includes(term) || name.toLowerCase().includes(term)
-    ).slice(0, 12);
-  }, [q, all]);
-
-  const select = (item) => {
-    setValueCode(item.code);
-    setValueName(item.name);
-    setQ(`${item.code} — ${item.name}`);
-    setOpen(false);
-  };
-
-  // sync input display when outside value changes
-  useEffect(() => {
-    if (valueCode || valueName) {
-      setQ(`${valueCode || ""}${valueCode && valueName ? " — " : ""}${valueName || ""}`);
-    } else if (!open) {
-      setQ("");
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [valueCode, valueName]);
-
-  return (
-    <div className="relative">
-      <input
-        type="text"
-        value={q}
-        onChange={(e) => { setQ(e.target.value); setOpen(true); }}
-        onFocus={() => setOpen(true)}
-        placeholder={placeholder}
-        className="w-full rounded-xl border bg-white px-3.5 py-2.5 text-[15px] outline-none focus:ring-2"
-        style={{ borderColor: TOKENS.border }}
-        aria-autocomplete="list"
-        aria-expanded={open}
-      />
-      {open && (
-        <div className="absolute z-20 mt-1 w-full rounded-xl border bg-white shadow-lg max-h-72 overflow-auto" style={{ borderColor: TOKENS.border }}>
-          {opts.length ? opts.map((it) => (
-            <button
-              key={it.id}
-              type="button"
-              onClick={() => select(it)}
-              className="w-full text-left px-3.5 py-2 hover:bg-slate-50"
-            >
-              <div className="text-[14px] font-semibold text-slate-900">{it.code || "—"}</div>
-              <div className="text-[13px] text-slate-600">{it.name || ""}</div>
-            </button>
-          )) : (
-            <div className="px-3.5 py-3 text-[13px] text-slate-500">No matches.</div>
-          )}
-        </div>
-      )}
-      {/* click-away to close */}
-      {open && (
-        <button
-          type="button"
-          className="fixed inset-0 cursor-default"
-          aria-hidden
-          onClick={() => setOpen(false)}
-          style={{ background: "transparent" }}
-        />
-      )}
-      {(valueCode || valueName) && (
-        <p className="mt-1 text-[12px] text-slate-500">
-          Selected: <span className="font-medium">{valueCode || "—"}</span>{valueCode && valueName ? " — " : " "}{valueName || ""}
-        </p>
-      )}
-    </div>
-  );
+/* ===== Helpers ===== */
+function pluckArray(payload) {
+  if (!payload) return [];
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload.posts)) return payload.posts;
+  if (Array.isArray(payload.items)) return payload.items;
+  if (Array.isArray(payload.data)) return payload.data;
+  if (Array.isArray(payload.results)) return payload.results;
+  if (Array.isArray(payload.list)) return payload.list;
+  if (Array.isArray(payload.docs)) return payload.docs;
+  if (payload.data && Array.isArray(payload.data.posts)) return payload.data.posts;
+  if (payload.data && Array.isArray(payload.data.items)) return payload.data.items;
+  return [];
 }
 
-/* ===== Freeboard form (title, content, photos) ===== */
-function FreeboardForm({ title, setTitle, content, setContent, images, setImages }) {
-  const onPick = (e) => {
-    const files = Array.from(e.target.files || []);
-    if (!files.length) return;
-    setImages((prev) => [...prev, ...files].slice(0, 6));
-  };
-  const removeAt = (idx) => setImages((prev) => prev.filter((_, i) => i !== idx));
-
-  return (
-    <div className="p-4">
-      <div className="text-[13px] font-semibold text-slate-700 mb-2">Write to Freeboard</div>
-      <input
-        type="text"
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        placeholder={`e.g. "Best late-night study spots near Bobst?"`}
-        className="w-full rounded-xl border bg-white px-3.5 py-2.5 text-[15px] outline-none focus:ring-2"
-        style={{ borderColor: TOKENS.border }}
-      />
-      <textarea
-        value={content}
-        onChange={(e) => setContent(e.target.value)}
-        rows={4}
-        placeholder={`Share details or ask a follow-up.`}
-        className="mt-3 w-full resize-y rounded-xl border bg-white px-3.5 py-2.5 text-[15px] outline-none focus:ring-2"
-        style={{ borderColor: TOKENS.border }}
-      />
-      {/* photos */}
-      <div className="mt-3">
-        <label className="block text-[12px] font-medium text-slate-600 mb-1">Photos (up to 6)</label>
-        <input type="file" accept="image/*" multiple onChange={onPick} />
-        {!!images.length && (
-          <div className="mt-2 grid grid-cols-3 gap-2">
-            {images.map((f, i) => (
-              <div key={i} className="relative">
-                <img src={URL.createObjectURL(f)} alt="" className="aspect-square w-full object-cover rounded-lg" />
-                <button
-                  type="button"
-                  className="absolute right-1 top-1 rounded-full bg-black/70 text-white text-xs px-1.5 py-0.5"
-                  onClick={() => removeAt(i)}
-                >
-                  ✕
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-      <p className="mt-2 text-[11px] text-slate-500">Posting as anonymous.</p>
-    </div>
-  );
+function normalizePosts(res) {
+  const arr = pluckArray(res);
+  return arr.map((p) => {
+    const id = p._id || p.id || p.postId || p.slug;
+    const title = p.title || (typeof p.content === "string" ? p.content.slice(0, 80) : "Untitled");
+    const createdAt = p.createdAt || p.updatedAt || p.time || p.date || new Date().toISOString();
+    const raw = p;
+    return { _id: id, title, createdAt, raw };
+  });
 }
 
-/* ===== Academic form: Question vs Looking for (with CourseCombo) ===== */
-function AcademicForm({
-  mode, setMode,
-  title, setTitle,
-  content, setContent,
-  courseCode, setCourseCode,
-  courseName, setCourseName,
-  materialType, setMaterialType,
-  extraNote, setExtraNote,
-}) {
-  return (
-    <div className="p-4">
-      <div className="text-[13px] font-semibold text-slate-700 mb-2">Write to Academic</div>
-
-      {/* internal segmented for mode */}
-      <div className="mb-3 inline-flex rounded-full border border-slate-200 p-1 bg-white">
-        <button
-          type="button"
-          onClick={() => setMode("question")}
-          className={`h-9 px-4 rounded-full text-sm ${mode === "question" ? "font-semibold text-slate-900" : "text-slate-600"}`}
-          style={mode === "question"
-            ? { background: "linear-gradient(#fff,#fff) padding-box, linear-gradient(90deg,#FF6B8A,#FF7A70) border-box", border: "2px solid transparent" }
-            : {}}
-        >
-          Question
-        </button>
-        <button
-          type="button"
-          onClick={() => setMode("looking_for")}
-          className={`h-9 px-4 rounded-full text-sm ${mode === "looking_for" ? "font-semibold text-slate-900" : "text-slate-600"}`}
-          style={mode === "looking_for"
-            ? { background: "linear-gradient(#fff,#fff) padding-box, linear-gradient(90deg,#FF6B8A,#FF7A70) border-box", border: "2px solid transparent" }
-            : {}}
-        >
-          Looking for
-        </button>
-      </div>
-
-      {/* shared title/content */}
-      <input
-        type="text"
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        placeholder={mode === "question" ? `e.g. "Which prof is better for DS-UA 201?"` : `e.g. "Looking for DS-UA 201 midterm review"`}
-        className="w-full rounded-xl border bg-white px-3.5 py-2.5 text-[15px] outline-none focus:ring-2"
-        style={{ borderColor: TOKENS.border }}
-      />
-
-      {/* mode-specific fields */}
-      {mode === "question" ? (
-        <textarea
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          rows={5}
-          placeholder={`Share details or ask a follow-up.\n• Interview prep notes?\n• Advice for course planning?`}
-          className="mt-3 w-full resize-y rounded-xl border bg-white px-3.5 py-2.5 text-[15px] outline-none focus:ring-2"
-          style={{ borderColor: TOKENS.border }}
-        />
-      ) : (
-        <>
-          <div className="mt-3 grid grid-cols-1 gap-3">
-            <div>
-              <label className="block text-[12px] font-medium text-slate-600 mb-1">Course (code or name)</label>
-              <CourseCombo
-                valueCode={courseCode}
-                setValueCode={setCourseCode}
-                valueName={courseName}
-                setValueName={setCourseName}
-                placeholder="Start typing course code or name…"
-              />
-            </div>
-            <div>
-              <label className="block text-[12px] font-medium text-slate-600 mb-1">Material type</label>
-              <input
-                type="text"
-                value={materialType}
-                onChange={(e) => setMaterialType(e.target.value)}
-                placeholder="e.g. syllabus, midterm review, past exams"
-                className="w-full rounded-xl border bg-white px-3.5 py-2.5 text-[15px] outline-none focus:ring-2"
-                style={{ borderColor: TOKENS.border }}
-              />
-            </div>
-          </div>
-          <textarea
-            value={extraNote}
-            onChange={(e) => setExtraNote(e.target.value)}
-            rows={4}
-            placeholder="Any extra details (links allowed)"
-            className="mt-3 w-full resize-y rounded-xl border bg-white px-3.5 py-2.5 text-[15px] outline-none focus:ring-2"
-            style={{ borderColor: TOKENS.border }}
-          />
-          <p className="mt-2 text-[11px] text-slate-500">
-            This post will be highlighted as <strong>Looking for</strong> in the feed.
-          </p>
-        </>
-      )}
-    </div>
-  );
-}
-
-/* ===== Media grid (Instagram-like) ===== */
-function MediaGrid({ images = [] }) {
-  if (!images.length) return null;
-  const shown = images.slice(0, 4);
-  const extra = images.length - shown.length;
-
-  if (shown.length === 1) {
-    return (
-      <div className="mt-3 overflow-hidden rounded-xl">
-        <img src={shown[0]} alt="" className="w-full max-h-[520px] object-cover" loading="lazy" />
-      </div>
-    );
-  }
-
-  if (shown.length === 2) {
-    return (
-      <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl overflow-hidden">
-        {shown.map((src, i) => (
-          <img key={i} src={src} alt="" className="aspect-square w-full object-cover" loading="lazy" />
-        ))}
-      </div>
-    );
-  }
-
-  // 3 or 4
-  return (
-    <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl overflow-hidden">
-      <img src={shown[0]} alt="" className="col-span-2 aspect-[2/1] w-full object-cover" loading="lazy" />
-      {shown.slice(1).map((src, i) => {
-        const isLast = i === shown.slice(1).length - 1 && extra > 0;
-        return (
-          <div key={i} className="relative">
-            <img src={src} alt="" className="aspect-square w-full object-cover" loading="lazy" />
-            {isLast && (
-              <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                <span className="text-white text-lg font-semibold">+{extra}</span>
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-/* ===== Skeleton (thicker separators) ===== */
 function FeedSkeleton({ rows = 8 }) {
   return (
-    <ul className="mx-auto max-w-[700px] px-2 py-2 divide-y-2 divide-slate-300/90">
+    <ul className="mt-4 space-y-3">
       {Array.from({ length: rows }).map((_, i) => (
-        <li key={i} className="py-5">
-          <div className="flex items-start gap-3">
-            <div className="h-9 w-9 rounded-full bg-slate-200 animate-pulse" />
-            <div className="flex-1 space-y-2">
-              <div className="h-4 w-3/4 rounded bg-slate-200 animate-pulse" />
-              <div className="h-3 w-1/2 rounded bg-slate-200 animate-pulse" />
-            </div>
-            <div className="h-3 w-12 rounded bg-slate-200 animate-pulse" />
-          </div>
-        </li>
+        <li key={i} className="h-16 rounded-xl bg-white/70 border border-slate-200 animate-pulse" />
       ))}
     </ul>
   );
 }
 
-/* ===== Post row (full-clickable) with images ===== */
-function PostRow({ post, onOpenDetail }) {
+function academicBadge(post) {
+  const r = post.raw || {};
+  const t = (r.postType || r.type || (r.lookingFor || r.isLookingFor ? "looking_for" : "question") || "").toLowerCase();
+  const k = (r.kind || r.category || r?.meta?.kind || (Array.isArray(r.tags) ? r.tags.find(x => /materials|group|coffee/i.test(x)) : "") || "").toLowerCase();
+
+  if (t !== "looking_for") return "﹖";
+  if (k.includes("group")) return "👥";
+  if (k.includes("coffee")) return "☕️";
+  return "📝";
+}
+
+function PostRow({ post, onOpenDetail, showBadge }) {
+  const badge = showBadge ? academicBadge(post) : null;
   return (
-    <article
-      role="button"
-      tabIndex={0}
-      onClick={onOpenDetail}
-      onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onOpenDetail()}
-      className="mx-auto max-w-[700px] px-2 focus:outline-none"
-    >
-      <div className="group -mx-2 px-2 py-5 hover:bg-slate-50 transition">
-        {/* top: avatar left, time right */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-full bg-slate-100 flex items-center justify-center">
-              <PersonIcon />
-            </div>
-          </div>
-          <time className="text-[12px] text-slate-500">{post.ago}</time>
+    <button type="button" onClick={onOpenDetail} className="w-full text-left py-4 px-3 hover:bg-slate-50 transition">
+      <div className="flex items-center gap-3">
+        {badge && <span className="text-[12px] w-4 text-center">{badge}</span>}
+        <div className="h-8 w-8 rounded-full bg-slate-200 flex items-center justify-center">
+          <PersonIcon />
         </div>
-
-        {/* title line with badge (Looking for) */}
-        <div className="mt-2 flex items-start gap-2 flex-wrap">
-          {post.lookingFor && (
-            <span className="inline-flex items-center text-white text-[11px] font-semibold px-2 py-0.5 rounded-full bg-gradient-to-r from-[#FF6B8A] to-[#FF7A70]">
-              Looking for
-              {post.courseCode || post.courseName
-                ? ` · ${post.courseCode || ""}${post.courseCode && post.courseName ? " — " : ""}${post.courseName || ""}`
-                : ""}
-            </span>
-          )}
-          {post.title ? (
-            <h3 className="text-[16px] font-semibold text-slate-900 leading-snug break-words">
-              {post.title}
-            </h3>
-          ) : null}
-        </div>
-
-        {/* first url */}
-        {post.firstUrl && (
-          <span className="mt-1 block text-[14px] text-blue-600 underline-offset-2 group-hover:underline break-all">
-            {post.firstUrl}
-          </span>
-        )}
-
-        {/* preview text */}
-        {post.preview && (
-          <p className="mt-1 text-[14px] text-slate-800 whitespace-pre-line break-words">
-            {post.preview}
-          </p>
-        )}
-
-        {/* images (Instagram-like) */}
-        <MediaGrid images={post.images} />
-
-        {/* meta */}
-        <div className="mt-3 flex items-center gap-6 text-[13px] text-slate-600">
-          <span className="inline-flex items-center gap-1">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
-              <path d="M12 21s-7-4.35-7-10a4 4 0 0 1 7-2 4 4 0 0 1 7 2c0 5.65-7 10-7 10z" stroke="currentColor" strokeWidth="2"/>
-            </svg>
-            {post.likes}
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
-              <path d="M21 15a4 4 0 0 1-4 4H9l-6 4V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v8z" stroke="currentColor" strokeWidth="2"/>
-            </svg>
-            {post.comments}
-          </span>
+        <div className="min-w-0">
+          <div className="truncate font-semibold text-slate-900">{post.title}</div>
+          <div className="text-xs text-slate-500">Posted by anonymous • {new Date(post.createdAt).toLocaleString()}</div>
         </div>
       </div>
-    </article>
+    </button>
   );
 }
 
-/* ===== Page ===== */
+function FreeSearchBar({ value, onSubmit, onReset }) {
+  const [local, setLocal] = useState(value);
+  useEffect(() => setLocal(value), [value]);
+
+  const handle = (e) => {
+    e.preventDefault();
+    onSubmit(local);
+  };
+
+  return (
+    <form
+      onSubmit={handle}
+      className="mx-auto mt-5 w-full max-w-[700px] rounded-full shadow-[0_6px_24px_rgba(0,0,0,0.06)] bg-white border border-slate-200 overflow-hidden"
+    >
+      <div className="grid grid-cols-[1fr_auto] items-stretch">
+        <div className="px-5 py-3">
+          <div className="text-[11px] font-semibold text-slate-500">Keyword</div>
+          <input
+            value={local.q || ""}
+            onChange={(e) => setLocal({ q: e.target.value })}
+            placeholder="Search posts…"
+            className="w-full bg-transparent text-[14px] focus:outline-none"
+          />
+        </div>
+        <div className="flex items-center gap-2 px-3">
+          <button type="button" onClick={() => onReset()} className="px-3 py-2 rounded-full text-sm text-slate-700 hover:bg-slate-100">
+            Reset
+          </button>
+          <button type="submit" className="px-4 py-2 rounded-full bg-black text-white text-sm font-semibold">
+            Search
+          </button>
+        </div>
+      </div>
+    </form>
+  );
+}
+
+function AcademicSearchBar({ value, onSubmit, onReset }) {
+  const [local, setLocal] = useState(value);
+  const [open, setOpen] = useState(false);
+  const anchorRef = useRef(null);
+  const [rect, setRect] = useState({ left: 0, top: 0, width: 0, bottom: 0 });
+
+  useEffect(() => setLocal(value), [value]);
+
+  const measure = () => {
+    const el = anchorRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    setRect({ left: r.left, top: r.top, width: r.width, bottom: r.bottom });
+  };
+
+  useLayoutEffect(() => {
+    measure();
+    const on = () => measure();
+    window.addEventListener("resize", on);
+    window.addEventListener("scroll", on, true);
+    return () => {
+      window.removeEventListener("resize", on);
+      window.removeEventListener("scroll", on, true);
+    };
+  }, []);
+
+  useEffect(() => {
+    const onDoc = (e) => {
+      if (!open) return;
+      if (anchorRef.current && anchorRef.current.contains(e.target)) return;
+      const el = e.target.closest?.("[data-acad-popover]");
+      if (el) return;
+      setOpen(false);
+    };
+    const onEsc = (e) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("click", onDoc);
+    document.addEventListener("keydown", onEsc);
+    return () => {
+      document.removeEventListener("click", onDoc);
+      document.removeEventListener("keydown", onEsc);
+    };
+  }, [open]);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSubmit(local);
+    setOpen(false);
+  };
+
+  const set = (patch) => setLocal((v) => ({ ...v, ...patch }));
+
+  const QUESTION_TOPICS = [
+    { key: "course_planning", label: "Course planning", emoji: "📚", desc: "What to take / prereqs" },
+    { key: "homework_help", label: "Homework help", emoji: "🧩", desc: "Concepts & hints (no full answers)" },
+    { key: "exam_prep", label: "Exam prep", emoji: "📝", desc: "Study strategies / past exams" },
+    { key: "internships", label: "Internships", emoji: "💼", desc: "Applications / referrals / experiences" },
+    { key: "job_search", label: "Job search", emoji: "💻", desc: "Interviews / resume / networking" },
+    { key: "visa_opt_cpt", label: "Visa · OPT · CPT", emoji: "🪪", desc: "International student topics" },
+    { key: "housing", label: "Housing", emoji: "🏠", desc: "On/off campus housing" },
+    { key: "scholarships", label: "Scholarships", emoji: "🎓", desc: "Aid / scholarships / grants" },
+  ];
+
+  const Panel = () =>
+    createPortal(
+      <div
+        data-acad-popover
+        className="z-50 fixed"
+        style={{
+          left: Math.round(rect.left),
+          top: Math.round(rect.bottom + 8),
+          width: Math.round(rect.width),
+          maxWidth: 860,
+        }}
+      >
+        <div className="rounded-3xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
+          <div className="grid grid-cols-1 sm:grid-cols-[280px_1fr]">
+            <div className="p-4 border-b sm:border-b-0 sm:border-r border-slate-200">
+              <div className="text-[12px] font-semibold text-slate-500 mb-2">Type</div>
+              <div className="flex sm:block">
+                {[
+                  { key: "all", label: "All" },
+                  { key: "question", label: "Question ﹖" },
+                  { key: "looking_for", label: "Looking for" },
+                ].map((opt) => {
+                  const active = local.type === opt.key || (!local.type && opt.key === "all");
+                  return (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      onClick={() =>
+                        set({
+                          type: opt.key,
+                          kind:
+                            opt.key === "looking_for"
+                              ? (local.kind && ["course_materials", "study_group", "coffee_chat"].includes(local.kind)
+                                  ? local.kind
+                                  : "course_materials")
+                              : "",
+                        })
+                      }
+                      className={`w-full text-left px-3 py-2 rounded-xl text-[14px] transition ${
+                        active ? "bg-slate-900 text-white" : "hover:bg-slate-50 text-slate-800"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="p-4">
+              {local.type === "looking_for" ? (
+                <>
+                  <div className="text-[12px] font-semibold text-slate-500 mb-2">Looking for · kind</div>
+                  {[
+                    { key: "course_materials", label: "Course materials", emoji: "📝", desc: "Syllabus, notes, exams…" },
+                    { key: "study_group", label: "Study group", emoji: "👥", desc: "Find peers to study together" },
+                    { key: "coffee_chat", label: "Coffee chat", emoji: "☕️", desc: "Casual chat / mentoring" },
+                  ].map((opt) => {
+                    const active = local.kind === opt.key;
+                    return (
+                      <button
+                        key={opt.key}
+                        type="button"
+                        onClick={() => set({ kind: opt.key, type: "looking_for" })}
+                        className={`w-full flex items-start gap-3 rounded-2xl border px-3 py-3 mb-2 text-left transition ${
+                          active ? "border-slate-900 bg-slate-50" : "border-slate-300 hover:bg-slate-50"
+                        }`}
+                      >
+                        <span className="text-xl leading-6">{opt.emoji}</span>
+                        <span>
+                          <div className="font-medium">{opt.label}</div>
+                          <div className="text-[12px] text-slate-500">{opt.desc}</div>
+                        </span>
+                      </button>
+                    );
+                  })}
+                  <div className="pt-2 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onReset();
+                        setOpen(false);
+                      }}
+                      className="px-3 py-2 rounded-xl text-sm text-slate-700 hover:bg-slate-100 mr-2"
+                    >
+                      Reset
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onSubmit(local);
+                        setOpen(false);
+                      }}
+                      className="px-4 py-2 rounded-xl bg-black text-white text-sm font-semibold"
+                    >
+                      Apply
+                    </button>
+                  </div>
+                </>
+              ) : local.type === "question" ? (
+                <>
+                  <div className="text-[12px] font-semibold text-slate-500 mb-2">Question · topic</div>
+                  <div className="max-h-[280px] overflow-auto pr-1">
+                    {QUESTION_TOPICS.map((opt) => {
+                      const active = local.kind === opt.key;
+                      return (
+                        <button
+                          key={opt.key}
+                          type="button"
+                          onClick={() => set({ kind: opt.key, type: "question" })}
+                          className={`w-full flex items-start gap-3 rounded-2xl border px-3 py-3 mb-2 text-left transition ${
+                            active ? "border-slate-900 bg-slate-50" : "border-slate-300 hover:bg-slate-50"
+                          }`}
+                        >
+                          <span className="text-xl leading-6">{opt.emoji}</span>
+                          <span>
+                            <div className="font-medium">{opt.label}</div>
+                            <div className="text-[12px] text-slate-500">{opt.desc}</div>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="pt-2 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onReset();
+                        setOpen(false);
+                      }}
+                      className="px-3 py-2 rounded-xl text-sm text-slate-700 hover:bg-slate-100 mr-2"
+                    >
+                      Reset
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onSubmit(local);
+                        setOpen(false);
+                      }}
+                      className="px-4 py-2 rounded-xl bg-black text-white text-sm font-semibold"
+                    >
+                      Apply
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="text-[13px] text-slate-500">Choose a type on the left to refine your search.</div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>,
+      document.body
+    );
+
+  return (
+    <div className="mx-auto mt-5 w-full max-w-[860px]" ref={anchorRef}>
+      <form
+        onSubmit={handleSubmit}
+        className="rounded-full shadow-[0_6px_24px_rgba(0,0,0,0.06)] bg-white border border-slate-200 overflow-hidden"
+      >
+        <div className="grid grid-cols-[1.2fr_0.9fr_auto] items-stretch">
+          <div className="px-5 py-3 border-r">
+            <div className="text-[11px] font-semibold text-slate-500">Keyword</div>
+            <input
+              value={local.q || ""}
+              onChange={(e) => set({ q: e.target.value })}
+              placeholder="Search academic posts…"
+              className="w-full bg-transparent text-[14px] focus:outline-none"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              measure();
+              setOpen(true);
+            }}
+            className="px-5 text-left py-3 border-r hover:bg-slate-50"
+          >
+            <div className="text-[11px] font-semibold text-slate-500">Type</div>
+            <div className="text-[14px]">
+              {local.type === "looking_for" ? "Looking for" : local.type === "question" ? "Question" : "All"}
+            </div>
+          </button>
+          <div className="flex items-center gap-2 px-3">
+            <button
+              type="button"
+              onClick={() => {
+                onReset();
+                setOpen(false);
+              }}
+              className="px-3 py-2 rounded-full text-sm text-slate-700 hover:bg-slate-100"
+            >
+              Reset
+            </button>
+            <button type="submit" className="px-4 py-2 rounded-full bg-black text-white text-sm font-semibold">
+              Search
+            </button>
+          </div>
+        </div>
+      </form>
+
+      {open && <Panel />}
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { school } = useSchool();
   const { user } = useAuth();
   const schoolPath = useSchoolPath();
@@ -988,77 +491,121 @@ export default function Dashboard() {
   const isAuthed = !!user;
   const schoolKey = school || "nyu";
 
-  const [active, setActive] = useState("general"); // "general" | "academic"
-  const [general, setGeneral] = useState({ loading: true, items: [] });
-  const [academic, setAcademic] = useState({ loading: true, items: [] });
+  const [active, setActive] = useState("general");
+  const [general, setGeneral] = useState({ loading: true, items: [], error: "" });
+  const [academic, setAcademic] = useState({ loading: true, items: [], error: "" });
 
-  // compose states (shared)
+  // composer
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
 
-  // freeboard only
+  // freeboard
   const [images, setImages] = useState([]);
 
-  // academic only
-  const [mode, setMode] = useState("question"); // "question" | "looking_for"
-  const [courseCode, setCourseCode] = useState("");
-  const [courseName, setCourseName] = useState("");
-  const [materialType, setMaterialType] = useState("");
-  const [extraNote, setExtraNote] = useState("");
+  // academic
+  const [mode, setMode] = useState("question");
+  const [lookingKind, setLookingKind] = useState("course_materials");
 
   const [posting, setPosting] = useState(false);
   const [msg, setMsg] = useState({ type: "", text: "" });
 
-  /* fetch posts */
+  useEffect(() => {
+    const p = new URLSearchParams(location.search);
+    const tab = (p.get("tab") || "").toLowerCase();
+    if (tab === "free") setActive("general");
+    else if (tab === "academic" || tab === "career") setActive("academic");
+  }, [location.search]);
+
   useEffect(() => {
     let alive = true;
     async function fetchAll() {
-      setGeneral((s) => ({ ...s, loading: true }));
-      setAcademic((s) => ({ ...s, loading: true }));
+      setGeneral({ loading: true, items: [], error: "" });
+      setAcademic({ loading: true, items: [], error: "" });
       try {
-        const [gen, acad] = await Promise.all([
-          isAuthed
-            ? listPosts({ school: schoolKey, limit: 30, sort: "new" })
-            : getPublicPosts({ school: schoolKey, limit: 30, sort: "new" }),
-          isAuthed
-            ? listCareerPosts({ school: schoolKey, limit: 30, sort: "new" })
-            : getPublicCareerPosts({ school: schoolKey, limit: 30, sort: "new" }),
+        const [genRaw, acadRaw] = await Promise.all([
+          getPublicPosts({ school: schoolKey, limit: 50, sort: "new" }),
+          getPublicCareerPosts({ school: schoolKey, limit: 50, sort: "new" }),
         ]);
         if (!alive) return;
-        setGeneral({ loading: false, items: normalizePosts(gen) });
-        setAcademic({ loading: false, items: normalizePosts(acad) });
-      } catch {
+        const gen = normalizePosts(genRaw);
+        const acad = normalizePosts(acadRaw);
+        setGeneral({ loading: false, items: gen, error: gen.length ? "" : "No posts yet." });
+        setAcademic({ loading: false, items: acad, error: acad.length ? "" : "No posts yet." });
+      } catch (err) {
         if (!alive) return;
-        setGeneral({ loading: false, items: [] });
-        setAcademic({ loading: false, items: [] });
+        const msg = err?.message || "Failed to load posts.";
+        setGeneral({ loading: false, items: [], error: msg });
+        setAcademic({ loading: false, items: [], error: msg });
       }
     }
     fetchAll();
     return () => { alive = false; };
-  }, [isAuthed, schoolKey]);
+  }, [schoolKey]);
 
-  const current = active === "general" ? general : academic;
+  const [freeQuery, setFreeQuery] = useState({ q: "" });
+  const [acadQuery, setAcadQuery] = useState({ q: "", type: "all", kind: "" });
 
-  const goGeneral = () => navigate(schoolPath("/freeboard"));
-  const goAcademic = () => navigate(schoolPath("/career"));
+  const filteredGeneral = useMemo(() => {
+    const { q } = freeQuery;
+    let list = general.items;
+    if (q) {
+      const key = q.toLowerCase();
+      list = list.filter((p) => p.title.toLowerCase().includes(key) || (p.raw?.content || "").toLowerCase().includes(key));
+    }
+    return list;
+  }, [general.items, freeQuery]);
+
+  const filteredAcademic = useMemo(() => {
+    const { q, type, kind } = acadQuery;
+    let list = academic.items;
+    if (q) {
+      const key = q.toLowerCase();
+      list = list.filter((p) => p.title.toLowerCase().includes(key) || (p.raw?.content || "").toLowerCase().includes(key));
+    }
+    if (type !== "all") {
+      list = list.filter((p) => {
+        const t = p.raw?.postType || p.raw?.type || (p.raw?.lookingFor ? "looking_for" : "question");
+        return String(t).toLowerCase() === type;
+      });
+    }
+    if (type === "looking_for" && kind) {
+      list = list.filter((p) => {
+        const k = (p.raw?.kind || p.raw?.category || p.raw?.meta?.kind || (Array.isArray(p.raw?.tags) ? p.raw.tags.join(" ") : "") || "").toLowerCase();
+        return k.includes(kind.replace("_", " "));
+      });
+    }
+    if (type === "question" && kind) {
+      list = list.filter((p) => {
+        const blob = [
+          p.raw?.topic,
+          p.raw?.category,
+          p.raw?.kind,
+          p.raw?.meta?.topic,
+          p.raw?.meta?.category,
+          ...(Array.isArray(p.raw?.tags) ? p.raw.tags : []),
+        ].filter(Boolean).join(" ").toLowerCase();
+        const needle = String(kind).replace(/_/g, " ").toLowerCase();
+        return blob.includes(needle);
+      });
+    }
+    return list;
+  }, [academic.items, acadQuery]);
+
+  const current = active === "general" ? { ...general, items: filteredGeneral } : { ...academic, items: filteredAcademic };
+
+  const schoolNavigate = (p) => navigate(schoolPath(p));
+  const goDashboardFree = () => schoolNavigate("/dashboard?tab=free");
+  const goDashboardAcademic = () => schoolNavigate("/dashboard?tab=academic");
+
   const openDetail = (post) => {
-    const id = post.slug || post._id || post.id;
-    if (!id) return (active === "general" ? goGeneral() : goAcademic());
-    const to =
-      active === "general"
-        ? schoolPath(`/freeboard/${id}`)
-        : schoolPath(`/career/${id}`);
+    const id = post.raw?.slug || post._id || post.raw?._id || post.raw?.id || post.id;
+    if (!id) return active === "general" ? goDashboardFree() : goDashboardAcademic();
+    const to = active === "general" ? schoolPath(`/freeboard/${id}`) : schoolPath(`/career/${id}`);
     navigate(to);
   };
 
-  /* compose guards */
   const canPostGeneral = isAuthed && title.trim() && (content.trim() || images.length);
-  const canPostAcademic =
-    isAuthed &&
-    title.trim() &&
-    (mode === "question"
-      ? content.trim()
-      : courseCode.trim() && materialType.trim());
+  const canPostAcademic = isAuthed && title.trim() && (mode === "question" ? content.trim() : true);
 
   const uploadFiles = async (files) => {
     const urls = [];
@@ -1066,9 +613,7 @@ export default function Dashboard() {
       try {
         const res = await uploadToCloudinary(file);
         if (res?.secure_url || res?.url) urls.push(res.secure_url || res.url);
-      } catch {
-        // ignore individual failures
-      }
+      } catch {}
     }
     return urls;
   };
@@ -1076,92 +621,111 @@ export default function Dashboard() {
   const submitPost = async (e) => {
     e.preventDefault();
     setMsg({ type: "", text: "" });
-    if (!isAuthed) {
-      setMsg({ type: "error", text: "Login required to post." });
-      return;
-    }
+    if (!isAuthed) { setMsg({ type: "error", text: "Login required to post." }); return; }
+
     setPosting(true);
     try {
       if (active === "general") {
         if (!canPostGeneral) throw new Error("Missing fields");
         let imageUrls = [];
         if (images.length) imageUrls = await uploadFiles(images);
-        await createPost({
-          school: schoolKey,
-          title: title.trim(),
-          content: content.trim(),
-          images: imageUrls, // <-- 저장
-        });
+        await createPost({ school: schoolKey, title: title.trim(), content: content.trim(), images: imageUrls });
         setMsg({ type: "success", text: "Posted to Freeboard! Redirecting…" });
-        setTimeout(goGeneral, 400);
+        setTimeout(goDashboardFree, 400);
       } else {
         if (!canPostAcademic) throw new Error("Missing fields");
         const base = { school: schoolKey, title: title.trim() };
+
         if (mode === "question") {
-          await createCareerPost({ ...base, content: content.trim(), postType: "question" });
+          await createCareerPost({ ...base, content: content.trim(), postType: "question", type: "question" });
         } else {
+          // Looking for — 필수 본문 없이도 등록 허용(요청은 상세에서 다른 사람이 보냄)
           await createCareerPost({
             ...base,
-            content: (content || extraNote).trim(),
+            content: content.trim(),
             postType: "looking_for",
-            kind: "looking_for",
+            type: "looking_for",
             category: "looking_for",
             lookingFor: true,
             isLookingFor: true,
-            courseCode: courseCode.trim(),
-            courseName: courseName.trim(),
-            materialType: materialType.trim(),
-            meta: { courseCode: courseCode.trim(), courseName: courseName.trim(), materialType: materialType.trim() },
+            kind: lookingKind,
+            tags: ["looking_for", lookingKind],
+            meta: { kind: lookingKind },
           });
         }
+
         setMsg({ type: "success", text: "Posted to Academic! Redirecting…" });
-        setTimeout(goAcademic, 400);
+        setTimeout(goDashboardAcademic, 400);
       }
+
       // reset
-      setTitle("");
-      setContent("");
-      setImages([]);
-      setCourseCode("");
-      setCourseName("");
-      setMaterialType("");
-      setExtraNote("");
-      setMode("question");
-    } catch {
-      setMsg({ type: "error", text: "Failed to post. Please check required fields." });
+      setTitle(""); setContent(""); setImages([]);
+      setMode("question"); setLookingKind("course_materials");
+    } catch (err) {
+      setMsg({ type: "error", text: err?.message || "Failed to post. Please check required fields." });
     } finally {
       setPosting(false);
     }
   };
 
-  const placeholders = useMemo(() => {
-    return active === "general"
-      ? { footer: <>Posting to <strong>Freeboard</strong> as anonymous.</> }
-      : { footer: <>Posting to <strong>Academic Board</strong> as anonymous.</> };
-  }, [active]);
+  const ComposerHeader = (
+    <div className="flex items-center gap-3 p-4 border-b border-slate-200">
+      <div className="shrink-0 h-10 w-10 rounded-full bg-slate-200 flex items-center justify-center">
+        <PersonIcon />
+      </div>
+      <div className="flex-1">
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder={
+            active === "general"
+              ? "Write a catchy title for your post…"
+              : mode === "question"
+              ? "Ask an academic/career question…"
+              : "Looking for… (short title)"
+          }
+          className="w-full rounded-xl border border-slate-300 px-3 py-2 text-[15px] font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900"
+        />
+        <p className="mt-1 text-xs text-slate-500">Posting as <span className="font-medium">anonymous</span></p>
+      </div>
+    </div>
+  );
 
   return (
     <div className="min-h-screen" style={{ background: TOKENS.pageBg }}>
-      {/* Two columns: feed + Airbnb-like composer */}
       <main className="mx-auto max-w-6xl px-4 py-6 grid grid-cols-1 md:grid-cols-[minmax(620px,700px)_380px] gap-10">
         {/* FEED */}
         <section className="md:col-start-1">
           <Segmented value={active} onChange={setActive} />
+
+          {active === "general" ? (
+            <FreeSearchBar value={freeQuery} onSubmit={setFreeQuery} onReset={() => setFreeQuery({ q: "" })} />
+          ) : (
+            <AcademicSearchBar
+              value={{ q: acadQuery.q, type: acadQuery.type, kind: acadQuery.kind }}
+              onSubmit={setAcadQuery}
+              onReset={() => setAcadQuery({ q: "", type: "all", kind: "" })}
+            />
+          )}
+
           {current.loading ? (
             <FeedSkeleton rows={10} />
           ) : current.items.length ? (
-            <ul className="mt-3 mx-auto max-w-[700px] px-2 divide-y-2 divide-slate-300/90">
+            <ul className="mt-5 mx-auto max-w-[700px] px-2">
               {current.items.map((p) => (
-                <li key={p._id}>
-                  <PostRow post={p} onOpenDetail={() => openDetail(p)} />
+                <li key={p._id || Math.random()}>
+                  <div className="mx-6 border-b border-slate-300/80">
+                    <PostRow post={p} onOpenDetail={() => openDetail(p)} showBadge={active === "academic"} />
+                  </div>
                 </li>
               ))}
             </ul>
           ) : (
             <div className="mx-auto max-w-[700px] text-center py-16">
-              <p className="text-[15px] text-slate-600">No posts yet.</p>
+              <p className="text-[15px] text-slate-600">{current.error || "No posts yet."}</p>
               <button
                 type="button"
-                onClick={active === "general" ? goGeneral : goAcademic}
+                onClick={active === "general" ? goDashboardFree : goDashboardAcademic}
                 className="mt-4 px-4 py-2 rounded-xl bg-black text-white text-[14px] font-semibold"
               >
                 Open {active === "general" ? "Freeboard" : "Academic Board"}
@@ -1170,65 +734,112 @@ export default function Dashboard() {
           )}
         </section>
 
-        {/* COMPOSER (right, AirBnB-like card) */}
+        {/* COMPOSER */}
         <aside className="md:col-start-2 md:sticky md:top-[24px] self-start">
           <CardBox>
             <form onSubmit={submitPost}>
-              {active === "general" ? (
-                <FreeboardForm
-                  title={title} setTitle={setTitle}
-                  content={content} setContent={setContent}
-                  images={images} setImages={setImages}
-                />
-              ) : (
-                <AcademicForm
-                  mode={mode} setMode={setMode}
-                  title={title} setTitle={setTitle}
-                  content={content} setContent={setContent}
-                  courseCode={courseCode} setCourseCode={setCourseCode}
-                  courseName={courseName} setCourseName={setCourseName}
-                  materialType={materialType} setMaterialType={setMaterialType}
-                  extraNote={extraNote} setExtraNote={setExtraNote}
-                />
-              )}
+              {ComposerHeader}
 
-              {/* footer actions */}
-              <div className="px-4 pb-4 pt-2 flex items-center justify-between">
-                <span className="text-xs text-slate-500">{placeholders.footer}</span>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setTitle(""); setContent(""); setImages([]);
-                      setCourseCode(""); setCourseName("");
-                      setMaterialType(""); setExtraNote(""); setMode("question");
-                      setMsg({ type: "", text: "" });
-                    }}
-                    className="rounded-xl border px-3.5 py-2 text-sm font-semibold hover:bg-black/5"
-                    style={{ borderColor: TOKENS.border }}
-                  >
-                    Clear
-                  </button>
+              <div className="p-4 space-y-4">
+                {active === "academic" && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setMode("question")}
+                      className={`px-3 py-1.5 rounded-full text-sm border ${mode === "question" ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"}`}
+                      aria-pressed={mode === "question"}
+                    >
+                      General question
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMode("looking_for")}
+                      className={`px-3 py-1.5 rounded-full text-sm border ${mode === "looking_for" ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"}`}
+                      aria-pressed={mode === "looking_for"}
+                    >
+                      Looking for 📥
+                    </button>
+
+                    {mode === "looking_for" && (
+                      <select
+                        value={lookingKind}
+                        onChange={(e) => setLookingKind(e.target.value)}
+                        className="ml-2 rounded-full border border-slate-300 px-3 py-1.5 text-sm"
+                      >
+                        <option value="course_materials">Course materials</option>
+                        <option value="study_group">Study group</option>
+                        <option value="coffee_chat">Coffee chat</option>
+                      </select>
+                    )}
+                  </div>
+                )}
+
+                <textarea
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  placeholder={
+                    active === "general"
+                      ? "Write your content here…"
+                      : mode === "question"
+                      ? "Describe your academic/career question…"
+                      : lookingKind === "course_materials"
+                      ? "Describe what you need or any context…"
+                      : lookingKind === "study_group"
+                      ? "Describe schedule, level, topic…"
+                      : "Say hello and what you'd like to chat about…"
+                  }
+                  className="w-full min-h-[120px] rounded-xl border border-slate-300 px-3 py-2 text-[14px] text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900"
+                />
+
+                {active === "general" && (
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-slate-700">Images</label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={(e) => setImages(Array.from(e.target.files || []))}
+                      className="block w-full text-sm file:mr-3 file:rounded-lg file:border file:border-slate-300 file:bg-white file:px-3 file:py-2 file:text-sm file:text-slate-700 hover:file:bg-slate-50"
+                    />
+                    {!!images.length && (
+                      <div className="grid grid-cols-3 gap-2">
+                        {images.map((f, idx) => (
+                          <div key={idx} className="h-24 rounded-lg overflow-hidden border border-slate-200">
+                            <img src={URL.createObjectURL(f)} alt={`selected-${idx}`} className="h-full w-full object-cover" />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between pt-2">
+                  <p className="text-[12px] text-slate-500">
+                    Posting to{" "}
+                    <strong>
+                      {active === "general"
+                        ? "Freeboard"
+                        : mode === "question"
+                        ? "Academic"
+                        : `Looking for: ${lookingKind === "course_materials" ? "Course materials" : lookingKind === "study_group" ? "Study group" : "Coffee chat"}`}
+                    </strong>
+                    .
+                  </p>
                   <button
                     type="submit"
                     disabled={posting || (active === "general" ? !canPostGeneral : !canPostAcademic)}
-                    className="rounded-xl px-4 py-2 text-white text-sm font-semibold disabled:opacity-50"
-                    style={{ background: TOKENS.primary }}
+                    className="rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-900 disabled:opacity-60"
                   >
-                    {posting ? "Posting..." : "Post"}
+                    {posting ? "Posting…" : "Post"}
                   </button>
                 </div>
-              </div>
 
-              {msg.text && (
-                <div
-                  className={`mx-4 mb-4 rounded-xl px-3 py-2 text-sm ${
-                    msg.type === "success" ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
-                  }`}
-                >
-                  {msg.text}
-                </div>
-              )}
+                {!!msg.text && (
+                  <div className={`text-sm rounded-lg px-3 py-2 ${msg.type === "success" ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
+                    {msg.text}
+                  </div>
+                )}
+              </div>
             </form>
           </CardBox>
         </aside>
@@ -1237,89 +848,9 @@ export default function Dashboard() {
   );
 }
 
-/* ===== helpers (normalizer now collects images) ===== */
-function normalizePosts(res) {
-  const arr =
-    (Array.isArray(res?.items) && res.items) ||
-    (Array.isArray(res?.data) && res.data) ||
-    (Array.isArray(res) && res) ||
-    [];
 
-  return arr.slice(0, 50).map((p) => {
-    const title = (p.title || p.subject || "").toString().trim();
-    const body = (p.content || p.text || p.body || "").toString();
 
-    const firstUrl = extractFirstUrl([p.link, p.url, p.sourceUrl, body]);
-    const cleaned = body.replace(/https?:\/\/[^\s)]+/gi, "").trim();
-    const preview = dedupeTitleFromBody(title, cleaned).slice(0, 240);
 
-    const comments =
-      (typeof p.commentsCount === "number" && p.commentsCount) ||
-      (Array.isArray(p.comments) ? p.comments.length : 0) ||
-      (typeof p.replies === "number" ? p.replies : 0);
 
-    const likes =
-      (typeof p.likesCount === "number" && p.likesCount) ||
-      (Array.isArray(p.likes) ? p.likes.length : 0) ||
-      (typeof p.upvotes === "number" ? p.upvotes : 0);
 
-    const lookingFor =
-      p.lookingFor ||
-      p.isLookingFor ||
-      p.kind === "looking_for" ||
-      p.category === "looking_for" ||
-      p.postType === "looking_for" ||
-      p.type === "looking_for";
 
-    const courseCode = p.courseCode || p.course || p.course_code || p?.meta?.courseCode || "";
-    const courseName = p.courseName || p.course_name || p?.meta?.courseName || "";
-
-    // collect possible image fields
-    const rawImgs =
-      (Array.isArray(p.images) && p.images) ||
-      (Array.isArray(p.imageUrls) && p.imageUrls) ||
-      (Array.isArray(p.media) && p.media) ||
-      [];
-    const images = rawImgs
-      .map((x) => (typeof x === "string" ? x : x?.url || x?.secure_url || ""))
-      .filter(Boolean);
-
-    return {
-      _id: p._id || p.id || Math.random().toString(36).slice(2),
-      slug: p.slug,
-      title,
-      preview,
-      firstUrl,
-      comments,
-      likes,
-      ago: p.createdAt ? timeAgo(p.createdAt) : "",
-      lookingFor: !!lookingFor,
-      courseCode,
-      courseName,
-      images,
-    };
-  });
-}
-function extractFirstUrl(sources) {
-  const text = sources.filter(Boolean).join(" ");
-  const m = text.match(/https?:\/\/[^\s)]+/i);
-  return m ? m[0] : null;
-}
-function dedupeTitleFromBody(title, body) {
-  if (!title) return body;
-  const t = title.trim();
-  const b = body.trim();
-  if (!b) return "";
-  if (b.toLowerCase().startsWith(t.toLowerCase())) return b.slice(t.length).trim();
-  return b;
-}
-function timeAgo(iso) {
-  try {
-    const d = new Date(iso);
-    const s = Math.floor((Date.now() - d.getTime()) / 1000);
-    if (s < 60) return `${s}s ago`;
-    if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-    if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-    return `${Math.floor(s / 86400)}d ago`;
-  } catch { return ""; }
-}

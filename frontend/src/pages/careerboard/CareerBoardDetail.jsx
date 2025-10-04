@@ -18,6 +18,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useSchool } from "../../contexts/SchoolContext";
 import { useLoginGate } from "../../hooks/useLoginGate";
 import { apiFetch } from "../../api/http";
+import { sendRequest, checkRequested } from "../../api/request";
 
 dayjs.extend(relativeTime);
 dayjs.locale("en");
@@ -38,6 +39,12 @@ export default function CareerBoardDetail() {
   const [editTitle, setEditTitle] = useState("");
   const [editContent, setEditContent] = useState("");
   const [saving, setSaving] = useState(false);
+
+  // request UI
+  const [reqOpen, setReqOpen] = useState(false);
+  const [reqMsg, setReqMsg] = useState("");
+  const [sending, setSending] = useState(false);
+  const [already, setAlready] = useState({ exists: false, conversationId: null });
 
   const loadPost = async () => {
     try {
@@ -80,13 +87,34 @@ export default function CareerBoardDetail() {
     [user, post]
   );
 
+  const isLookingFor = useMemo(() => {
+    const t = String(post?.postType || post?.type || "").toLowerCase();
+    return t === "looking_for";
+  }, [post]);
+
+  // 이미 요청했는지 체크 (로그인 사용자만)
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      if (!token || !school || !post?._id || !isLookingFor) return;
+      try {
+        const r = await checkRequested({ school, targetId: post._id });
+        if (!alive) return;
+        setAlready({ exists: !!r?.exists, conversationId: r?.conversationId || null });
+      } catch {}
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [token, school, post?._id, isLookingFor]);
+
   const handleDelete = async () => {
     ensureAuth(async () => {
       if (!window.confirm("Delete this post?")) return;
       try {
         await deleteCareerPost({ school, id: post._id });
         alert("Post deleted.");
-        navigate(schoolPath("/career"));
+        navigate(schoolPath("/dashboard?tab=academic"));
       } catch (err) {
         alert("Delete failed: " + (err.message || "Unknown error"));
       }
@@ -140,6 +168,41 @@ export default function CareerBoardDetail() {
     setEditContent(post?.content || "");
     setIsEditing(false);
   };
+
+  const openRequest = () =>
+    ensureAuth(() => {
+      if (already.exists && already.conversationId) {
+        // 이미 있으면 메시지 화면으로 이동
+        navigate(schoolPath(`/messages?conversation=${already.conversationId}`));
+      } else {
+        setReqOpen(true);
+      }
+    });
+
+  const submitRequest = () =>
+    ensureAuth(async () => {
+      if (!isLookingFor) return;
+      const text = (reqMsg || "").trim();
+      if (!text) {
+        alert("Write a short hello message.");
+        return;
+      }
+      setSending(true);
+      try {
+        const r = await sendRequest({ school, targetId: post._id, initialMessage: text });
+        const cid = r?.conversationId;
+        if (cid) {
+          setReqOpen(false);
+          navigate(schoolPath(`/messages?conversation=${cid}`));
+        } else {
+          alert("Sent, but failed to find the conversation ID.");
+        }
+      } catch (e) {
+        alert(e?.message || "Failed to send request.");
+      } finally {
+        setSending(false);
+      }
+    });
 
   if (error) {
     return (
@@ -219,6 +282,18 @@ export default function CareerBoardDetail() {
                   <button onClick={handleCancelEdit} className="rounded-lg border px-3 py-1 text-sm">Cancel</button>
                 </>
               )}
+
+              {/* ✅ Request 버튼: 오직 "looking_for" + 비작성자일 때만 */}
+              {!isAuthor && isLookingFor && (
+                <button
+                  onClick={openRequest}
+                  className="rounded-lg border px-3 py-1 text-sm"
+                  title={already.exists ? "You already requested" : "Send request (first message)"}
+                  disabled={already.exists && !!already.conversationId}
+                >
+                  {already.exists && already.conversationId ? "Requested" : "Send request"}
+                </button>
+              )}
             </div>
           </div>
 
@@ -228,13 +303,43 @@ export default function CareerBoardDetail() {
         </div>
 
         <div className="mt-6">
-          <button onClick={() => navigate(schoolPath("/career"))} className="text-sm text-gray-600 hover:underline">
+          <button onClick={() => navigate(schoolPath("/dashboard?tab=academic"))} className="text-sm text-gray-600 hover:underline">
             ← Back to list
           </button>
         </div>
       </div>
+
+      {/* ✅ 간단한 모달 */}
+      {reqOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
+            <h3 className="mb-2 text-lg font-semibold">Send request</h3>
+            <p className="mb-3 text-sm text-gray-600">
+              This sends your first message to the author. A conversation will be created.
+            </p>
+            <textarea
+              value={reqMsg}
+              onChange={(e) => setReqMsg(e.target.value)}
+              placeholder="Say hello and what you’re looking for…"
+              className="h-28 w-full resize-none rounded-xl border px-3 py-2 text-sm"
+            />
+            <div className="mt-3 flex justify-end gap-2">
+              <button onClick={() => setReqOpen(false)} className="rounded-lg border px-3 py-1 text-sm">Cancel</button>
+              <button
+                onClick={submitRequest}
+                disabled={sending}
+                className="rounded-lg bg-gray-900 px-3 py-1 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                {sending ? "Sending…" : "Send"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
+
 
 
