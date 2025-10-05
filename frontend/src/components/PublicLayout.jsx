@@ -35,7 +35,7 @@ export default function PublicLayout() {
   return (
     <div className="min-h-screen flex bg-gray-50">
       {/* Left Sidebar */}
-      <aside className="hidden md:flex md:w-60 flex-col border-r bg-white">
+      {/* <aside className="hidden md:flex md:w-60 flex-col border-r bg-white">
         <div className="p-4 border-b">
           <Link to="/" className="inline-flex items-center gap-2">
             <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-red-600 text-white font-black">C</span>
@@ -75,7 +75,7 @@ export default function PublicLayout() {
             </div>
           )}
         </div>
-      </aside>
+      </aside> */}
 
       {/* Right column */}
       <div className="flex-1 min-w-0 flex flex-col">
