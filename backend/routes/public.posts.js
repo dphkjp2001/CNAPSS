@@ -8,7 +8,8 @@ const ALLOWED_SCHOOLS = ["nyu", "columbia", "boston"];
 
 /**
  * GET /api/public/:school/posts
- * Query: page, limit, q, sort(new|old)
+ * Query: page, limit, q, sort(new|old), board(freeboard|academic), mode(general|looking_for)
+ * 공개 리스트에서도 최소한 board/mode/kind를 내려줘야 FE에서 배지/필터 가능.
  */
 router.get("/", async (req, res) => {
   try {
@@ -23,8 +24,15 @@ router.get("/", async (req, res) => {
     const sortOpt = String(req.query.sort || "new").toLowerCase();
     const sortStage = sortOpt === "old" ? { createdAt: 1, _id: 1 } : { createdAt: -1, _id: -1 };
 
+    const board = String(req.query.board || "").toLowerCase();
+    const mode = String(req.query.mode || "").toLowerCase();
+
     const match = { school };
-    if (q) match.title = { $regex: q, $options: "i" };
+    if (q) {
+      match.$or = [{ title: { $regex: q, $options: "i" } }, { content: { $regex: q, $options: "i" } }];
+    }
+    if (board === "academic" || board === "freeboard") match.board = board;
+    if (mode === "general" || mode === "looking_for") match.mode = mode;
 
     const total = await Post.countDocuments(match);
 
@@ -37,14 +45,23 @@ router.get("/", async (req, res) => {
         $project: {
           _id: 1,
           title: 1,
-          content: 1,   // ✅ preview 허용
-          images: 1,    // ✅ 이미지 포함
+          content: 1,
+          images: 1,
           createdAt: 1,
-          school: 1,
-          likesCount: { $size: { $ifNull: ["$thumbsUpUsers", []] } },
+          board: 1,
+          mode: 1,
+          kind: 1,
+          category: 1,
+          tags: 1,
+          likesCount: {
+            $cond: [
+              { $gt: [{ $size: { $ifNull: ["$likes", []] } }, 0] },
+              { $size: { $ifNull: ["$likes", []] } },
+              { $size: { $ifNull: ["$thumbsUpUsers", []] } },
+            ],
+          },
         },
       },
-      { $project: { school: 0 } },
     ]);
 
     res.json({ page, limit, total, items });
@@ -67,7 +84,7 @@ router.get("/:id", async (req, res) => {
 
     const post = await Post.findOne(
       { _id: req.params.id, school },
-      "_id title content images createdAt"
+      "_id title content images createdAt board mode kind category tags"
     ).lean();
     if (!post) return res.status(404).json({ message: "Post not found." });
 
@@ -79,5 +96,6 @@ router.get("/:id", async (req, res) => {
 });
 
 module.exports = router;
+
 
 

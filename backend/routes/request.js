@@ -5,54 +5,53 @@ const mongoose = require("mongoose");
 const Request = require("../models/Request");
 const Conversation = require("../models/Conversation");
 const Message = require("../models/Message");
-const CareerPost = require("../models/CareerPost");
+const Post = require("../models/Post"); // ✅ use Post instead of CareerPost
 
 const requireAuth = require("../middleware/requireAuth");
 const schoolGuard = require("../middleware/schoolGuard");
 
 const router = express.Router({ mergeParams: true });
 
-// 모든 라우트는 app.js에서 requireAuth + schoolGuard가 이미 걸려있지만,
-// 직접 접근 시를 대비해 한 번 더 보강
+// Hard guard (defense in depth)
 router.use(requireAuth, schoolGuard);
 
 /**
  * POST /api/:school/request
- * Academic "Looking for" 글에 대한 요청(=첫 메시지) 생성
+ * Academic "Looking for" post only
  * body: { targetId, initialMessage }
- * 결과: { ok, requestId, conversationId }
+ * result: { ok, requestId, conversationId }
  */
 router.post("/", async (req, res) => {
   try {
-    const school = req.params.school;
-    const userEmail = (req.user?.email || "").toLowerCase();
+    const school = String(req.params.school || "").toLowerCase();
+    const userEmail = String(req.user?.email || "").toLowerCase();
     const { targetId, initialMessage } = req.body || {};
 
     if (!mongoose.isValidObjectId(targetId)) {
       return res.status(400).json({ error: "Invalid targetId." });
     }
 
-    const post = await CareerPost.findById(targetId).lean();
+    const post = await Post.findOne({ _id: targetId, school }).lean();
     if (!post) return res.status(404).json({ error: "Post not found." });
-    if ((post.school || "").toLowerCase() !== (school || "").toLowerCase()) {
-      return res.status(403).json({ error: "School scope mismatch." });
+
+    // ✅ Only academic 'looking_for'
+    const board = String(post.board || "").toLowerCase();
+    const mode =
+      String(post.mode || post.kind || post.type || (post.lookingFor ? "looking_for" : "general"))
+        .toLowerCase();
+
+    if (!(board === "academic" && mode === "looking_for")) {
+      return res.status(400).json({ error: "Requests are only allowed on academic 'looking_for' posts." });
     }
 
-    const authorEmail = String(post.email || "").toLowerCase();
-    if (!authorEmail) return res.status(400).json({ error: "Post has no author." });
-
-    // 오직 'looking_for' 타입만 허용
-    const postType = String(post.postType || post.type || "").toLowerCase();
-    if (postType !== "looking_for") {
-      return res.status(400).json({ error: "Only 'looking for' posts accept requests." });
-    }
-
+    const authorEmail = String(post.email || post.authorEmail || "").toLowerCase();
+    if (!authorEmail) return res.status(400).json({ error: "Post has no author email." });
     if (authorEmail === userEmail) {
       return res.status(400).json({ error: "You cannot send a request to your own post." });
     }
 
-    // 중복 요청 방지
-    const exists = await Request.findOne({ targetId, fromUser: userEmail });
+    // Duplicate guard
+    const exists = await Request.findOne({ school, targetId, fromUser: userEmail });
     if (exists) {
       return res.status(409).json({
         error: "You have already requested.",
@@ -61,24 +60,20 @@ router.post("/", async (req, res) => {
       });
     }
 
-    // 대화가 이미 있는지 탐색(양방향)
+    // Start or reuse conversation (buyer/seller semantics kept)
     let convo = await Conversation.findOne({
       school,
       $or: [
         { buyer: userEmail, seller: authorEmail },
         { buyer: authorEmail, seller: userEmail },
       ],
-      // 특정 글 기준으로 묶을 수 있으면 좋지만, itemId 필드가 없을 수도 있어 optional
-      $orIgnore: true,
     });
 
     if (!convo) {
-      // 새 대화 생성
       convo = await Conversation.create({
         school,
         buyer: userEmail,
         seller: authorEmail,
-        // 기존 스키마에 없을 수도 있는 필드이므로 optional
         source: "academic_looking_for",
         itemId: targetId,
         resourceTitle: post.title || "Looking for",
@@ -86,8 +81,7 @@ router.post("/", async (req, res) => {
       });
     }
 
-    // 첫 메시지 생성
-    const text = (initialMessage || "").trim() || "Hi! I'm interested in your post.";
+    const text = String(initialMessage || "").trim() || "Hi! I'm interested in your post.";
     const msg = await Message.create({
       conversationId: convo._id,
       sender: userEmail,
@@ -95,15 +89,13 @@ router.post("/", async (req, res) => {
       school,
     });
 
-    // 대화 갱신
     convo.lastMessage = text;
     convo.updatedAt = new Date();
     await convo.save();
 
-    // Request 레코드 (자동 수락된 상태로 기록)
     const reqDoc = await Request.create({
       school,
-      targetType: "career_post",
+      targetType: "academic_post", // ✅
       targetId,
       fromUser: userEmail,
       toUser: authorEmail,
@@ -112,11 +104,10 @@ router.post("/", async (req, res) => {
       conversationId: convo._id,
     });
 
-    // 소켓 알림(상대방 목록 갱신)
+    // Socket preview to the author (best-effort)
     try {
       const io = req.app.get("io");
       if (io) {
-        // 대화방 참여자들에게 미리보기 전달
         io.to(`user:${authorEmail}`).emit("chat:preview", {
           conversationId: String(convo._id),
           lastMessage: text,
@@ -140,13 +131,13 @@ router.post("/", async (req, res) => {
 
 /**
  * GET /api/:school/request/exists?targetId=...
- * 현재 로그인 사용자가 이미 요청했는지 여부(버튼 상태용)
  */
 router.get("/exists", async (req, res) => {
   try {
-    const school = req.params.school;
-    const userEmail = (req.user?.email || "").toLowerCase();
+    const school = String(req.params.school || "").toLowerCase();
+    const userEmail = String(req.user?.email || "").toLowerCase();
     const { targetId } = req.query || {};
+
     if (!mongoose.isValidObjectId(targetId)) {
       return res.status(400).json({ error: "Invalid targetId." });
     }
@@ -163,6 +154,7 @@ router.get("/exists", async (req, res) => {
 });
 
 module.exports = router;
+
 
 
 

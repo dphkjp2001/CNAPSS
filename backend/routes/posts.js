@@ -9,71 +9,79 @@ const Post = require("../models/Post");
 const Comment = require("../models/Comment");
 
 // ---------------------------------------------
-// Helpers: normalize inbound flags into 'mode'
+// Helpers
 // ---------------------------------------------
+function normalizeBoard(v) {
+  const s = String(v || "").toLowerCase();
+  if (["free", "freeboard", "free_board"].includes(s)) return "freeboard";
+  if (["academic", "career", "careerboard"].includes(s)) return "academic";
+  return "freeboard";
+}
+
+// normalize inbound flags into 'mode'
 function resolveMode({ board, mode, kind, type, lookingFor }) {
-  const inbound = mode || kind || type || (lookingFor ? "looking_for" : null);
+  const inbound = (mode || kind || type || (lookingFor ? "looking_for" : "") || "").toLowerCase();
   const normalized =
     inbound === "looking_for" || inbound === "looking" || inbound === "lf"
       ? "looking_for"
       : "general";
-  return board === "academic" ? normalized : "general";
+  return normalizeBoard(board) === "academic" ? normalized : "general";
 }
 
 // Ensure FE compatibility keys always exist in response
 function serializePost(doc) {
   const obj = doc.toJSON ? doc.toJSON() : { ...doc };
-  // prefer stored mode; fallback to resolver
-  const m = obj.mode || resolveMode(obj);
+  const board = normalizeBoard(obj.board);
+  const m = obj.mode || resolveMode({ ...obj, board });
 
-  const modeFinal = obj.board === "academic" ? m : "general";
+  const modeFinal = board === "academic" ? m : "general";
 
   return {
     ...obj,
+    board,
     mode: modeFinal,
-    kind: obj.kind || modeFinal,
+    kind: obj.kind || obj.category || obj?.meta?.kind || "",
     type: obj.type || modeFinal,
     lookingFor:
       typeof obj.lookingFor === "boolean" ? obj.lookingFor : modeFinal === "looking_for",
-    // convenience counts
-    likesCount: Array.isArray(obj.likes) ? obj.likes.length : 0,
+    likesCount: Array.isArray(obj.likes)
+      ? obj.likes.length
+      : Array.isArray(obj.thumbsUpUsers)
+      ? obj.thumbsUpUsers.length
+      : 0,
   };
 }
 
 // ---------------------------------------------
-// GET /:school/posts
-// Protected list (board scoped, paging, q, sorting)
+// GET /:school/posts  (protected list)
+// Query: board(freeboard|academic), mode(general|looking_for), q, page, limit, sort(recent|mostLiked)
 // ---------------------------------------------
 router.get("/:school/posts", requireAuth, schoolGuard, async (req, res, next) => {
   try {
     const { school } = req.params;
-
     const {
-      board, // 'free' | 'academic'
-      mode, // 'general' | 'looking_for'
-      q, // search query on title/content
+      board,
+      mode,
+      q,
       page = 1,
       limit = 20,
-      sort = "recent", // 'recent' | 'mostLiked'
+      sort = "recent",
     } = req.query;
 
     const pageNum = Math.max(parseInt(page, 10) || 1, 1);
     const limitNum = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
 
     const filter = { school };
-    if (board) filter.board = board;
-
-    // If client requests a mode filter, respect it (only meaningful for academic)
-    if (mode === "general" || mode === "looking_for") {
-      filter.mode = mode;
-    }
+    const boardNorm = normalizeBoard(board);
+    if (board) filter.board = boardNorm;
+    if (mode === "general" || mode === "looking_for") filter.mode = mode;
 
     if (q && typeof q === "string" && q.trim()) {
       const rx = new RegExp(q.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
       filter.$or = [{ title: rx }, { content: rx }];
     }
 
-    let sortObj = { createdAt: -1 };
+    let sortObj = { createdAt: -1, _id: -1 };
     if (sort === "mostLiked") sortObj = { "likes.length": -1, createdAt: -1 };
 
     const [items, total] = await Promise.all([
@@ -85,10 +93,8 @@ router.get("/:school/posts", requireAuth, schoolGuard, async (req, res, next) =>
       Post.countDocuments(filter),
     ]);
 
-    const data = items.map(serializePost);
-
     res.json({
-      data,
+      data: items.map(serializePost),
       paging: {
         page: pageNum,
         limit: limitNum,
@@ -109,9 +115,7 @@ router.get("/:school/posts/:id", requireAuth, schoolGuard, async (req, res, next
     const { school, id } = req.params;
     const post = await Post.findOne({ _id: id, school }).lean();
     if (!post) return res.status(404).json({ message: "Post not found" });
-
-    const serialized = serializePost(post);
-    res.json(serialized);
+    res.json(serializePost(post));
   } catch (err) {
     next(err);
   }
@@ -119,43 +123,47 @@ router.get("/:school/posts/:id", requireAuth, schoolGuard, async (req, res, next
 
 // ---------------------------------------------
 // POST /:school/posts  (create)
+// Body: { title, content, board, images?, mode?, kind?, type?, lookingFor? }
 // ---------------------------------------------
 router.post("/:school/posts", requireAuth, schoolGuard, async (req, res, next) => {
   try {
     const { school } = req.params;
 
-    // Whitelist but allow aliases (mode/kind/type/lookingFor)
     const {
       title,
       content,
-      board = "free",
+      board = "freeboard",
       images = [],
       anonymous = false,
       mode,
       kind,
       type,
       lookingFor,
-    } = req.body;
+      tags = [],
+      category,
+    } = req.body || {};
 
     if (!title || typeof title !== "string") {
       return res.status(400).json({ message: "title is required" });
     }
 
-    const finalMode = resolveMode({ board, mode, kind, type, lookingFor });
+    const boardNorm = normalizeBoard(board);
+    const finalMode = resolveMode({ board: boardNorm, mode, kind, type, lookingFor });
 
     const post = await Post.create({
       school,
-      board,
+      board: boardNorm,
       title: title.trim(),
       content: content || "",
       images: Array.isArray(images) ? images : [],
       anonymous: !!anonymous,
       author: req.user._id,
       mode: finalMode,
-      // keep aliases for backward compatibility
-      kind,
+      kind: kind || category || "",
       type,
       lookingFor,
+      tags: Array.isArray(tags) ? tags : [],
+      category: category || "",
     });
 
     res.status(201).json(serializePost(post));
@@ -170,7 +178,6 @@ router.post("/:school/posts", requireAuth, schoolGuard, async (req, res, next) =
 router.patch("/:school/posts/:id", requireAuth, schoolGuard, async (req, res, next) => {
   try {
     const { school, id } = req.params;
-
     const {
       title,
       content,
@@ -181,7 +188,9 @@ router.patch("/:school/posts/:id", requireAuth, schoolGuard, async (req, res, ne
       kind,
       type,
       lookingFor,
-    } = req.body;
+      tags,
+      category,
+    } = req.body || {};
 
     const post = await Post.findOne({ _id: id, school });
     if (!post) return res.status(404).json({ message: "Post not found" });
@@ -193,18 +202,16 @@ router.patch("/:school/posts/:id", requireAuth, schoolGuard, async (req, res, ne
     if (typeof content !== "undefined") post.content = String(content);
     if (typeof images !== "undefined") post.images = Array.isArray(images) ? images : [];
     if (typeof anonymous !== "undefined") post.anonymous = !!anonymous;
-    if (typeof board !== "undefined") post.board = board;
-
-    // accept alias flags from FE
-    if (typeof mode !== "undefined") post.mode = mode;
+    if (typeof board !== "undefined") post.board = normalizeBoard(board);
     if (typeof kind !== "undefined") post.kind = kind;
     if (typeof type !== "undefined") post.type = type;
-    if (typeof lookingFor !== "undefined") post.lookingFor = lookingFor;
+    if (typeof lookingFor !== "undefined") post.lookingFor = !!lookingFor;
+    if (typeof tags !== "undefined") post.tags = Array.isArray(tags) ? tags : [];
+    if (typeof category !== "undefined") post.category = category;
 
-    // normalize final mode before save
     post.mode = resolveMode({
       board: post.board,
-      mode: post.mode,
+      mode: typeof mode !== "undefined" ? mode : post.mode,
       kind: post.kind,
       type: post.type,
       lookingFor: post.lookingFor,
@@ -232,7 +239,6 @@ router.delete("/:school/posts/:id", requireAuth, schoolGuard, async (req, res, n
 
     await Promise.all([
       Post.deleteOne({ _id: id, school }),
-      // Cascade remove comments for this post (if your Comment schema uses 'post')
       Comment.deleteMany({ post: id, school }),
     ]);
 
@@ -243,47 +249,43 @@ router.delete("/:school/posts/:id", requireAuth, schoolGuard, async (req, res, n
 });
 
 // ---------------------------------------------
-// POST /:school/posts/:id/like  (toggle or explicit action)
-// body: { action?: 'like' | 'unlike' }
+// POST /:school/posts/:id/like
 // ---------------------------------------------
-router.post(
-  "/:school/posts/:id/like",
-  requireAuth,
-  schoolGuard,
-  async (req, res, next) => {
-    try {
-      const { school, id } = req.params;
-      const { action } = req.body || {};
-      const userId = String(req.user._id);
+router.post("/:school/posts/:id/like", requireAuth, schoolGuard, async (req, res, next) => {
+  try {
+    const { school, id } = req.params;
+    const { action } = req.body || {};
+    const userId = String(req.user._id);
 
-      const post = await Post.findOne({ _id: id, school });
-      if (!post) return res.status(404).json({ message: "Post not found" });
+    const post = await Post.findOne({ _id: id, school });
+    if (!post) return res.status(404).json({ message: "Post not found" });
 
-      const hasLiked = post.likes.some((u) => String(u) === userId);
+    const hasLiked = post.likes?.some?.((u) => String(u) === userId);
 
-      let doLike = !hasLiked;
-      if (action === "like") doLike = true;
-      if (action === "unlike") doLike = false;
+    let doLike = !hasLiked;
+    if (action === "like") doLike = true;
+    if (action === "unlike") doLike = false;
 
-      if (doLike && !hasLiked) {
-        post.likes.push(req.user._id);
-      } else if (!doLike && hasLiked) {
-        post.likes = post.likes.filter((u) => String(u) !== userId);
-      }
-
-      await post.save();
-
-      res.json({
-        ...serializePost(post.toObject()),
-        liked: doLike,
-      });
-    } catch (err) {
-      next(err);
+    if (doLike && !hasLiked) {
+      post.likes = Array.isArray(post.likes) ? post.likes : [];
+      post.likes.push(req.user._id);
+    } else if (!doLike && hasLiked) {
+      post.likes = post.likes.filter((u) => String(u) !== userId);
     }
+
+    await post.save();
+
+    res.json({
+      ...serializePost(post.toObject()),
+      liked: doLike,
+    });
+  } catch (err) {
+    next(err);
   }
-);
+});
 
 module.exports = router;
+
 
 
 

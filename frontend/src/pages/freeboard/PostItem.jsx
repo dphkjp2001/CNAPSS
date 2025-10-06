@@ -1,118 +1,60 @@
-//  frontend/src/pages/freeboard/PostItem.jsx
-import React, { useState } from "react";
-import { useAuth } from "../../contexts/AuthContext";
-import { useSchool } from "../../contexts/SchoolContext";
-import { updatePost, deletePost } from "../../api/posts";
+// frontend/src/components/PostItem.jsx
+import React from "react";
+import { useNavigate } from "react-router-dom";
+import { useSchoolPath } from "../../utils/schoolPath";
 
-function PostItem({ post, onDelete, onUpdate }) {
-  const { user } = useAuth();
-  const { school } = useSchool();
+const KIND_EMOJI = {
+  course_materials: "📝",
+  study_group: "👥",
+  coffee_chat: "☕️",
+};
 
-  const [isEditing, setIsEditing] = useState(false);
-  const [editedContent, setEditedContent] = useState(post.content);
-  const [loading, setLoading] = useState(false);
+export default function PostItem({ post }) {
+  const navigate = useNavigate();
+  const schoolPath = useSchoolPath();
 
-  const isAuthor =
-    String(user?.email || "").toLowerCase() === String(post?.email || "").toLowerCase();
+  const isLooking = post?.type === "looking_for" || post?.lookingFor === true;
+  const kind = post?.lookingForKind || "course_materials";
+  const emoji = KIND_EMOJI[kind] || "🔎";
 
-  const handleDelete = async () => {
-    if (!window.confirm("Are you sure you want to delete this post?")) return;
-    if (!school || !post?._id) return;
-
-    try {
-      setLoading(true);
-      await deletePost({ school, id: post._id }); // ✅ /:school/posts/:id
-      onDelete?.(post._id);
-    } catch (err) {
-      alert("Failed to delete post: " + (err?.message || "Unknown error"));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSave = async () => {
-    if (!school || !post?._id) return;
-
-    try {
-      setLoading(true);
-      const updated = await updatePost({
-        school,
-        id: post._id,
-        title: post.title,          // 인라인 편집은 content만 바꾸고 title은 유지
-        content: editedContent,
-      });
-      onUpdate?.(updated?.post || updated); // 래퍼가 반환하는 형태 대응
-      setIsEditing(false);
-    } catch (err) {
-      alert("Failed to update post: " + (err?.message || "Unknown error"));
-    } finally {
-      setLoading(false);
+  const goDetail = () => {
+    if (isLooking) {
+      navigate(schoolPath(`/academic/requests/${post._id || post.id}`));
+    } else {
+      navigate(schoolPath(`/freeboard/${post._id || post.id}`));
     }
   };
 
   return (
-    <div className="rounded border p-4 shadow-sm">
-      <h3 className="mb-1 text-lg font-semibold">{post.title}</h3>
-      <p className="mb-2 text-sm text-gray-500">
-        Posted by: {post.nickname ? "anonymous" : "anonymous"}
-      </p>
-
-      {isEditing ? (
-        <textarea
-          className="mb-2 w-full resize-y rounded border p-2"
-          rows={3}
-          value={editedContent}
-          onChange={(e) => setEditedContent(e.target.value)}
-        />
-      ) : (
-        <p className="mb-2 whitespace-pre-wrap">{post.content}</p>
-      )}
-
-      {isAuthor && (
-        <div className="flex gap-2">
-          {isEditing ? (
-            <>
-              <button
-                onClick={handleSave}
-                disabled={loading}
-                className="rounded bg-green-500 px-3 py-1 text-white disabled:opacity-60"
-              >
-                {loading ? "Saving..." : "Save"}
-              </button>
-              <button
-                onClick={() => {
-                  setIsEditing(false);
-                  setEditedContent(post.content);
-                }}
-                className="rounded bg-gray-400 px-3 py-1 text-white"
-              >
-                Cancel
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                onClick={() => setIsEditing(true)}
-                className="rounded bg-yellow-500 px-3 py-1 text-white"
-              >
-                Edit
-              </button>
-              <button
-                onClick={handleDelete}
-                disabled={loading}
-                className="rounded bg-red-500 px-3 py-1 text-white disabled:opacity-60"
-              >
-                {loading ? "Deleting..." : "Delete"}
-              </button>
-            </>
-          )}
+    <li>
+      <button
+        className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left hover:bg-gray-50"
+        onClick={goDetail}
+      >
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-gray-300 bg-white text-[15px]">
+          {isLooking ? emoji : "?"}
         </div>
-      )}
-    </div>
+
+        <div className="min-w-0 grow">
+          <div className="truncate text-[15px] font-semibold text-gray-900">
+            {post.title || "(untitled)"}
+          </div>
+          <div className="mt-0.5 flex items-center gap-2 text-xs text-gray-500">
+            <span>{post.anonymous ? "anonymous" : post.authorName || "unknown"}</span>
+            {post.createdAt && (
+              <>
+                <span>•</span>
+                <span>{new Date(post.createdAt).toLocaleString()}</span>
+              </>
+            )}
+          </div>
+        </div>
+      </button>
+      <div className="mx-3 border-b border-gray-200" />
+    </li>
   );
 }
 
-export default PostItem;
 
 
 

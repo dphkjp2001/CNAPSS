@@ -35,11 +35,10 @@ function NavItem({ to, children }) {
 
 export default function Layout() {
   const { user, logout } = useAuth();
-  const { school, schoolTheme } = useSchool();
+  const { school } = useSchool();
   const navigate = useNavigate();
   const schoolPath = useSchoolPath();
 
-  // notifications
   const { items, count, markAsRead, markAllAsRead } = useNotificationsPolling(
     user?.email,
     5000,
@@ -50,16 +49,6 @@ export default function Layout() {
   const [showNoti, setShowNoti] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showQuick, setShowQuick] = useState(false);
-  const [bump, setBump] = useState(false);
-  const prevCountRef = useRef(count);
-  useEffect(() => {
-    if (count > prevCountRef.current) {
-      setBump(true);
-      const t = setTimeout(() => setBump(false), 300);
-      return () => clearTimeout(t);
-    }
-    prevCountRef.current = count;
-  }, [count]);
 
   const onLogout = async () => {
     await logout();
@@ -68,12 +57,6 @@ export default function Layout() {
 
   const nickname = user?.nickname || (user?.email ? user.email.split("@")[0] : "GU");
 
-  // ✅ Quick Actions → 대시보드 탭으로 이동
-  const goReviewsHub = () => {
-    if (!school) return navigate("/select-school");
-    navigate(schoolPath("/reviews"));
-    setShowQuick(false);
-  };
   const goAskQuestion = () => {
     if (!school) return navigate("/select-school");
     navigate(schoolPath("/dashboard?tab=academic"));
@@ -99,12 +82,10 @@ export default function Layout() {
 
         <nav className="p-3 space-y-1">
           <NavItem to={schoolPath("/dashboard")}>Dashboard</NavItem>
-          {/* ✅ 리스트 메뉴는 탭으로 연결 */}
           <NavItem to={schoolPath("/dashboard?tab=free")}>Free Board</NavItem>
-          <NavItem to={schoolPath("/dashboard?tab=academic")}>Career Board</NavItem>
-          <NavItem to={schoolPath("/courses")}>Course Hub</NavItem>
+          <NavItem to={schoolPath("/dashboard?tab=academic")}>Academic Board</NavItem>
           <NavItem to={schoolPath("/reviews")}>Reviews</NavItem>
-          <NavItem to={schoolPath("/market")}>Marketplace</NavItem>
+          {/* removed: Course Hub, Marketplace */}
           <NavItem to={schoolPath("/messages")}>Messages</NavItem>
           <NavItem to={schoolPath("/foodmap")}>Food Map</NavItem>
           <div className="mt-4 border-t pt-3">
@@ -113,8 +94,6 @@ export default function Layout() {
             <NavItem to={schoolPath("/commented")}>Commented</NavItem>
           </div>
         </nav>
-
-        <div className="mt-auto p-3 text-[11px] text-gray-400">Stay anonymous. Be kind.</div>
       </aside>
 
       {/* === Main column === */}
@@ -142,23 +121,10 @@ export default function Layout() {
                   <div className="fixed inset-0 z-40" onClick={() => setShowQuick(false)} />
                   <div className="absolute right-0 z-50 mt-2 w-56 rounded-xl border bg-white shadow-lg">
                     <div className="p-1 text-sm">
-                      <button
-                        className="w-full text-left rounded-lg px-3 py-2 hover:bg-gray-100"
-                        onClick={goReviewsHub}
-                      >
-                        ⭐ Rate Course / Professor
-                      </button>
-                      <button
-                        className="w-full text-left rounded-lg px-3 py-2 hover:bg-gray-100"
-                        onClick={goAskQuestion}
-                      >
+                      <button className="w-full text-left rounded-lg px-3 py-2 hover:bg-gray-100" onClick={goAskQuestion}>
                         ❓ Ask Academic Question
                       </button>
-                      <div className="my-1 border-t" />
-                      <button
-                        className="w-full text-left rounded-lg px-3 py-2 hover:bg-gray-100"
-                        onClick={goLookingFor}
-                      >
+                      <button className="w-full text-left rounded-lg px-3 py-2 hover:bg-gray-100" onClick={goLookingFor}>
                         📥 Post “Looking For”
                       </button>
                     </div>
@@ -185,11 +151,7 @@ export default function Layout() {
             >
               <span>🔔</span>
               {count > 0 && (
-                <span
-                  className={`absolute -top-1.5 -right-1.5 inline-flex items-center justify-center
-                    min-w-[18px] h-[18px] px-1 rounded-full text-[11px] text-white`}
-                  style={{ backgroundColor: "#7c3aed" }}
-                >
+                <span className="absolute -top-1.5 -right-1.5 inline-flex min-w-[18px] h-[18px] items-center justify-center rounded-full px-1 text-[11px] text-white" style={{ backgroundColor: "#7c3aed" }}>
                   {count}
                 </span>
               )}
@@ -197,62 +159,16 @@ export default function Layout() {
 
             {/* Auth / Profile */}
             {user?.email ? (
-              <ProfileMenu
-                nickname={nickname}
-                email={user.email}
-                onLogout={onLogout}
-                schoolPath={schoolPath}
-                showProfile={showProfile}
-                setShowProfile={setShowProfile}
-              />
+              <ProfileMenu nickname={user.nickname || user.email.split("@")[0]} email={user.email} onLogout={onLogout} schoolPath={schoolPath} />
             ) : (
               <>
-                <Link to="/login" className="px-3 py-2 text-sm text-gray-700 hover:text-violet-700 hover:bg-violet-50 rounded-md">
-                  Log in
-                </Link>
-                <Link to="/register" className="px-3 py-2 text-sm text-gray-700 hover:text-violet-700 hover:bg-violet-50 rounded-md">
-                  Register
-                </Link>
+                <Link to="/login" className="px-3 py-2 text-sm text-gray-700 hover:text-violet-700 hover:bg-violet-50 rounded-md">Log in</Link>
+                <Link to="/register" className="px-3 py-2 text-sm text-gray-700 hover:text-violet-700 hover:bg-violet-50 rounded-md">Register</Link>
               </>
             )}
           </div>
         </header>
 
-        {/* Notifications modal */}
-        {showNoti && (
-          <div
-            className="fixed inset-0 z-40 bg-black/30 flex items-start justify-end p-4"
-            onClick={() => setShowNoti(false)}
-          >
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
-              <div className="px-4 py-3 border-b flex items-center justify-between">
-                <div className="font-medium">Notifications</div>
-                <button className="text-sm text-violet-600 hover:underline" onClick={() => { markAllAsRead(); setShowNoti(false); }}>
-                  Mark all as read
-                </button>
-              </div>
-              <div className="max-h-[60vh] overflow-auto">
-                {items.length === 0 ? (
-                  <div className="p-4 text-sm text-gray-500">No notifications</div>
-                ) : (
-                  items.map((n) => (
-                    <div key={n._id} className="p-4 border-b text-sm">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="font-medium">{n.title || "Notification"}</div>
-                        <button className="text-violet-600 hover:underline" onClick={() => markAsRead(n._id)}>
-                          Read
-                        </button>
-                      </div>
-                      {n.message && <div className="mt-1 text-gray-600">{n.message}</div>}
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Routed pages */}
         <main className="flex-1">
           <Outlet />
         </main>
@@ -261,51 +177,33 @@ export default function Layout() {
   );
 }
 
-function ProfileMenu({ nickname, email, onLogout, schoolPath, showProfile, setShowProfile }) {
+function ProfileMenu({ nickname, email, onLogout, schoolPath }) {
+  const [open, setOpen] = useState(false);
   return (
     <div className="relative">
-      <button
-        type="button"
-        onClick={() => setShowProfile((v) => !v)}
-        className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-violet-50"
-      >
+      <button type="button" onClick={() => setOpen((v) => !v)} className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-violet-50">
         <Initials name={nickname} />
         <span className="hidden sm:inline text-sm font-medium text-gray-700">{nickname}</span>
-        <svg className={`h-4 w-4 text-gray-500 transition ${showProfile ? "rotate-180" : ""}`} viewBox="0 0 20 20" fill="currentColor">
+        <svg className={`h-4 w-4 text-gray-500 transition ${open ? "rotate-180" : ""}`} viewBox="0 0 20 20" fill="currentColor">
           <path d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.25a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" />
         </svg>
       </button>
 
-      {showProfile && (
+      {open && (
         <>
-          <div className="fixed inset-0 z-40" onClick={() => setShowProfile(false)} />
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
           <div className="absolute right-0 z-50 mt-2 w-56 rounded-xl border bg-white shadow-lg">
             <div className="px-3 py-2 border-b">
               <div className="text-sm font-semibold">{nickname}</div>
               <div className="text-xs text-gray-500 truncate">{email}</div>
             </div>
             <div className="p-1 text-sm">
-              <MenuItem to={schoolPath("/dashboard")} onClick={() => setShowProfile(false)}>
-                Dashboard
-              </MenuItem>
-              <MenuItem to={schoolPath("/myposts")} onClick={() => setShowProfile(false)}>
-                My Posts
-              </MenuItem>
-              <MenuItem to={schoolPath("/liked")} onClick={() => setShowProfile(false)}>
-                Liked
-              </MenuItem>
-              <MenuItem to={schoolPath("/commented")} onClick={() => setShowProfile(false)}>
-                Commented
-              </MenuItem>
-              <MenuItem to={schoolPath("/messages")} onClick={() => setShowProfile(false)}>
-                Messages
-              </MenuItem>
-              <MenuItem to={schoolPath("/market")} onClick={() => setShowProfile(false)}>
-                Marketplace
-              </MenuItem>
-              <MenuItem to={schoolPath("/foodmap")} onClick={() => setShowProfile(false)}>
-                Food Map
-              </MenuItem>
+              <MenuItem to={schoolPath("/dashboard")} onClick={() => setOpen(false)}>Dashboard</MenuItem>
+              <MenuItem to={schoolPath("/myposts")} onClick={() => setOpen(false)}>My Posts</MenuItem>
+              <MenuItem to={schoolPath("/liked")} onClick={() => setOpen(false)}>Liked</MenuItem>
+              <MenuItem to={schoolPath("/commented")} onClick={() => setOpen(false)}>Commented</MenuItem>
+              <MenuItem to={schoolPath("/messages")} onClick={() => setOpen(false)}>Messages</MenuItem>
+              <MenuItem to={schoolPath("/foodmap")} onClick={() => setOpen(false)}>Food Map</MenuItem>
             </div>
             <div className="border-t p-1">
               <button onClick={onLogout} className="w-full rounded-lg px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50">
@@ -326,6 +224,7 @@ function MenuItem({ to, children, onClick }) {
     </Link>
   );
 }
+
 
 
 

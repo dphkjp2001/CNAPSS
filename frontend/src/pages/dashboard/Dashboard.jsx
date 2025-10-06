@@ -10,7 +10,7 @@ import { uploadToCloudinary } from "../../utils/uploadToCloudinary";
 
 /* Read / Write API */
 import { createPost, getPublicPosts } from "../../api/posts";
-import { createCareerPost, getPublicCareerPosts } from "../../api/careerPosts";
+import { listAcademicPosts } from "../../api/academic"; // ✅ use protected academic list (not legacy career)
 
 /* ===== Design tokens ===== */
 const TOKENS = {
@@ -20,6 +20,17 @@ const TOKENS = {
   primary: "#111827",
   pink: "#FF6B8A",
   red: "#FF7A70",
+};
+
+const TOPIC_EMOJI = {
+  course_planning: "📚",
+  homework_help: "🧩",
+  exam_prep: "📝",
+  internships: "💼",
+  job_search: "💻",
+  visa_opt_cpt: "🪪",
+  housing: "🏠",
+  scholarships: "🎓",
 };
 
 function PersonIcon() {
@@ -148,13 +159,32 @@ function FeedSkeleton({ rows = 8 }) {
 
 function academicBadge(post) {
   const r = post.raw || {};
-  const t = (r.postType || r.type || (r.lookingFor || r.isLookingFor ? "looking_for" : "question") || "").toLowerCase();
-  const k = (r.kind || r.category || r?.meta?.kind || (Array.isArray(r.tags) ? r.tags.find(x => /materials|group|coffee/i.test(x)) : "") || "").toLowerCase();
+  const t = (
+    r.mode || // prefer normalized mode from API
+    r.postType ||
+    r.type ||
+    (r.lookingFor || r.isLookingFor ? "looking_for" : "general") ||
+    ""
+  ).toLowerCase();
 
-  if (t !== "looking_for") return "﹖";
-  if (k.includes("group")) return "👥";
-  if (k.includes("coffee")) return "☕️";
-  return "📝";
+  const k =
+    (r.kind ||
+      r.category ||
+      r?.meta?.kind ||
+      (Array.isArray(r.tags)
+        ? r.tags.find((x) =>
+            /materials|group|coffee|planning|homework|exam|intern|job|visa|housing|scholar/i.test(x)
+          )
+        : "") ||
+      "")?.toLowerCase();
+
+  if (t === "looking_for") {
+    if (k.includes("group")) return "👥";
+    if (k.includes("coffee")) return "☕️";
+    return "📝";
+  }
+  if (k && TOPIC_EMOJI[k]) return TOPIC_EMOJI[k];
+  return "❓";
 }
 
 function PostRow({ post, onOpenDetail, showBadge }) {
@@ -162,7 +192,7 @@ function PostRow({ post, onOpenDetail, showBadge }) {
   return (
     <button type="button" onClick={onOpenDetail} className="w-full text-left py-4 px-3 hover:bg-slate-50 transition">
       <div className="flex items-center gap-3">
-        {badge && <span className="text-[12px] w-4 text-center">{badge}</span>}
+        {badge && <span className="text-[14px] w-5 text-center">{badge}</span>}
         <div className="h-8 w-8 rounded-full bg-slate-200 flex items-center justify-center">
           <PersonIcon />
         </div>
@@ -376,7 +406,16 @@ function AcademicSearchBar({ value, onSubmit, onReset }) {
                 <>
                   <div className="text-[12px] font-semibold text-slate-500 mb-2">Question · topic</div>
                   <div className="max-h-[280px] overflow-auto pr-1">
-                    {QUESTION_TOPICS.map((opt) => {
+                    {[
+                      { key: "course_planning", label: "Course planning", emoji: "📚", desc: "What to take / prereqs" },
+                      { key: "homework_help", label: "Homework help", emoji: "🧩", desc: "Concepts & hints (no full answers)" },
+                      { key: "exam_prep", label: "Exam prep", emoji: "📝", desc: "Study strategies / past exams" },
+                      { key: "internships", label: "Internships", emoji: "💼", desc: "Applications / referrals / experiences" },
+                      { key: "job_search", label: "Job search", emoji: "💻", desc: "Interviews / resume / networking" },
+                      { key: "visa_opt_cpt", label: "Visa · OPT · CPT", emoji: "🪪", desc: "International student topics" },
+                      { key: "housing", label: "Housing", emoji: "🏠", desc: "On/off campus housing" },
+                      { key: "scholarships", label: "Scholarships", emoji: "🎓", desc: "Aid / scholarships / grants" },
+                    ].map((opt) => {
                       const active = local.kind === opt.key;
                       return (
                         <button
@@ -430,7 +469,7 @@ function AcademicSearchBar({ value, onSubmit, onReset }) {
     );
 
   return (
-    <div className="mx-auto mt-5 w-full max-w-[860px]" ref={anchorRef}>
+    <div className="mx-auto mt-5 w-full max-w={[860]}px" ref={anchorRef}>
       <form
         onSubmit={handleSubmit}
         className="rounded-full shadow-[0_6px_24px_rgba(0,0,0,0.06)] bg-white border border-slate-200 overflow-hidden"
@@ -505,6 +544,7 @@ export default function Dashboard() {
   // academic
   const [mode, setMode] = useState("question");
   const [lookingKind, setLookingKind] = useState("course_materials");
+  const [questionKind, setQuestionKind] = useState("course_planning");
 
   const [posting, setPosting] = useState(false);
   const [msg, setMsg] = useState({ type: "", text: "" });
@@ -524,7 +564,7 @@ export default function Dashboard() {
       try {
         const [genRaw, acadRaw] = await Promise.all([
           getPublicPosts({ school: schoolKey, limit: 50, sort: "new" }),
-          getPublicCareerPosts({ school: schoolKey, limit: 50, sort: "new" }),
+          listAcademicPosts({ school: schoolKey, page: 1, limit: 50, sort: "recent" }),
         ]);
         if (!alive) return;
         const gen = normalizePosts(genRaw);
@@ -564,7 +604,11 @@ export default function Dashboard() {
     }
     if (type !== "all") {
       list = list.filter((p) => {
-        const t = p.raw?.postType || p.raw?.type || (p.raw?.lookingFor ? "looking_for" : "question");
+        const t =
+          p.raw?.mode ||
+          p.raw?.postType ||
+          p.raw?.type ||
+          (p.raw?.lookingFor ? "looking_for" : "general");
         return String(t).toLowerCase() === type;
       });
     }
@@ -591,7 +635,8 @@ export default function Dashboard() {
     return list;
   }, [academic.items, acadQuery]);
 
-  const current = active === "general" ? { ...general, items: filteredGeneral } : { ...academic, items: filteredAcademic };
+  const current =
+    active === "general" ? { ...general, items: filteredGeneral } : { ...academic, items: filteredAcademic };
 
   const schoolNavigate = (p) => navigate(schoolPath(p));
   const goDashboardFree = () => schoolNavigate("/dashboard?tab=free");
@@ -600,7 +645,7 @@ export default function Dashboard() {
   const openDetail = (post) => {
     const id = post.raw?.slug || post._id || post.raw?._id || post.raw?.id || post.id;
     if (!id) return active === "general" ? goDashboardFree() : goDashboardAcademic();
-    const to = active === "general" ? schoolPath(`/freeboard/${id}`) : schoolPath(`/career/${id}`);
+    const to = active === "general" ? schoolPath(`/freeboard/${id}`) : schoolPath(`/academic/${id}`);
     navigate(to);
   };
 
@@ -629,28 +674,31 @@ export default function Dashboard() {
         if (!canPostGeneral) throw new Error("Missing fields");
         let imageUrls = [];
         if (images.length) imageUrls = await uploadFiles(images);
-        await createPost({ school: schoolKey, title: title.trim(), content: content.trim(), images: imageUrls });
+        await createPost({ school: schoolKey, board: "freeboard", title: title.trim(), content: content.trim(), images: imageUrls });
         setMsg({ type: "success", text: "Posted to Freeboard! Redirecting…" });
         setTimeout(goDashboardFree, 400);
       } else {
         if (!canPostAcademic) throw new Error("Missing fields");
-        const base = { school: schoolKey, title: title.trim() };
+        const base = { school: schoolKey, board: "academic", title: title.trim() };
 
         if (mode === "question") {
-          await createCareerPost({ ...base, content: content.trim(), postType: "question", type: "question" });
-        } else {
-          // Looking for — 필수 본문 없이도 등록 허용(요청은 상세에서 다른 사람이 보냄)
-          await createCareerPost({
+          await createPost({
             ...base,
             content: content.trim(),
-            postType: "looking_for",
+            mode: "general",
+            type: "question",
+            kind: questionKind,
+            tags: ["academic", "question", questionKind],
+          });
+        } else {
+          await createPost({
+            ...base,
+            content: content.trim(),
+            mode: "looking_for",
             type: "looking_for",
-            category: "looking_for",
             lookingFor: true,
-            isLookingFor: true,
             kind: lookingKind,
-            tags: ["looking_for", lookingKind],
-            meta: { kind: lookingKind },
+            tags: ["academic", "looking_for", lookingKind],
           });
         }
 
@@ -660,7 +708,7 @@ export default function Dashboard() {
 
       // reset
       setTitle(""); setContent(""); setImages([]);
-      setMode("question"); setLookingKind("course_materials");
+      setMode("question"); setLookingKind("course_materials"); setQuestionKind("course_planning");
     } catch (err) {
       setMsg({ type: "error", text: err?.message || "Failed to post. Please check required fields." });
     } finally {
@@ -771,6 +819,23 @@ export default function Dashboard() {
                         <option value="coffee_chat">Coffee chat</option>
                       </select>
                     )}
+
+                    {mode === "question" && (
+                      <select
+                        value={questionKind}
+                        onChange={(e) => setQuestionKind(e.target.value)}
+                        className="ml-2 rounded-full border border-slate-300 px-3 py-1.5 text-sm"
+                      >
+                        <option value="course_planning">📚 Course planning</option>
+                        <option value="homework_help">🧩 Homework help</option>
+                        <option value="exam_prep">📝 Exam prep</option>
+                        <option value="internships">💼 Internships</option>
+                        <option value="job_search">💻 Job search</option>
+                        <option value="visa_opt_cpt">🪪 Visa / OPT / CPT</option>
+                        <option value="housing">🏠 Housing</option>
+                        <option value="scholarships">🎓 Scholarships</option>
+                      </select>
+                    )}
                   </div>
                 )}
 
@@ -820,8 +885,10 @@ export default function Dashboard() {
                       {active === "general"
                         ? "Freeboard"
                         : mode === "question"
-                        ? "Academic"
-                        : `Looking for: ${lookingKind === "course_materials" ? "Course materials" : lookingKind === "study_group" ? "Study group" : "Coffee chat"}`}
+                        ? `Academic • ${TOPIC_EMOJI[questionKind] || "❓"} ${questionKind.replace(/_/g, " ")}`
+                        : `Looking for: ${
+                            lookingKind === "course_materials" ? "Course materials" : lookingKind === "study_group" ? "Study group" : "Coffee chat"
+                          }`}
                     </strong>
                     .
                   </p>
@@ -847,6 +914,9 @@ export default function Dashboard() {
     </div>
   );
 }
+
+
+
 
 
 

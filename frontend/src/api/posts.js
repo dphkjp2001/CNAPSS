@@ -19,12 +19,14 @@ export async function getPublicPost({ school, id }) {
 }
 
 // ============== Protected (auth) ==============
-export async function listPosts({ school, page = 1, limit = 20, q = "", sort = "new" } = {}) {
+export async function listPosts({ school, page = 1, limit = 20, q = "", sort = "new", board, mode } = {}) {
   const url = new URL(`${API_URL}/${school}/posts`);
   if (page) url.searchParams.set("page", String(page));
   if (limit) url.searchParams.set("limit", String(limit));
   if (q) url.searchParams.set("q", q);
   if (sort) url.searchParams.set("sort", sort);
+  if (board) url.searchParams.set("board", board);
+  if (mode) url.searchParams.set("mode", mode);
   return getJson(url);
 }
 
@@ -33,14 +35,19 @@ export async function getPost({ school, id }) {
   return getJson(url);
 }
 
-export async function createPost({ school, title, content, images = [] }) {
+/**
+ * Create a post (Freeboard or Academic).
+ * Pass-through extra fields like: board, mode, kind, type, lookingFor, images, tags…
+ */
+export async function createPost(params) {
+  const { school, ...payload } = params;
   const url = `${API_URL}/${school}/posts`;
-  return postJson(url, { title, content, images }); // ✅ 이미지 함께 전송
+  return postJson(url, payload);
 }
 
-export async function updatePost({ school, id, title, content, images }) {
+export async function updatePost({ school, id, ...payload }) {
   const url = `${API_URL}/${school}/posts/${id}`;
-  return putJson(url, { title, content, images });
+  return putJson(url, payload);
 }
 
 export async function deletePost({ school, id }) {
@@ -63,13 +70,14 @@ export async function listCommented({ school, email }) {
   return getJson(url);
 }
 
-/* ---- Legacy adapters ---- */
+/* ---- Legacy adapters (keep for back-compat) ---- */
 export async function fetchPosts(school) { return listPosts({ school }); }
 export async function fetchPost(id, school) { return getPost({ school, id }); }
 export async function fetchPostById(id, school) { return getPost({ school, id }); }
 export async function togglePostLike(id, school) { return toggleThumbs({ school, id }); }
 export async function fetchLikedPosts(email, school) { return listLiked({ school, email }); }
 export async function fetchCommentedPosts(email, school) { return listCommented({ school, email }); }
+
 
 
 
