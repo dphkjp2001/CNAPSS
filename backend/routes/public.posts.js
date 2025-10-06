@@ -3,99 +3,79 @@ const express = require("express");
 const router = express.Router({ mergeParams: true });
 const Post = require("../models/Post");
 
-// Keep in sync with Post.js enum
-const ALLOWED_SCHOOLS = ["nyu", "columbia", "boston"];
-
-/**
- * GET /api/public/:school/posts
- * Query: page, limit, q, sort(new|old), board(freeboard|academic), mode(general|looking_for)
- * 공개 리스트에서도 최소한 board/mode/kind를 내려줘야 FE에서 배지/필터 가능.
- */
-router.get("/", async (req, res) => {
-  try {
-    const school = String(req.params.school || "").toLowerCase();
-    if (!ALLOWED_SCHOOLS.includes(school)) {
-      return res.status(400).json({ message: "Invalid school." });
-    }
-
-    const page = Math.max(parseInt(req.query.page || "1", 10), 1);
-    const limit = Math.min(Math.max(parseInt(req.query.limit || "20", 10), 1), 50);
-    const q = (req.query.q || "").trim();
-    const sortOpt = String(req.query.sort || "new").toLowerCase();
-    const sortStage = sortOpt === "old" ? { createdAt: 1, _id: 1 } : { createdAt: -1, _id: -1 };
-
-    const board = String(req.query.board || "").toLowerCase();
-    const mode = String(req.query.mode || "").toLowerCase();
-
-    const match = { school };
-    if (q) {
-      match.$or = [{ title: { $regex: q, $options: "i" } }, { content: { $regex: q, $options: "i" } }];
-    }
-    if (board === "academic" || board === "freeboard") match.board = board;
-    if (mode === "general" || mode === "looking_for") match.mode = mode;
-
-    const total = await Post.countDocuments(match);
-
-    const items = await Post.aggregate([
-      { $match: match },
-      { $sort: sortStage },
-      { $skip: (page - 1) * limit },
-      { $limit: limit },
-      {
-        $project: {
-          _id: 1,
-          title: 1,
-          content: 1,
-          images: 1,
-          createdAt: 1,
-          board: 1,
-          mode: 1,
-          kind: 1,
-          category: 1,
-          tags: 1,
-          likesCount: {
-            $cond: [
-              { $gt: [{ $size: { $ifNull: ["$likes", []] } }, 0] },
-              { $size: { $ifNull: ["$likes", []] } },
-              { $size: { $ifNull: ["$thumbsUpUsers", []] } },
-            ],
-          },
-        },
-      },
-    ]);
-
-    res.json({ page, limit, total, items });
-  } catch (err) {
-    console.error("Public posts error:", err);
-    res.status(500).json({ message: "Failed to load public posts." });
+function normalizeBoard(v) {
+  const s = String(v || "").toLowerCase();
+  if (["free", "freeboard", "free_board"].includes(s)) return "freeboard";
+  if (["academic", "career", "careerboard"].includes(s)) return "academic";
+  return "freeboard";
+}
+function resolveMode(board, m) {
+  const mode = String(m || "").toLowerCase();
+  if (normalizeBoard(board) === "academic") {
+    return mode === "looking_for" ? "looking_for" : "general";
   }
+  return "general";
+}
+function serializeLean(p) {
+  const board = normalizeBoard(p.board);
+  const mode = resolveMode(board, p.mode || (p.lookingFor ? "looking_for" : ""));
+  return {
+    _id: p._id,
+    title: p.title || "",
+    content: p.content || "",
+    images: Array.isArray(p.images) ? p.images : [],
+    createdAt: p.createdAt,
+    board,
+    mode,
+    kind: p.kind || p.category || p?.meta?.kind || "",
+    tags: p.tags || [],
+  };
+}
+
+// -------- LIST (public) --------
+router.get("/", async (req, res) => {
+  const school = String(req.params.school || "").toLowerCase();
+  const { page = 1, limit = 20, sort = "new", q = "", board = "", mode = "" } = req.query;
+
+  const filter = { school };
+  const b = normalizeBoard(board);
+  if (board) filter.board = b;
+  if (mode === "general" || mode === "looking_for") filter.mode = mode;
+
+  if (q) {
+    const rx = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+    filter.$or = [{ title: rx }, { content: rx }];
+  }
+
+  const pageNum = Math.max(1, parseInt(page, 10) || 1);
+  const limitNum = Math.min(50, Math.max(1, parseInt(limit, 10) || 20));
+  const sortObj = sort === "old" ? { createdAt: 1, _id: 1 } : { createdAt: -1, _id: -1 };
+
+  const docs = await Post.find(filter)
+    .select("_id title content images createdAt board mode kind category tags")
+    .sort(sortObj)
+    .skip((pageNum - 1) * limitNum)
+    .limit(limitNum)
+    .lean();
+
+  res.json({ page: pageNum, limit: limitNum, items: docs.map(serializeLean) });
 });
 
-/**
- * GET /api/public/:school/posts/:id
- * - 공개 상세 조회 (비로그인 허용)
- */
+// -------- DETAIL (public) --------
 router.get("/:id", async (req, res) => {
-  try {
-    const school = String(req.params.school || "").toLowerCase();
-    if (!ALLOWED_SCHOOLS.includes(school)) {
-      return res.status(400).json({ message: "Invalid school." });
-    }
+  const school = String(req.params.school || "").toLowerCase();
+  const id = req.params.id;
+  const p = await Post.findOne(
+    { _id: id, school },
+    "_id title content images createdAt board mode kind category tags"
+  ).lean();
 
-    const post = await Post.findOne(
-      { _id: req.params.id, school },
-      "_id title content images createdAt board mode kind category tags"
-    ).lean();
-    if (!post) return res.status(404).json({ message: "Post not found." });
-
-    res.json(post);
-  } catch (err) {
-    console.error("Public post detail error:", err);
-    res.status(500).json({ message: "Failed to load public post." });
-  }
+  if (!p) return res.status(404).json({ message: "Post not found" });
+  res.json(serializeLean(p));
 });
 
 module.exports = router;
+
 
 
 
