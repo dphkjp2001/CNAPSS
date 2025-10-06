@@ -217,160 +217,107 @@
 
 
 
-// backend/routes/comments.js
+// backend/routes/public.comments.js
+//
+// Public comments API (read-only)
+// - Works without CareerPost; uses Comment + Post collection
+// - No auth required
+//
 const express = require("express");
-const mongoose = require("mongoose");
-const Comment = require("../models/Comment");
-const Post = require("../models/Post"); // ✅ to check academic/looking_for
-const requireAuth = require("../middleware/requireAuth");
-const schoolGuard = require("../middleware/schoolGuard");
-
 const router = express.Router({ mergeParams: true });
 
-// List (public)
-router.get("/:postId", async (req, res) => {
+const Comment = require("../models/Comment");
+const Post = require("../models/Post");
+
+/**
+ * GET /api/public/:school/comments
+ * Query:
+ *   - postId (required): target Post _id
+ *   - page=1, limit=50
+ *   - sort=old|new (default: old -> oldest first, good for building threads)
+ *
+ * Response: { page, limit, total, items: [ ...comments ] }
+ * Each comment item (sanitized):
+ *   { _id, post, parent, content, createdAt, likesCount, isDeleted, depth }
+ */
+router.get("/", async (req, res) => {
   try {
     const school = String(req.params.school || "").toLowerCase();
-    const postId = req.params.postId;
+    const { postId, page = 1, limit = 50, sort = "old" } = req.query;
 
-    if (!mongoose.isValidObjectId(postId)) return res.json([]);
+    if (!postId) {
+      return res.status(400).json({ message: "postId is required." });
+    }
 
-    const items = await Comment.find({ school, postId }).sort({ createdAt: 1 }).lean();
-    res.json(items);
-  } catch (e) {
-    console.error("GET comments error:", e);
-    res.status(500).json({ message: "Failed to load comments" });
+    // Ensure post exists & belongs to the same school
+    const post = await Post.findOne({ _id: postId, school }).lean();
+    if (!post) {
+      return res.status(404).json({ message: "Post not found." });
+    }
+
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 50));
+    const sortObj = sort === "new" ? { createdAt: -1, _id: -1 } : { createdAt: 1, _id: 1 };
+
+    const filter = { school, post: post._id };
+    const total = await Comment.countDocuments(filter);
+
+    const docs = await Comment.find(filter)
+      .select("_id post parent content createdAt likes isDeleted depth")
+      .sort(sortObj)
+      .skip((pageNum - 1) * limitNum)
+      .limit(limitNum)
+      .lean();
+
+    // sanitize
+    const items = docs.map((c) => ({
+      _id: c._id,
+      post: c.post,
+      parent: c.parent || null,
+      content: c.isDeleted ? "" : (c.content || ""),
+      createdAt: c.createdAt,
+      likesCount: Array.isArray(c.likes) ? c.likes.length : 0,
+      isDeleted: !!c.isDeleted,
+      depth: typeof c.depth === "number" ? c.depth : (c.parent ? 1 : 0),
+    }));
+
+    res.json({ page: pageNum, limit: limitNum, total, items });
+  } catch (err) {
+    console.error("[public.comments] list error:", err);
+    res.status(500).json({ message: "Failed to load comments." });
   }
 });
 
-// Create (protected)
-// ✅ Block when target post is academic 'looking_for'
-router.post("/:postId", requireAuth, schoolGuard, async (req, res) => {
+/**
+ * GET /api/public/:school/comments/:id
+ * Minimal public detail (read-only)
+ */
+router.get("/:id", async (req, res) => {
   try {
     const school = String(req.params.school || "").toLowerCase();
-    const postId = req.params.postId;
+    const id = req.params.id;
 
-    if (!mongoose.isValidObjectId(postId)) {
-      return res.status(400).json({ message: "Invalid postId" });
-    }
+    const c = await Comment.findOne(
+      { _id: id, school },
+      "_id post parent content createdAt likes isDeleted depth"
+    ).lean();
 
-    const target = await Post.findOne({ _id: postId, school }).lean();
-    if (!target) return res.status(404).json({ message: "Post not found" });
+    if (!c) return res.status(404).json({ message: "Comment not found." });
 
-    const board = String(target.board || "").toLowerCase();
-    const mode =
-      String(target.mode || target.kind || target.type || (target.lookingFor ? "looking_for" : "general"))
-        .toLowerCase();
-
-    if (board === "academic" && mode === "looking_for") {
-      return res.status(400).json({ message: "Comments are disabled for 'looking for' posts." });
-    }
-
-    const content = String(req.body?.content || "").trim();
-    const parentId = req.body?.parentId || null;
-    if (!content) return res.status(400).json({ message: "content is required" });
-
-    const doc = await Comment.create({
-      school,
-      postId,
-      parentId: parentId && mongoose.isValidObjectId(parentId) ? parentId : null,
-      content,
-      email: String(req.user?.email || "").toLowerCase(),
-      thumbsUpUsers: [],
-      readBy: [],
+    res.json({
+      _id: c._id,
+      post: c.post,
+      parent: c.parent || null,
+      content: c.isDeleted ? "" : (c.content || ""),
+      createdAt: c.createdAt,
+      likesCount: Array.isArray(c.likes) ? c.likes.length : 0,
+      isDeleted: !!c.isDeleted,
+      depth: typeof c.depth === "number" ? c.depth : (c.parent ? 1 : 0),
     });
-    res.status(201).json(doc);
-  } catch (e) {
-    console.error("POST comment error:", e);
-    res.status(500).json({ message: "Failed to add comment" });
-  }
-});
-
-// Update (protected, owner only)
-router.put("/:commentId", requireAuth, schoolGuard, async (req, res) => {
-  try {
-    const school = String(req.params.school || "").toLowerCase();
-    const commentId = req.params.commentId;
-    const content = String(req.body?.content || "").trim();
-
-    if (!mongoose.isValidObjectId(commentId)) {
-      return res.status(400).json({ message: "Invalid commentId" });
-    }
-    const c = await Comment.findOne({ _id: commentId, school });
-    if (!c) return res.status(404).json({ message: "Not found" });
-    if (String(c.email || "").toLowerCase() !== String(req.user?.email || "").toLowerCase()) {
-      return res.status(403).json({ message: "Forbidden" });
-    }
-    if (!content) return res.status(400).json({ message: "content is required" });
-
-    c.content = content;
-    await c.save();
-    res.json(c);
-  } catch (e) {
-    console.error("PUT comment error:", e);
-    res.status(500).json({ message: "Failed to update comment" });
-  }
-});
-
-// Delete (protected, owner only)
-router.delete("/:commentId", requireAuth, schoolGuard, async (req, res) => {
-  try {
-    const school = String(req.params.school || "").toLowerCase();
-    const commentId = req.params.commentId;
-
-    if (!mongoose.isValidObjectId(commentId)) {
-      return res.status(400).json({ message: "Invalid commentId" });
-    }
-    const c = await Comment.findOne({ _id: commentId, school });
-    if (!c) return res.status(404).json({ message: "Not found" });
-    if (String(c.email || "").toLowerCase() !== String(req.user?.email || "").toLowerCase()) {
-      return res.status(403).json({ message: "Forbidden" });
-    }
-
-    await Comment.deleteOne({ _id: commentId, school });
-    res.json({ ok: true });
-  } catch (e) {
-    console.error("DELETE comment error:", e);
-    res.status(500).json({ message: "Failed to delete comment" });
-  }
-});
-
-// Toggle thumbs
-router.post("/:commentId/thumbs", requireAuth, schoolGuard, async (req, res) => {
-  try {
-    const school = String(req.params.school || "").toLowerCase();
-    const commentId = req.params.commentId;
-    const me = String(req.user?.email || "").toLowerCase();
-
-    if (!mongoose.isValidObjectId(commentId)) {
-      return res.status(400).json({ message: "Invalid commentId" });
-    }
-
-    const c = await Comment.findOne({ _id: commentId, school });
-    if (!c) return res.status(404).json({ message: "Not found" });
-    if (String(c.email || "").toLowerCase() === me) {
-      return res.status(400).json({ message: "Cannot like your own comment." });
-    }
-
-    const has = (c.thumbsUpUsers || []).map((e) => String(e).toLowerCase()).includes(me);
-    if (has) {
-      c.thumbsUpUsers = (c.thumbsUpUsers || []).filter((e) => String(e).toLowerCase() !== me);
-    } else {
-      c.thumbsUpUsers = [...(c.thumbsUpUsers || []), me];
-    }
-    await c.save();
-    res.json({ _id: c._id, thumbs: c.thumbsUpUsers });
-  } catch (e) {
-    console.error("POST thumbs error:", e);
-    res.status(500).json({ message: "Failed to toggle thumbs" });
+  } catch (err) {
+    console.error("[public.comments] detail error:", err);
+    res.status(500).json({ message: "Failed to load comment." });
   }
 });
 
 module.exports = router;
-
-
-
-
-
-
-
