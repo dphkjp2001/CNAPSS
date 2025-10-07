@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: cnapss-api
+    env: node
+    buildCommand: npm install
+    startCommand: node server.js
+    plan: free
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+    routes:
+      - type: web
+        name: default
+        path: /
+        protocol: https
+      - type: web
+        name: websocket
+        path: /socket.io
+        protocol: wss
