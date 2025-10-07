@@ -1,31 +1,28 @@
 // backend/models/User.js
 const mongoose = require("mongoose");
+const bcrypt = require("bcryptjs");
 
-const userSchema = new mongoose.Schema(
+const UserSchema = new mongoose.Schema(
   {
-    email: { type: String, required: true, unique: true, index: true, lowercase: true, trim: true },
-    password: { type: String, required: true },
-    nickname: { type: String, required: true, unique: true, trim: true },
-
-    // school tenancy
-    school: { type: String, required: true, index: true, lowercase: true, trim: true },
-
-    // verification / roles
-    isVerified: { type: Boolean, default: false },
+    email: { type: String, required: true, unique: true, lowercase: true, trim: true, index: true },
+    school: { type: String, required: true, index: true }, // e.g., "nyu"
+    name: { type: String, default: "" },
+    nickname: { type: String, default: "" },
+    avatar: { type: String, default: "" },
     role: { type: String, default: "user" },
-
-    // NEW: Cohort (Class of YYYY). We keep it simple for MVP.
-    classOf: {
-      type: Number,
-      // allow a wide but safe range; UI will guide typical 4–6yr window
-      min: 2000,
-      max: 2100,
-      default: null,
-      index: true,
-    },
+    isVerified: { type: Boolean, default: false },
+    passwordHash: { type: String, default: "" },
+    points: { type: Number, default: 0 }
   },
   { timestamps: true }
 );
 
-module.exports = mongoose.model("User", userSchema);
+// methods
+UserSchema.methods.setPassword = async function (plain) {
+  this.passwordHash = await bcrypt.hash(plain, 10);
+};
+UserSchema.methods.verifyPassword = function (plain) {
+  return bcrypt.compare(plain, this.passwordHash || "");
+};
 
+module.exports = mongoose.model("User", UserSchema);

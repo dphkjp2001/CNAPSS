@@ -1,56 +1,16 @@
-// // backend/models/Message.js
-// const mongoose = require("mongoose");
-
-// const messageSchema = new mongoose.Schema(
-//   {
-//     conversationId: {
-//       type: mongoose.Schema.Types.ObjectId,
-//       required: true,
-//       ref: "Conversation",
-//       index: true,
-//     },
-//     sender: { type: String, required: true, lowercase: true }, // email
-//     content: { type: String, required: true, trim: true },
-
-//     readBy: { type: [String], default: [] }, // emails (lowercase)
-
-//     // ✅ duplicate school for filtering/guard
-//     school: {
-//       type: String,
-//       required: true,
-//       lowercase: true,
-//       enum: ["nyu", "columbia", "boston"],
-//       index: true,
-//     },
-//   },
-//   { timestamps: true }
-// );
-
-// messageSchema.index({ school: 1, conversationId: 1, createdAt: 1 });
-
-// module.exports = mongoose.model("Message", messageSchema);
-
-
-
 // backend/models/Message.js
 const mongoose = require("mongoose");
 
-const messageSchema = new mongoose.Schema(
-  {
-    conversationId: { type: mongoose.Schema.Types.ObjectId, ref: "Conversation", required: true, index: true },
-    sender: { type: String, required: true, index: true }, // email
-    content: { type: String, required: true },
-    readBy: { type: [String], default: [] }, // emails who read
+const MessageSchema = new mongoose.Schema({
+  school:        { type: String, required: true, index: true },
+  conversationId:{ type: mongoose.Schema.Types.ObjectId, ref: "Conversation", required: true, index: true },
+  senderId:      { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
+  recipientId:   { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
+  body:          { type: String, default: "" },
+  attachments:   [{ url: String, name: String }],
+  readAt:        { type: Date, default: null }
+}, { timestamps: true });
 
-    // 🔐 tenant scope
-    school: { type: String, required: true, lowercase: true, index: true },
-  },
-  { timestamps: true }
-);
+MessageSchema.index({ conversationId: 1, createdAt: -1 });
 
-messageSchema.index({ conversationId: 1, createdAt: 1 });
-
-module.exports = mongoose.model("Message", messageSchema);
-
-
-
+module.exports = mongoose.model("Message", MessageSchema);

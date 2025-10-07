@@ -1,33 +1,22 @@
-// frontend/src/components/AsyncButton.jsx
+import React from "react";
 
-import React, { useState } from "react";
-
-function AsyncButton({ onClick, children, loadingText = "Processing...", ...props }) {
-  const [isLoading, setIsLoading] = useState(false);
-
-  const handleClick = async (e) => {
-    if (isLoading) return;
-    setIsLoading(true);
-
-    try {
-      await onClick(e);
-    } catch (err) {
-      console.error("AsyncButton error:", err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
+export default function AsyncButton({ onClick, children, className = "", ...rest }) {
+  const [loading, setLoading] = React.useState(false);
   return (
     <button
-      onClick={handleClick}
-      disabled={isLoading}
-      className={`disabled:opacity-50 ${props.className || ""}`}
-      {...props}
+      className={`inline-flex items-center justify-center rounded-lg px-4 py-2 font-medium shadow-sm border border-gray-200 bg-white hover:bg-gray-50 ${className}`}
+      disabled={loading || rest.disabled}
+      onClick={async (e) => {
+        try {
+          setLoading(true);
+          await onClick?.(e);
+        } finally {
+          setLoading(false);
+        }
+      }}
+      {...rest}
     >
-      {isLoading ? loadingText : children}
+      {loading ? "..." : children}
     </button>
   );
 }
-
-export default AsyncButton;
