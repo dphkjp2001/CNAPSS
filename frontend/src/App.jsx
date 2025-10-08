@@ -8,44 +8,26 @@ import RequireAuth from "./components/RequireAuth";
 import { useAuth } from "./contexts/AuthContext";
 import AuthGateProvider from "./contexts/AuthGateProvider";
 
-// Top-level pages
 import SchoolSelect from "./pages/SchoolSelect";
 import About from "./pages/About";
 import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
 import AuthRequired from "./pages/auth/AuthRequired";
 
-// CourseHub
-import Courses from "./pages/courses/Courses.jsx";
-import CourseWrite from "./pages/courses/CourseWrite";
-import MaterialDetail from "./pages/courses/MaterialDetail";
-
-// ✅ RMP pages
-import CourseDetail from "./pages/courses/CourseDetail";
-import ProfessorDetail from "./pages/courses/ProfessorDetail";
-import ReviewsHub from "./pages/reviews/ReviewsHub";
-
-// Dashboards (lazy)
+// Dashboard + Boards
 const Dashboard = lazy(() => import("./pages/dashboard/Dashboard"));
-const MyPosts = lazy(() => import("./pages/dashboard/MyPosts"));
-const LikedPosts = lazy(() => import("./pages/dashboard/LikedPosts"));
-const CommentedPosts = lazy(() => import("./pages/dashboard/CommentedPosts"));
-
-// ✅ 상세 페이지만 유지
 const FreeBoardDetail = lazy(() => import("./pages/freeboard/FreeBoardDetail"));
 const CareerBoardDetail = lazy(() => import("./pages/careerboard/CareerBoardDetail"));
 
-// Market (lazy)
+// Market + Messages
 const MarketList = lazy(() => import("./pages/market/MarketList"));
 const MarketWrite = lazy(() => import("./pages/market/MarketWrite"));
 const MarketDetail = lazy(() => import("./pages/market/MarketDetail"));
 const MarketEdit = lazy(() => import("./pages/market/MarketEdit"));
-
-// Messages / Schedule / Food (lazy)
 const Messages = lazy(() => import("./pages/messages/Messages"));
+
 const PersonalSchedule = lazy(() => import("./pages/schedule/PersonalSchedule"));
 const GroupAvailability = lazy(() => import("./pages/schedule/GroupAvailability"));
-const FoodMap = lazy(() => import("./pages/food/FoodMap"));
 
 const ENABLED_SCHOOLS = new Set(["nyu"]);
 
@@ -53,11 +35,6 @@ function NormalizeDashboard() {
   const { user } = useAuth();
   if (user?.school) return <Navigate to={`/${user.school}/dashboard`} replace />;
   return <Navigate to="/" replace />;
-}
-
-function LegacyCourseMaterialsRedirect() {
-  const { school } = useParams();
-  return <Navigate to={`/${school}/courses`} replace />;
 }
 
 function LoginRoute() {
@@ -72,17 +49,11 @@ function RegisterRoute() {
 function SchoolGate({ children }) {
   const { school } = useParams();
   if (!ENABLED_SCHOOLS.has((school || "").toLowerCase())) {
-    const label =
-      school?.toLowerCase() === "columbia"
-        ? "Columbia"
-        : school?.toLowerCase() === "boston"
-        ? "Boston"
-        : school;
     return (
       <Navigate
         to="/"
         replace
-        state={{ flash: { type: "info", message: `${label || "This school"} is coming soon 🚧` } }}
+        state={{ flash: { type: "info", message: `${school || "This school"} is coming soon 🚧` } }}
       />
     );
   }
@@ -94,21 +65,16 @@ export default function App() {
     <AuthGateProvider>
       <Suspense fallback={<div className="p-6 text-sm text-gray-500">Loading…</div>}>
         <Routes>
-          {/* Public (no auth) */}
           <Route element={<PublicLayout />}>
             <Route path="/" element={<SchoolSelect />} />
-            <Route path="/select-school" element={<Navigate to="/" replace />} />
             <Route path="/about" element={<About />} />
             <Route path="/login" element={<LoginRoute />} />
             <Route path="/register" element={<RegisterRoute />} />
-            <Route path="/register/:school" element={<RegisterRoute />} />
             <Route path="/auth-required" element={<AuthRequired />} />
           </Route>
 
-          {/* Normalize */}
           <Route path="/dashboard/*" element={<NormalizeDashboard />} />
 
-          {/* School-scoped */}
           <Route
             path="/:school"
             element={
@@ -120,23 +86,9 @@ export default function App() {
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard" element={<Dashboard />} />
 
-            {/* ✅ 리스트 페이지 제거 → 대시보드 탭으로 리다이렉트 */}
-            <Route path="freeboard" element={<Navigate to="../dashboard?tab=free" replace />} />
-            <Route path="career" element={<Navigate to="../dashboard?tab=academic" replace />} />
-
-            {/* ✅ 상세 페이지만 유지 */}
+            {/* Free & Academic boards (detail only) */}
             <Route path="freeboard/:id" element={<FreeBoardDetail />} />
             <Route path="career/:id" element={<CareerBoardDetail />} />
-
-            {/* CourseHub */}
-            <Route path="courses" element={<Courses />} />
-            <Route path="courses/write" element={<CourseWrite />} />
-            <Route path="courses/materials/:id" element={<MaterialDetail />} />
-
-            {/* ✅ Reviews */}
-            <Route path="reviews" element={<ReviewsHub />} />
-            <Route path="courses/:courseId" element={<CourseDetail />} />
-            <Route path="professors/:professorId" element={<ProfessorDetail />} />
 
             {/* Marketplace */}
             <Route path="market" element={<MarketList />} />
@@ -145,25 +97,21 @@ export default function App() {
             <Route path="market/edit/:id" element={<RequireAuth><MarketEdit /></RequireAuth>} />
 
             {/* Protected pages */}
-            <Route path="myposts" element={<RequireAuth><MyPosts /></RequireAuth>} />
-            <Route path="liked" element={<RequireAuth><LikedPosts /></RequireAuth>} />
-            <Route path="commented" element={<RequireAuth><CommentedPosts /></RequireAuth>} />
+            <Route path="myposts" element={<RequireAuth><Dashboard /></RequireAuth>} />
+            <Route path="liked" element={<RequireAuth><Dashboard /></RequireAuth>} />
+            <Route path="commented" element={<RequireAuth><Dashboard /></RequireAuth>} />
             <Route path="messages" element={<RequireAuth><Messages /></RequireAuth>} />
             <Route path="schedule" element={<RequireAuth><PersonalSchedule /></RequireAuth>} />
             <Route path="group-availability" element={<RequireAuth><GroupAvailability /></RequireAuth>} />
-            <Route path="foodmap" element={<FoodMap />} />
-
-            {/* Legacy */}
-            <Route path="materials" element={<LegacyCourseMaterialsRedirect />} />
           </Route>
 
-          {/* 404 */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
     </AuthGateProvider>
   );
 }
+
 
 
 

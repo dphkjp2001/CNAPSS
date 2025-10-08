@@ -23,6 +23,20 @@ import { sendRequest, checkRequested } from "../../api/request";
 dayjs.extend(relativeTime);
 dayjs.locale("en");
 
+// helpers (mirror of backend normalization)
+const normType = (t, lf = false) => {
+  const x = String(t || (lf ? "looking_for" : "")).toLowerCase();
+  if (x === "looking_for" || x === "looking" || x === "lf" || x === "seeking") return "seeking";
+  return "question";
+};
+const normKind = (k) => {
+  const v = String(k || "").toLowerCase();
+  if (v === "study_group") return "study_mate";
+  return v;
+};
+const kindLabel = (k) =>
+  k === "course_materials" ? "Course Materials" : k === "study_mate" ? "Study Mate" : k === "coffee_chat" ? "Coffee Chat" : "";
+
 export default function CareerBoardDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -87,16 +101,18 @@ export default function CareerBoardDetail() {
     [user, post]
   );
 
-  const isLookingFor = useMemo(() => {
-    const t = String(post?.postType || post?.type || "").toLowerCase();
-    return t === "looking_for";
-  }, [post]);
+  const postType = useMemo(
+    () => normType(post?.postType || post?.type, post?.lookingFor || post?.isLookingFor),
+    [post]
+  );
+  const isSeeking = postType === "seeking";
+  const kind = useMemo(() => (isSeeking ? normKind(post?.kind) : ""), [isSeeking, post?.kind]);
 
   // 이미 요청했는지 체크 (로그인 사용자만)
   useEffect(() => {
     let alive = true;
     (async () => {
-      if (!token || !school || !post?._id || !isLookingFor) return;
+      if (!token || !school || !post?._id || !isSeeking) return;
       try {
         const r = await checkRequested({ school, targetId: post._id });
         if (!alive) return;
@@ -106,7 +122,7 @@ export default function CareerBoardDetail() {
     return () => {
       alive = false;
     };
-  }, [token, school, post?._id, isLookingFor]);
+  }, [token, school, post?._id, isSeeking]);
 
   const handleDelete = async () => {
     ensureAuth(async () => {
@@ -125,18 +141,6 @@ export default function CareerBoardDetail() {
     ensureAuth(async () => {
       try {
         await toggleCareerThumbs({ school, id: post._id });
-        setPost((p) =>
-          !p
-            ? p
-            : {
-                ...p,
-                thumbsUpUsers: (p.thumbsUpUsers || []).includes((user?.email || "").toLowerCase())
-                  ? p.thumbsUpUsers.filter(
-                      (e) => e.toLowerCase() !== (user?.email || "").toLowerCase()
-                    )
-                  : [...(p.thumbsUpUsers || []), (user?.email || "").toLowerCase()],
-              }
-        );
         await loadPost();
       } catch (err) {
         alert("Failed to like: " + (err.message || "Unknown error"));
@@ -148,10 +152,17 @@ export default function CareerBoardDetail() {
     ensureAuth(async () => {
       const title = editTitle.trim();
       const content = editContent.trim();
-      if (!title || !content) return;
+      if (!title) return;
       setSaving(true);
       try {
-        const updated = await updateCareerPost({ school, id: post._id, title, content });
+        const updated = await updateCareerPost({
+          school,
+          id: post._id,
+          title,
+          content,
+          postType, // keep current type
+          kind,     // keep current kind
+        });
         const next = updated?.post || updated;
         setPost(next);
         setIsEditing(false);
@@ -172,7 +183,6 @@ export default function CareerBoardDetail() {
   const openRequest = () =>
     ensureAuth(() => {
       if (already.exists && already.conversationId) {
-        // 이미 있으면 메시지 화면으로 이동
         navigate(schoolPath(`/messages?conversation=${already.conversationId}`));
       } else {
         setReqOpen(true);
@@ -181,7 +191,7 @@ export default function CareerBoardDetail() {
 
   const submitRequest = () =>
     ensureAuth(async () => {
-      if (!isLookingFor) return;
+      if (!isSeeking) return;
       const text = (reqMsg || "").trim();
       if (!text) {
         alert("Write a short hello message.");
@@ -227,16 +237,13 @@ export default function CareerBoardDetail() {
       <div className="mx-auto max-w-3xl">
         <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
           <div className="border-b border-gray-100 p-5 sm:p-6">
-            {isEditing ? (
-              <input
-                value={editTitle}
-                onChange={(e) => setEditTitle(e.target.value)}
-                placeholder="Title"
-                className="w-full rounded-xl border border-gray-300 px-3 py-2 text-lg font-semibold text-gray-900 focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10"
-              />
-            ) : (
+            <div className="flex items-center gap-2">
               <h1 className="text-2xl font-bold text-gray-900">{post.title}</h1>
-            )}
+              {/* small badge */}
+              <span className="rounded-full border px-2 py-0.5 text-xs text-gray-700">
+                {postType === "question" ? "General Question" : `Seeking · ${kindLabel(kind)}`}
+              </span>
+            </div>
             <p className="mt-1 text-sm text-gray-500">
               Posted by <span className="font-medium">anonymous</span> • {dayjs(post.createdAt).fromNow()}
             </p>
@@ -279,12 +286,12 @@ export default function CareerBoardDetail() {
                   <button onClick={handleSaveEdit} disabled={saving} className="rounded-lg border px-3 py-1 text-sm text-white" style={{ backgroundColor: "#111827" }}>
                     {saving ? "Saving..." : "Save"}
                   </button>
-                  <button onClick={handleCancelEdit} className="rounded-lg border px-3 py-1 text-sm">Cancel</button>
+                  <button onClick={() => setIsEditing(false)} className="rounded-lg border px-3 py-1 text-sm">Cancel</button>
                 </>
               )}
 
-              {/* ✅ Request 버튼: 오직 "looking_for" + 비작성자일 때만 */}
-              {!isAuthor && isLookingFor && (
+              {/* ✅ Request 버튼: 오직 'seeking' + 비작성자일 때만 */}
+              {!isAuthor && isSeeking && (
                 <button
                   onClick={openRequest}
                   className="rounded-lg border px-3 py-1 text-sm"
@@ -309,7 +316,7 @@ export default function CareerBoardDetail() {
         </div>
       </div>
 
-      {/* ✅ 간단한 모달 */}
+      {/* simple modal */}
       {reqOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
@@ -339,6 +346,7 @@ export default function CareerBoardDetail() {
     </div>
   );
 }
+
 
 
 

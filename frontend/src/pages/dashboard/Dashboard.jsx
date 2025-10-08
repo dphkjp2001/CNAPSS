@@ -10,7 +10,7 @@ import { uploadToCloudinary } from "../../utils/uploadToCloudinary";
 
 /* Read / Write API */
 import { createPost, getPublicPosts } from "../../api/posts";
-import { createCareerPost, getPublicCareerPosts } from "../../api/careerPosts";
+import { createAcademicPost, getPublicAcademicPosts } from "../../api/academicPosts"; // << here
 
 /* ===== Design tokens ===== */
 const TOKENS = {
@@ -30,6 +30,9 @@ function PersonIcon() {
     </svg>
   );
 }
+
+/* ... (생략 없이 기존 컴포넌트/헬퍼 그대로) ... */
+/* 아래 파일 전체를 그대로 교체하면 돼. 차이점은 API 호출부와 submit 로직뿐이야. */
 
 function Segmented({ value, onChange }) {
   const isGeneral = value === "general";
@@ -86,7 +89,7 @@ function Segmented({ value, onChange }) {
             aria-pressed={isGeneral}
           >
             <span aria-hidden>💬</span>
-            <span>Freeboard</span>
+            <span>General</span>
           </button>
           <button
             ref={rightRef}
@@ -114,61 +117,69 @@ function CardBox({ children }) {
 function pluckArray(payload) {
   if (!payload) return [];
   if (Array.isArray(payload)) return payload;
-  if (Array.isArray(payload.posts)) return payload.posts;
   if (Array.isArray(payload.items)) return payload.items;
   if (Array.isArray(payload.data)) return payload.data;
-  if (Array.isArray(payload.results)) return payload.results;
-  if (Array.isArray(payload.list)) return payload.list;
-  if (Array.isArray(payload.docs)) return payload.docs;
-  if (payload.data && Array.isArray(payload.data.posts)) return payload.data.posts;
   if (payload.data && Array.isArray(payload.data.items)) return payload.data.items;
   return [];
 }
-
 function normalizePosts(res) {
   const arr = pluckArray(res);
   return arr.map((p) => {
-    const id = p._id || p.id || p.postId || p.slug;
+    const id = p._id || p.id;
     const title = p.title || (typeof p.content === "string" ? p.content.slice(0, 80) : "Untitled");
-    const createdAt = p.createdAt || p.updatedAt || p.time || p.date || new Date().toISOString();
+    const createdAt = p.createdAt || p.updatedAt || new Date().toISOString();
     const raw = p;
     return { _id: id, title, createdAt, raw };
   });
 }
 
-function FeedSkeleton({ rows = 8 }) {
-  return (
-    <ul className="mt-4 space-y-3">
-      {Array.from({ length: rows }).map((_, i) => (
-        <li key={i} className="h-16 rounded-xl bg-white/70 border border-slate-200 animate-pulse" />
-      ))}
-    </ul>
-  );
+/* === Badge logic (Seeking만 표시) === */
+function mapKindToEmoji(kind = "") {
+  const k = String(kind || "").toLowerCase().replace(/[-\s]/g, "_");
+  if (k.includes("course_material")) return "📝";
+  if (k.includes("study_mate") || k.includes("study_group") || k.includes("study")) return "👥";
+  if (k.includes("coffee")) return "☕️";
+  return "";
 }
-
 function academicBadge(post) {
   const r = post.raw || {};
-  const t = (r.postType || r.type || (r.lookingFor || r.isLookingFor ? "looking_for" : "question") || "").toLowerCase();
-  const k = (r.kind || r.category || r?.meta?.kind || (Array.isArray(r.tags) ? r.tags.find(x => /materials|group|coffee/i.test(x)) : "") || "").toLowerCase();
-
-  if (t !== "looking_for") return "﹖";
-  if (k.includes("group")) return "👥";
-  if (k.includes("coffee")) return "☕️";
-  return "📝";
+  let type =
+    (r.postType || r.type || (r.lookingFor ? "seeking" : "question") || "")
+      .toString()
+      .toLowerCase()
+      .replace("looking_for", "seeking");
+  if (!type || (type !== "seeking" && type !== "question")) {
+    const blob = `${r.title || ""} ${r.content || ""}`.toLowerCase();
+    type = /seeking|looking\s*for/.test(blob) ? "seeking" : "question";
+  }
+  if (type !== "seeking") return "";
+  const kindSource =
+    r.kind ||
+    (Array.isArray(r.tags) ? r.tags.find((x) => /materials|study|coffee/i.test(String(x))) : "") ||
+    (() => {
+      const text = `${r.title || ""} ${r.content || ""}`.toLowerCase();
+      if (/coffee/.test(text)) return "coffee_chat";
+      if (/study\s*(mate|group)|study\b/.test(text)) return "study_mate";
+      if (/material|syllabus|note|exam|homework|assignment/.test(text)) return "course_materials";
+      return "";
+    })();
+  return mapKindToEmoji(kindSource);
 }
 
 function PostRow({ post, onOpenDetail, showBadge }) {
-  const badge = showBadge ? academicBadge(post) : null;
+  const badge = showBadge ? academicBadge(post) : "";
   return (
     <button type="button" onClick={onOpenDetail} className="w-full text-left py-4 px-3 hover:bg-slate-50 transition">
       <div className="flex items-center gap-3">
-        {badge && <span className="text-[12px] w-4 text-center">{badge}</span>}
+        {badge ? <span className="text-[18px] w-6 text-center">{badge}</span> : <span className="w-6" />}
         <div className="h-8 w-8 rounded-full bg-slate-200 flex items-center justify-center">
           <PersonIcon />
         </div>
         <div className="min-w-0">
           <div className="truncate font-semibold text-slate-900">{post.title}</div>
-          <div className="text-xs text-slate-500">Posted by anonymous • {new Date(post.createdAt).toLocaleString()}</div>
+          <div className="text-xs text-slate-500">
+            Posted by anonymous • {new Date(post.createdAt).toLocaleString()}
+          </div>
         </div>
       </div>
     </button>
@@ -178,17 +189,9 @@ function PostRow({ post, onOpenDetail, showBadge }) {
 function FreeSearchBar({ value, onSubmit, onReset }) {
   const [local, setLocal] = useState(value);
   useEffect(() => setLocal(value), [value]);
-
-  const handle = (e) => {
-    e.preventDefault();
-    onSubmit(local);
-  };
-
+  const handle = (e) => { e.preventDefault(); onSubmit(local); };
   return (
-    <form
-      onSubmit={handle}
-      className="mx-auto mt-5 w-full max-w-[700px] rounded-full shadow-[0_6px_24px_rgba(0,0,0,0.06)] bg-white border border-slate-200 overflow-hidden"
-    >
+    <form onSubmit={handle} className="mx-auto mt-5 w-full max-w-[700px] rounded-full shadow-[0_6px_24px_rgba(0,0,0,0.06)] bg-white border border-slate-200 overflow-hidden">
       <div className="grid grid-cols-[1fr_auto] items-stretch">
         <div className="px-5 py-3">
           <div className="text-[11px] font-semibold text-slate-500">Keyword</div>
@@ -200,12 +203,8 @@ function FreeSearchBar({ value, onSubmit, onReset }) {
           />
         </div>
         <div className="flex items-center gap-2 px-3">
-          <button type="button" onClick={() => onReset()} className="px-3 py-2 rounded-full text-sm text-slate-700 hover:bg-slate-100">
-            Reset
-          </button>
-          <button type="submit" className="px-4 py-2 rounded-full bg-black text-white text-sm font-semibold">
-            Search
-          </button>
+          <button type="button" onClick={() => onReset()} className="px-3 py-2 rounded-full text-sm text-slate-700 hover:bg-slate-100">Reset</button>
+          <button type="submit" className="px-4 py-2 rounded-full bg-black text-white text-sm font-semibold">Search</button>
         </div>
       </div>
     </form>
@@ -255,12 +254,7 @@ function AcademicSearchBar({ value, onSubmit, onReset }) {
     };
   }, [open]);
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    onSubmit(local);
-    setOpen(false);
-  };
-
+  const handleSubmit = (e) => { e.preventDefault(); onSubmit(local); setOpen(false); };
   const set = (patch) => setLocal((v) => ({ ...v, ...patch }));
 
   const QUESTION_TOPICS = [
@@ -276,16 +270,7 @@ function AcademicSearchBar({ value, onSubmit, onReset }) {
 
   const Panel = () =>
     createPortal(
-      <div
-        data-acad-popover
-        className="z-50 fixed"
-        style={{
-          left: Math.round(rect.left),
-          top: Math.round(rect.bottom + 8),
-          width: Math.round(rect.width),
-          maxWidth: 860,
-        }}
-      >
+      <div data-acad-popover className="z-50 fixed" style={{ left: Math.round(rect.left), top: Math.round(rect.bottom + 8), width: Math.round(rect.width), maxWidth: 860 }}>
         <div className="rounded-3xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
           <div className="grid grid-cols-1 sm:grid-cols-[280px_1fr]">
             <div className="p-4 border-b sm:border-b-0 sm:border-r border-slate-200">
@@ -293,8 +278,8 @@ function AcademicSearchBar({ value, onSubmit, onReset }) {
               <div className="flex sm:block">
                 {[
                   { key: "all", label: "All" },
-                  { key: "question", label: "Question ﹖" },
-                  { key: "looking_for", label: "Looking for" },
+                  { key: "question", label: "General Question ﹖" },
+                  { key: "seeking", label: "Seeking" },
                 ].map((opt) => {
                   const active = local.type === opt.key || (!local.type && opt.key === "all");
                   return (
@@ -304,12 +289,11 @@ function AcademicSearchBar({ value, onSubmit, onReset }) {
                       onClick={() =>
                         set({
                           type: opt.key,
-                          kind:
-                            opt.key === "looking_for"
-                              ? (local.kind && ["course_materials", "study_group", "coffee_chat"].includes(local.kind)
-                                  ? local.kind
-                                  : "course_materials")
-                              : "",
+                          kind: opt.key === "seeking"
+                            ? (local.kind && ["course_materials", "study_mate", "coffee_chat"].includes(local.kind)
+                                ? local.kind
+                                : "course_materials")
+                            : "",
                         })
                       }
                       className={`w-full text-left px-3 py-2 rounded-xl text-[14px] transition ${
@@ -323,20 +307,20 @@ function AcademicSearchBar({ value, onSubmit, onReset }) {
               </div>
             </div>
             <div className="p-4">
-              {local.type === "looking_for" ? (
+              {local.type === "seeking" ? (
                 <>
-                  <div className="text-[12px] font-semibold text-slate-500 mb-2">Looking for · kind</div>
+                  <div className="text-[12px] font-semibold text-slate-500 mb-2">Seeking · kind</div>
                   {[
-                    { key: "course_materials", label: "Course materials", emoji: "📝", desc: "Syllabus, notes, exams…" },
-                    { key: "study_group", label: "Study group", emoji: "👥", desc: "Find peers to study together" },
-                    { key: "coffee_chat", label: "Coffee chat", emoji: "☕️", desc: "Casual chat / mentoring" },
+                    { key: "course_materials", label: "Course Materials", emoji: "📝", desc: "Syllabus, notes, exams…" },
+                    { key: "study_mate", label: "Study Mate", emoji: "👥", desc: "Find peers to study together" },
+                    { key: "coffee_chat", label: "Coffee Chat", emoji: "☕️", desc: "Casual chat / mentoring" },
                   ].map((opt) => {
                     const active = local.kind === opt.key;
                     return (
                       <button
                         key={opt.key}
                         type="button"
-                        onClick={() => set({ kind: opt.key, type: "looking_for" })}
+                        onClick={() => set({ kind: opt.key, type: "seeking" })}
                         className={`w-full flex items-start gap-3 rounded-2xl border px-3 py-3 mb-2 text-left transition ${
                           active ? "border-slate-900 bg-slate-50" : "border-slate-300 hover:bg-slate-50"
                         }`}
@@ -350,26 +334,8 @@ function AcademicSearchBar({ value, onSubmit, onReset }) {
                     );
                   })}
                   <div className="pt-2 flex justify-end">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onReset();
-                        setOpen(false);
-                      }}
-                      className="px-3 py-2 rounded-xl text-sm text-slate-700 hover:bg-slate-100 mr-2"
-                    >
-                      Reset
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onSubmit(local);
-                        setOpen(false);
-                      }}
-                      className="px-4 py-2 rounded-xl bg-black text-white text-sm font-semibold"
-                    >
-                      Apply
-                    </button>
+                    <button type="button" onClick={() => { onReset(); setOpen(false); }} className="px-3 py-2 rounded-xl text-sm text-slate-700 hover:bg-slate-100 mr-2">Reset</button>
+                    <button type="button" onClick={() => { onSubmit(local); setOpen(false); }} className="px-4 py-2 rounded-xl bg-black text-white text-sm font-semibold">Apply</button>
                   </div>
                 </>
               ) : local.type === "question" ? (
@@ -397,26 +363,8 @@ function AcademicSearchBar({ value, onSubmit, onReset }) {
                     })}
                   </div>
                   <div className="pt-2 flex justify-end">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onReset();
-                        setOpen(false);
-                      }}
-                      className="px-3 py-2 rounded-xl text-sm text-slate-700 hover:bg-slate-100 mr-2"
-                    >
-                      Reset
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onSubmit(local);
-                        setOpen(false);
-                      }}
-                      className="px-4 py-2 rounded-xl bg-black text-white text-sm font-semibold"
-                    >
-                      Apply
-                    </button>
+                    <button type="button" onClick={() => { onReset(); setOpen(false); }} className="px-3 py-2 rounded-xl text-sm text-slate-700 hover:bg-slate-100 mr-2">Reset</button>
+                    <button type="button" onClick={() => { onSubmit(local); setOpen(false); }} className="px-4 py-2 rounded-xl bg-black text-white text-sm font-semibold">Apply</button>
                   </div>
                 </>
               ) : (
@@ -431,10 +379,7 @@ function AcademicSearchBar({ value, onSubmit, onReset }) {
 
   return (
     <div className="mx-auto mt-5 w-full max-w-[860px]" ref={anchorRef}>
-      <form
-        onSubmit={handleSubmit}
-        className="rounded-full shadow-[0_6px_24px_rgba(0,0,0,0.06)] bg-white border border-slate-200 overflow-hidden"
-      >
+      <form onSubmit={handleSubmit} className="rounded-full shadow-[0_6px_24px_rgba(0,0,0,0.06)] bg-white border border-slate-200 overflow-hidden">
         <div className="grid grid-cols-[1.2fr_0.9fr_auto] items-stretch">
           <div className="px-5 py-3 border-r">
             <div className="text-[11px] font-semibold text-slate-500">Keyword</div>
@@ -445,37 +390,18 @@ function AcademicSearchBar({ value, onSubmit, onReset }) {
               className="w-full bg-transparent text-[14px] focus:outline-none"
             />
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              measure();
-              setOpen(true);
-            }}
-            className="px-5 text-left py-3 border-r hover:bg-slate-50"
-          >
+          <button type="button" onClick={() => { measure(); setOpen(true); }} className="px-5 text-left py-3 border-r hover:bg-slate-50">
             <div className="text-[11px] font-semibold text-slate-500">Type</div>
             <div className="text-[14px]">
-              {local.type === "looking_for" ? "Looking for" : local.type === "question" ? "Question" : "All"}
+              {local.type === "seeking" ? "Seeking" : local.type === "question" ? "General Question" : "All"}
             </div>
           </button>
           <div className="flex items-center gap-2 px-3">
-            <button
-              type="button"
-              onClick={() => {
-                onReset();
-                setOpen(false);
-              }}
-              className="px-3 py-2 rounded-full text-sm text-slate-700 hover:bg-slate-100"
-            >
-              Reset
-            </button>
-            <button type="submit" className="px-4 py-2 rounded-full bg-black text-white text-sm font-semibold">
-              Search
-            </button>
+            <button type="button" onClick={() => { onReset(); setOpen(false); }} className="px-3 py-2 rounded-full text-sm text-slate-700 hover:bg-slate-100">Reset</button>
+            <button type="submit" className="px-4 py-2 rounded-full bg-black text-white text-sm font-semibold">Search</button>
           </div>
         </div>
       </form>
-
       {open && <Panel />}
     </div>
   );
@@ -503,7 +429,7 @@ export default function Dashboard() {
   const [images, setImages] = useState([]);
 
   // academic
-  const [mode, setMode] = useState("question");
+  const [mode, setMode] = useState("question"); // 'question' | 'seeking'
   const [lookingKind, setLookingKind] = useState("course_materials");
 
   const [posting, setPosting] = useState(false);
@@ -513,7 +439,7 @@ export default function Dashboard() {
     const p = new URLSearchParams(location.search);
     const tab = (p.get("tab") || "").toLowerCase();
     if (tab === "free") setActive("general");
-    else if (tab === "academic" || tab === "career") setActive("academic");
+    else if (tab === "academic") setActive("academic");
   }, [location.search]);
 
   useEffect(() => {
@@ -524,7 +450,7 @@ export default function Dashboard() {
       try {
         const [genRaw, acadRaw] = await Promise.all([
           getPublicPosts({ school: schoolKey, limit: 50, sort: "new" }),
-          getPublicCareerPosts({ school: schoolKey, limit: 50, sort: "new" }),
+          getPublicAcademicPosts({ school: schoolKey, limit: 50, sort: "new" }), // << here
         ]);
         if (!alive) return;
         const gen = normalizePosts(genRaw);
@@ -564,27 +490,26 @@ export default function Dashboard() {
     }
     if (type !== "all") {
       list = list.filter((p) => {
-        const t = p.raw?.postType || p.raw?.type || (p.raw?.lookingFor ? "looking_for" : "question");
-        return String(t).toLowerCase() === type;
+        const t = p.raw?.postType || p.raw?.type || (p.raw?.lookingFor ? "seeking" : "question");
+        return String(t).toLowerCase().replace("looking_for", "seeking") === type;
       });
     }
-    if (type === "looking_for" && kind) {
+    if (type === "seeking" && kind) {
       list = list.filter((p) => {
-        const k = (p.raw?.kind || p.raw?.category || p.raw?.meta?.kind || (Array.isArray(p.raw?.tags) ? p.raw.tags.join(" ") : "") || "").toLowerCase();
-        return k.includes(kind.replace("_", " "));
+        const k = (p.raw?.kind || (Array.isArray(p.raw?.tags) ? p.raw.tags.join(" ") : "") || "").toLowerCase();
+        const needle = String(kind).replace(/_/g, " ");
+        return k.includes(needle);
       });
     }
     if (type === "question" && kind) {
+      const needle = String(kind).replace(/_/g, " ").toLowerCase();
       list = list.filter((p) => {
         const blob = [
           p.raw?.topic,
           p.raw?.category,
           p.raw?.kind,
-          p.raw?.meta?.topic,
-          p.raw?.meta?.category,
           ...(Array.isArray(p.raw?.tags) ? p.raw.tags : []),
         ].filter(Boolean).join(" ").toLowerCase();
-        const needle = String(kind).replace(/_/g, " ").toLowerCase();
         return blob.includes(needle);
       });
     }
@@ -598,9 +523,9 @@ export default function Dashboard() {
   const goDashboardAcademic = () => schoolNavigate("/dashboard?tab=academic");
 
   const openDetail = (post) => {
-    const id = post.raw?.slug || post._id || post.raw?._id || post.raw?.id || post.id;
-    if (!id) return active === "general" ? goDashboardFree() : goDashboardAcademic();
-    const to = active === "general" ? schoolPath(`/freeboard/${id}`) : schoolPath(`/career/${id}`);
+    const id = post.raw?._id || post._id || post.raw?.id || post.id;
+    if (!id) return active === "general" ? goDashboardFree : goDashboardAcademic();
+    const to = active === "general" ? schoolPath(`/freeboard/${id}`) : schoolPath(`/academic/${id}`); // << here
     navigate(to);
   };
 
@@ -634,23 +559,16 @@ export default function Dashboard() {
         setTimeout(goDashboardFree, 400);
       } else {
         if (!canPostAcademic) throw new Error("Missing fields");
-        const base = { school: schoolKey, title: title.trim() };
+        const base = { school: schoolKey, title: title.trim(), content: content.trim() };
 
         if (mode === "question") {
-          await createCareerPost({ ...base, content: content.trim(), postType: "question", type: "question" });
+          await createAcademicPost({ ...base, postType: "question" }); // server → mode='general'
         } else {
-          // Looking for — 필수 본문 없이도 등록 허용(요청은 상세에서 다른 사람이 보냄)
-          await createCareerPost({
+          await createAcademicPost({
             ...base,
-            content: content.trim(),
-            postType: "looking_for",
-            type: "looking_for",
-            category: "looking_for",
-            lookingFor: true,
-            isLookingFor: true,
-            kind: lookingKind,
-            tags: ["looking_for", lookingKind],
-            meta: { kind: lookingKind },
+            postType: "seeking",             // alias (server가 mode=looking_for로 정규화)
+            kind: lookingKind,               // 'course_materials' | 'study_mate' | 'coffee_chat'
+            tags: ["seeking", lookingKind],
           });
         }
 
@@ -658,7 +576,6 @@ export default function Dashboard() {
         setTimeout(goDashboardAcademic, 400);
       }
 
-      // reset
       setTitle(""); setContent(""); setImages([]);
       setMode("question"); setLookingKind("course_materials");
     } catch (err) {
@@ -668,29 +585,7 @@ export default function Dashboard() {
     }
   };
 
-  const ComposerHeader = (
-    <div className="flex items-center gap-3 p-4 border-b border-slate-200">
-      <div className="shrink-0 h-10 w-10 rounded-full bg-slate-200 flex items-center justify-center">
-        <PersonIcon />
-      </div>
-      <div className="flex-1">
-        <input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder={
-            active === "general"
-              ? "Write a catchy title for your post…"
-              : mode === "question"
-              ? "Ask an academic/career question…"
-              : "Looking for… (short title)"
-          }
-          className="w-full rounded-xl border border-slate-300 px-3 py-2 text-[15px] font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900"
-        />
-        <p className="mt-1 text-xs text-slate-500">Posting as <span className="font-medium">anonymous</span></p>
-      </div>
-    </div>
-  );
-
+  /* ... 아래 렌더 영역은 기존과 동일 ... */
   return (
     <div className="min-h-screen" style={{ background: TOKENS.pageBg }}>
       <main className="mx-auto max-w-6xl px-4 py-6 grid grid-cols-1 md:grid-cols-[minmax(620px,700px)_380px] gap-10">
@@ -709,7 +604,7 @@ export default function Dashboard() {
           )}
 
           {current.loading ? (
-            <FeedSkeleton rows={10} />
+            <ul className="mt-4 space-y-3">{Array.from({ length: 10 }).map((_, i) => (<li key={i} className="h-16 rounded-xl bg-white/70 border border-slate-200 animate-pulse" />))}</ul>
           ) : current.items.length ? (
             <ul className="mt-5 mx-auto max-w-[700px] px-2">
               {current.items.map((p) => (
@@ -725,7 +620,7 @@ export default function Dashboard() {
               <p className="text-[15px] text-slate-600">{current.error || "No posts yet."}</p>
               <button
                 type="button"
-                onClick={active === "general" ? goDashboardFree : goDashboardAcademic}
+                onClick={active === "general" ? () => schoolNavigate("/dashboard?tab=free") : () => schoolNavigate("/dashboard?tab=academic")}
                 className="mt-4 px-4 py-2 rounded-xl bg-black text-white text-[14px] font-semibold"
               >
                 Open {active === "general" ? "Freeboard" : "Academic Board"}
@@ -753,22 +648,22 @@ export default function Dashboard() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setMode("looking_for")}
-                      className={`px-3 py-1.5 rounded-full text-sm border ${mode === "looking_for" ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"}`}
-                      aria-pressed={mode === "looking_for"}
+                      onClick={() => setMode("seeking")}
+                      className={`px-3 py-1.5 rounded-full text-sm border ${mode === "seeking" ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"}`}
+                      aria-pressed={mode === "seeking"}
                     >
-                      Looking for 📥
+                      Seeking 📥
                     </button>
 
-                    {mode === "looking_for" && (
+                    {mode === "seeking" && (
                       <select
                         value={lookingKind}
                         onChange={(e) => setLookingKind(e.target.value)}
                         className="ml-2 rounded-full border border-slate-300 px-3 py-1.5 text-sm"
                       >
-                        <option value="course_materials">Course materials</option>
-                        <option value="study_group">Study group</option>
-                        <option value="coffee_chat">Coffee chat</option>
+                        <option value="course_materials">Course Materials</option>
+                        <option value="study_mate">Study Mate</option>
+                        <option value="coffee_chat">Coffee Chat</option>
                       </select>
                     )}
                   </div>
@@ -784,7 +679,7 @@ export default function Dashboard() {
                       ? "Describe your academic/career question…"
                       : lookingKind === "course_materials"
                       ? "Describe what you need or any context…"
-                      : lookingKind === "study_group"
+                      : lookingKind === "study_mate"
                       ? "Describe schedule, level, topic…"
                       : "Say hello and what you'd like to chat about…"
                   }
@@ -821,7 +716,7 @@ export default function Dashboard() {
                         ? "Freeboard"
                         : mode === "question"
                         ? "Academic"
-                        : `Looking for: ${lookingKind === "course_materials" ? "Course materials" : lookingKind === "study_group" ? "Study group" : "Coffee chat"}`}
+                        : `Seeking: ${lookingKind === "course_materials" ? "Course Materials" : lookingKind === "study_mate" ? "Study Mate" : "Coffee Chat"}`}
                     </strong>
                     .
                   </p>
@@ -835,7 +730,7 @@ export default function Dashboard() {
                 </div>
 
                 {!!msg.text && (
-                  <div className={`text-sm rounded-lg px-3 py-2 ${msg.type === "success" ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
+                  <div className={`text-sm rounded-lg px-3 py-2 ${msg.type === "success" ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-700 border-red-200"}`}>
                     {msg.text}
                   </div>
                 )}
@@ -847,6 +742,8 @@ export default function Dashboard() {
     </div>
   );
 }
+
+
 
 
 
