@@ -10,7 +10,7 @@ import { uploadToCloudinary } from "../../utils/uploadToCloudinary";
 
 /* Read / Write API */
 import { createPost, getPublicPosts } from "../../api/posts";
-import { createAcademicPost, getPublicAcademicPosts } from "../../api/academicPosts"; // << here
+import { createAcademicPost, getPublicAcademicPosts } from "../../api/academicPosts";
 
 /* ===== Design tokens ===== */
 const TOKENS = {
@@ -30,9 +30,6 @@ function PersonIcon() {
     </svg>
   );
 }
-
-/* ... (생략 없이 기존 컴포넌트/헬퍼 그대로) ... */
-/* 아래 파일 전체를 그대로 교체하면 돼. 차이점은 API 호출부와 submit 로직뿐이야. */
 
 function Segmented({ value, onChange }) {
   const isGeneral = value === "general";
@@ -183,6 +180,36 @@ function PostRow({ post, onOpenDetail, showBadge }) {
         </div>
       </div>
     </button>
+  );
+}
+
+function ComposerHeader({ title, setTitle, active, mode }) {
+  return (
+    <div className="flex items-center gap-3 p-4 border-b border-slate-200">
+      <div className="shrink-0 h-10 w-10 rounded-full bg-slate-200 flex items-center justify-center">
+        <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden>
+          <circle cx="12" cy="8" r="4" fill="#cbd5e1" />
+          <path d="M4 20c0-4 4-6 8-6s8 2 8 6" fill="#cbd5e1" />
+        </svg>
+      </div>
+      <div className="flex-1">
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder={
+            active === "general"
+              ? "Write a catchy title for your post…"
+              : mode === "question"
+              ? "Ask an academic/career question…"
+              : "Seeking… (short title)"
+          }
+          className="w-full rounded-xl border border-slate-300 px-3 py-2 text-[15px] font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900"
+        />
+        <p className="mt-1 text-xs text-slate-500">
+          Posting as <span className="font-medium">anonymous</span>
+        </p>
+      </div>
+    </div>
   );
 }
 
@@ -450,7 +477,7 @@ export default function Dashboard() {
       try {
         const [genRaw, acadRaw] = await Promise.all([
           getPublicPosts({ school: schoolKey, limit: 50, sort: "new" }),
-          getPublicAcademicPosts({ school: schoolKey, limit: 50, sort: "new" }), // << here
+          getPublicAcademicPosts({ school: schoolKey, limit: 50, sort: "new" }),
         ]);
         if (!alive) return;
         const gen = normalizePosts(genRaw);
@@ -516,7 +543,8 @@ export default function Dashboard() {
     return list;
   }, [academic.items, acadQuery]);
 
-  const current = active === "general" ? { ...general, items: filteredGeneral } : { ...academic, items: filteredAcademic };
+  const current =
+    active === "general" ? { ...general, items: filteredGeneral } : { ...academic, items: filteredAcademic };
 
   const schoolNavigate = (p) => navigate(schoolPath(p));
   const goDashboardFree = () => schoolNavigate("/dashboard?tab=free");
@@ -525,7 +553,8 @@ export default function Dashboard() {
   const openDetail = (post) => {
     const id = post.raw?._id || post._id || post.raw?.id || post.id;
     if (!id) return active === "general" ? goDashboardFree : goDashboardAcademic();
-    const to = active === "general" ? schoolPath(`/freeboard/${id}`) : schoolPath(`/academic/${id}`); // << here
+    const to =
+      active === "general" ? schoolPath(`/freeboard/${id}`) : schoolPath(`/academic/${id}`);
     navigate(to);
   };
 
@@ -546,7 +575,10 @@ export default function Dashboard() {
   const submitPost = async (e) => {
     e.preventDefault();
     setMsg({ type: "", text: "" });
-    if (!isAuthed) { setMsg({ type: "error", text: "Login required to post." }); return; }
+    if (!isAuthed) {
+      setMsg({ type: "error", text: "Login required to post." });
+      return;
+    }
 
     setPosting(true);
     try {
@@ -554,7 +586,12 @@ export default function Dashboard() {
         if (!canPostGeneral) throw new Error("Missing fields");
         let imageUrls = [];
         if (images.length) imageUrls = await uploadFiles(images);
-        await createPost({ school: schoolKey, title: title.trim(), content: content.trim(), images: imageUrls });
+        await createPost({
+          school: schoolKey,
+          title: title.trim(),
+          content: content.trim(),
+          images: imageUrls,
+        });
         setMsg({ type: "success", text: "Posted to Freeboard! Redirecting…" });
         setTimeout(goDashboardFree, 400);
       } else {
@@ -566,8 +603,8 @@ export default function Dashboard() {
         } else {
           await createAcademicPost({
             ...base,
-            postType: "seeking",             // alias (server가 mode=looking_for로 정규화)
-            kind: lookingKind,               // 'course_materials' | 'study_mate' | 'coffee_chat'
+            postType: "seeking", // alias (server가 mode=looking_for로 정규화)
+            kind: lookingKind, // 'course_materials' | 'study_mate' | 'coffee_chat'
             tags: ["seeking", lookingKind],
           });
         }
@@ -576,16 +613,21 @@ export default function Dashboard() {
         setTimeout(goDashboardAcademic, 400);
       }
 
-      setTitle(""); setContent(""); setImages([]);
-      setMode("question"); setLookingKind("course_materials");
+      setTitle("");
+      setContent("");
+      setImages([]);
+      setMode("question");
+      setLookingKind("course_materials");
     } catch (err) {
-      setMsg({ type: "error", text: err?.message || "Failed to post. Please check required fields." });
+      setMsg({
+        type: "error",
+        text: err?.message || "Failed to post. Please check required fields.",
+      });
     } finally {
       setPosting(false);
     }
   };
 
-  /* ... 아래 렌더 영역은 기존과 동일 ... */
   return (
     <div className="min-h-screen" style={{ background: TOKENS.pageBg }}>
       <main className="mx-auto max-w-6xl px-4 py-6 grid grid-cols-1 md:grid-cols-[minmax(620px,700px)_380px] gap-10">
@@ -604,7 +646,11 @@ export default function Dashboard() {
           )}
 
           {current.loading ? (
-            <ul className="mt-4 space-y-3">{Array.from({ length: 10 }).map((_, i) => (<li key={i} className="h-16 rounded-xl bg-white/70 border border-slate-200 animate-pulse" />))}</ul>
+            <ul className="mt-4 space-y-3">
+              {Array.from({ length: 10 }).map((_, i) => (
+                <li key={i} className="h-16 rounded-xl bg-white/70 border border-slate-200 animate-pulse" />
+              ))}
+            </ul>
           ) : current.items.length ? (
             <ul className="mt-5 mx-auto max-w-[700px] px-2">
               {current.items.map((p) => (
@@ -620,7 +666,11 @@ export default function Dashboard() {
               <p className="text-[15px] text-slate-600">{current.error || "No posts yet."}</p>
               <button
                 type="button"
-                onClick={active === "general" ? () => schoolNavigate("/dashboard?tab=free") : () => schoolNavigate("/dashboard?tab=academic")}
+                onClick={
+                  active === "general"
+                    ? () => navigate(schoolPath("/dashboard?tab=free"))
+                    : () => navigate(schoolPath("/dashboard?tab=academic"))
+                }
                 className="mt-4 px-4 py-2 rounded-xl bg-black text-white text-[14px] font-semibold"
               >
                 Open {active === "general" ? "Freeboard" : "Academic Board"}
@@ -633,7 +683,13 @@ export default function Dashboard() {
         <aside className="md:col-start-2 md:sticky md:top-[24px] self-start">
           <CardBox>
             <form onSubmit={submitPost}>
-              {ComposerHeader}
+              {/* ✅ 반드시 컴포넌트로 “호출”해서 렌더해야 함 */}
+              <ComposerHeader
+                title={title}
+                setTitle={setTitle}
+                active={active}
+                mode={mode}
+              />
 
               <div className="p-4 space-y-4">
                 {active === "academic" && (
@@ -641,7 +697,11 @@ export default function Dashboard() {
                     <button
                       type="button"
                       onClick={() => setMode("question")}
-                      className={`px-3 py-1.5 rounded-full text-sm border ${mode === "question" ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"}`}
+                      className={`px-3 py-1.5 rounded-full text-sm border ${
+                        mode === "question"
+                          ? "bg-slate-900 text-white border-slate-900"
+                          : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
+                      }`}
                       aria-pressed={mode === "question"}
                     >
                       General question
@@ -649,7 +709,11 @@ export default function Dashboard() {
                     <button
                       type="button"
                       onClick={() => setMode("seeking")}
-                      className={`px-3 py-1.5 rounded-full text-sm border ${mode === "seeking" ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"}`}
+                      className={`px-3 py-1.5 rounded-full text-sm border ${
+                        mode === "seeking"
+                          ? "bg-slate-900 text-white border-slate-900"
+                          : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
+                      }`}
                       aria-pressed={mode === "seeking"}
                     >
                       Seeking 📥
@@ -716,7 +780,13 @@ export default function Dashboard() {
                         ? "Freeboard"
                         : mode === "question"
                         ? "Academic"
-                        : `Seeking: ${lookingKind === "course_materials" ? "Course Materials" : lookingKind === "study_mate" ? "Study Mate" : "Coffee Chat"}`}
+                        : `Seeking: ${
+                            lookingKind === "course_materials"
+                              ? "Course Materials"
+                              : lookingKind === "study_mate"
+                              ? "Study Mate"
+                              : "Coffee Chat"
+                          }`}
                     </strong>
                     .
                   </p>
@@ -730,7 +800,13 @@ export default function Dashboard() {
                 </div>
 
                 {!!msg.text && (
-                  <div className={`text-sm rounded-lg px-3 py-2 ${msg.type === "success" ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-700 border-red-200"}`}>
+                  <div
+                    className={`text-sm rounded-lg px-3 py-2 ${
+                      msg.type === "success"
+                        ? "bg-green-50 text-green-700 border border-green-200"
+                        : "bg-red-50 text-red-700 border-red-200"
+                    }`}
+                  >
                     {msg.text}
                   </div>
                 )}
@@ -742,6 +818,7 @@ export default function Dashboard() {
     </div>
   );
 }
+
 
 
 

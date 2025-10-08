@@ -3,15 +3,12 @@ const express = require("express");
 const router = express.Router({ mergeParams: true });
 const AcademicPost = require("../models/AcademicPost");
 
-// 허용 학교(필요시 조정)
 const ALLOWED_SCHOOLS = ["nyu"];
 
 router.get("/", async (req, res) => {
   try {
     const school = String(req.params.school || "").toLowerCase();
-    if (!ALLOWED_SCHOOLS.includes(school)) {
-      return res.status(400).json({ message: "Invalid school." });
-    }s
+    if (!ALLOWED_SCHOOLS.includes(school)) return res.status(400).json({ message: "Invalid school." });
 
     const page = Math.max(parseInt(req.query.page || "1", 10), 1);
     const limit = Math.min(Math.max(parseInt(req.query.limit || "20", 10), 1), 50);
@@ -22,18 +19,15 @@ router.get("/", async (req, res) => {
 
     const match = { school };
     if (q) match.title = { $regex: q, $options: "i" };
-
     if (type) {
       const m = type === "question" ? "general" : type === "seeking" ? "looking_for" : type;
       if (m === "general" || m === "looking_for") match.mode = m;
     }
     if (kind) match.kind = kind;
 
-    const sortStage =
-      sortOpt === "old" ? { createdAt: 1, _id: 1 } : { createdAt: -1, _id: -1 };
+    const sortStage = sortOpt === "old" ? { createdAt: 1, _id: 1 } : { createdAt: -1, _id: -1 };
 
     const total = await AcademicPost.countDocuments(match);
-
     const items = await AcademicPost.aggregate([
       { $match: match },
       { $sort: sortStage },
@@ -50,14 +44,15 @@ router.get("/", async (req, res) => {
           mode: 1,
           kind: 1,
           likesCount: { $size: { $ifNull: ["$likes", []] } },
+          author: 1,
         },
       },
       { $project: { school: 0 } },
     ]);
 
     res.json({ page, limit, total, items });
-  } catch (err) {
-    console.error("Public academic posts error:", err);
+  } catch (e) {
+    console.error("Public academic posts error:", e);
     res.status(500).json({ message: "Failed to load academic posts." });
   }
 });
@@ -65,21 +60,21 @@ router.get("/", async (req, res) => {
 router.get("/:id", async (req, res) => {
   try {
     const school = String(req.params.school || "").toLowerCase();
-    if (!ALLOWED_SCHOOLS.includes(school)) {
-      return res.status(400).json({ message: "Invalid school." });
-    }
+    if (!ALLOWED_SCHOOLS.includes(school)) return res.status(400).json({ message: "Invalid school." });
 
     const post = await AcademicPost.findOne(
       { _id: req.params.id, school },
-      "_id title content images createdAt mode kind"
+      "_id title content images createdAt mode kind author"
     ).lean();
     if (!post) return res.status(404).json({ message: "Post not found." });
 
     res.json(post);
-  } catch (err) {
-    console.error("Public academic post detail error:", err);
+  } catch (e) {
+    console.error("Public academic post detail error:", e);
     res.status(500).json({ message: "Failed to load academic post." });
   }
 });
 
 module.exports = router;
+
+

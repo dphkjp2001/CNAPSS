@@ -17,7 +17,7 @@ import AuthRequired from "./pages/auth/AuthRequired";
 // Dashboard + Boards
 const Dashboard = lazy(() => import("./pages/dashboard/Dashboard"));
 const FreeBoardDetail = lazy(() => import("./pages/freeboard/FreeBoardDetail"));
-const CareerBoardDetail = lazy(() => import("./pages/careerboard/CareerBoardDetail"));
+const AcademicDetail = lazy(() => import("./pages/academic/AcademicDetail")); // ✅ NEW (career 대체)
 
 // Market + Messages
 const MarketList = lazy(() => import("./pages/market/MarketList"));
@@ -88,7 +88,7 @@ export default function App() {
 
             {/* Free & Academic boards (detail only) */}
             <Route path="freeboard/:id" element={<FreeBoardDetail />} />
-            <Route path="career/:id" element={<CareerBoardDetail />} />
+            <Route path="academic/:id" element={<AcademicDetail />} /> {/* ✅ career → academic */}
 
             {/* Marketplace */}
             <Route path="market" element={<MarketList />} />
@@ -111,6 +111,7 @@ export default function App() {
     </AuthGateProvider>
   );
 }
+
 
 
 

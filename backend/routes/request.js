@@ -5,80 +5,63 @@ const mongoose = require("mongoose");
 const Request = require("../models/Request");
 const Conversation = require("../models/Conversation");
 const Message = require("../models/Message");
-const CareerPost = require("../models/CareerPost");
+const AcademicPost = require("../models/AcademicPost");
+const User = require("../models/User");
 
 const requireAuth = require("../middleware/requireAuth");
 const schoolGuard = require("../middleware/schoolGuard");
 
 const router = express.Router({ mergeParams: true });
 
-// 모든 라우트는 app.js에서 requireAuth + schoolGuard가 이미 걸려있지만,
-// 직접 접근 시를 대비해 한 번 더 보강
 router.use(requireAuth, schoolGuard);
 
 /**
  * POST /api/:school/request
- * Academic "Looking for" 글에 대한 요청(=첫 메시지) 생성
  * body: { targetId, initialMessage }
- * 결과: { ok, requestId, conversationId }
+ * result: { ok, requestId, conversationId }
  */
 router.post("/", async (req, res) => {
   try {
     const school = req.params.school;
-    const userEmail = (req.user?.email || "").toLowerCase();
     const { targetId, initialMessage } = req.body || {};
+    if (!mongoose.isValidObjectId(targetId)) return res.status(400).json({ error: "Invalid targetId." });
 
-    if (!mongoose.isValidObjectId(targetId)) {
-      return res.status(400).json({ error: "Invalid targetId." });
-    }
-
-    const post = await CareerPost.findById(targetId).lean();
+    const post = await AcademicPost.findOne({ _id: targetId, school }).populate("author", "email _id").lean();
     if (!post) return res.status(404).json({ error: "Post not found." });
-    if ((post.school || "").toLowerCase() !== (school || "").toLowerCase()) {
-      return res.status(403).json({ error: "School scope mismatch." });
+
+    const authorId = post.author?._id;
+    const authorEmail = String(post.author?.email || "").toLowerCase();
+    const userId = req.user._id;
+    const userEmail = String(req.user.email || "").toLowerCase();
+
+    // only seeking posts accept requests
+    const postMode = String(post.mode || post.postType || post.type || "").toLowerCase();
+    if (!(postMode === "looking_for" || postMode === "seeking")) {
+      return res.status(400).json({ error: "Only 'seeking' posts accept requests." });
+    }
+    if (!authorId || authorEmail === userEmail) {
+      return res.status(400).json({ error: "Invalid target user." });
     }
 
-    const authorEmail = String(post.email || "").toLowerCase();
-    if (!authorEmail) return res.status(400).json({ error: "Post has no author." });
-
-    // 오직 'looking_for' 타입만 허용
-    const postType = String(post.postType || post.type || "").toLowerCase();
-    if (postType !== "looking_for") {
-      return res.status(400).json({ error: "Only 'looking for' posts accept requests." });
-    }
-
-    if (authorEmail === userEmail) {
-      return res.status(400).json({ error: "You cannot send a request to your own post." });
-    }
-
-    // 중복 요청 방지
-    const exists = await Request.findOne({ targetId, fromUser: userEmail });
+    // prevent duplicates (same user → same post)
+    const exists = await Request.findOne({ school, targetId, fromUser: userId });
     if (exists) {
-      return res.status(409).json({
-        error: "You have already requested.",
-        requestId: exists._id,
-        conversationId: exists.conversationId,
-      });
+      return res.status(409).json({ error: "Already requested.", requestId: exists._id, conversationId: exists.conversationId });
     }
 
-    // 대화가 이미 있는지 탐색(양방향)
+    // conversation (email 기반으로 맞춰서)
     let convo = await Conversation.findOne({
       school,
       $or: [
         { buyer: userEmail, seller: authorEmail },
         { buyer: authorEmail, seller: userEmail },
       ],
-      // 특정 글 기준으로 묶을 수 있으면 좋지만, itemId 필드가 없을 수도 있어 optional
-      $orIgnore: true,
     });
-
     if (!convo) {
-      // 새 대화 생성
       convo = await Conversation.create({
         school,
         buyer: userEmail,
         seller: authorEmail,
-        // 기존 스키마에 없을 수도 있는 필드이므로 optional
         source: "academic_looking_for",
         itemId: targetId,
         resourceTitle: post.title || "Looking for",
@@ -86,76 +69,51 @@ router.post("/", async (req, res) => {
       });
     }
 
-    // 첫 메시지 생성
     const text = (initialMessage || "").trim() || "Hi! I'm interested in your post.";
-    const msg = await Message.create({
-      conversationId: convo._id,
-      sender: userEmail,
-      content: text,
-      school,
-    });
-
-    // 대화 갱신
+    const msg = await Message.create({ conversationId: convo._id, sender: userEmail, content: text, school });
     convo.lastMessage = text;
     convo.updatedAt = new Date();
     await convo.save();
 
-    // Request 레코드 (자동 수락된 상태로 기록)
     const reqDoc = await Request.create({
       school,
-      targetType: "career_post",
+      targetType: "academic_post",
       targetId,
-      fromUser: userEmail,
-      toUser: authorEmail,
-      initialMessage: text,
+      fromUser: userId,
+      toUser: authorId,
+      type: "academic_request",
       status: "accepted",
+      message: text,
       conversationId: convo._id,
     });
 
-    // 소켓 알림(상대방 목록 갱신)
+    // socket notify (best-effort)
     try {
       const io = req.app.get("io");
       if (io) {
-        // 대화방 참여자들에게 미리보기 전달
         io.to(`user:${authorEmail}`).emit("chat:preview", {
           conversationId: String(convo._id),
           lastMessage: text,
           updatedAt: convo.updatedAt,
         });
       }
-    } catch (e) {
-      console.warn("[request] socket notify failed:", e?.message || e);
-    }
+    } catch {}
 
-    return res.json({
-      ok: true,
-      requestId: String(reqDoc._id),
-      conversationId: String(convo._id),
-    });
+    return res.json({ ok: true, requestId: String(reqDoc._id), conversationId: String(convo._id) });
   } catch (e) {
     console.error("POST /request error:", e);
     return res.status(500).json({ error: "Failed to create request." });
   }
 });
 
-/**
- * GET /api/:school/request/exists?targetId=...
- * 현재 로그인 사용자가 이미 요청했는지 여부(버튼 상태용)
- */
+/** GET /api/:school/request/exists?targetId=... */
 router.get("/exists", async (req, res) => {
   try {
     const school = req.params.school;
-    const userEmail = (req.user?.email || "").toLowerCase();
     const { targetId } = req.query || {};
-    if (!mongoose.isValidObjectId(targetId)) {
-      return res.status(400).json({ error: "Invalid targetId." });
-    }
-    const found = await Request.findOne({ school, targetId, fromUser: userEmail }).select("_id conversationId");
-    return res.json({
-      exists: !!found,
-      requestId: found?._id,
-      conversationId: found?.conversationId,
-    });
+    if (!mongoose.isValidObjectId(targetId)) return res.status(400).json({ error: "Invalid targetId." });
+    const found = await Request.findOne({ school, targetId, fromUser: req.user._id }).select("_id conversationId");
+    return res.json({ exists: !!found, requestId: found?._id, conversationId: found?.conversationId });
   } catch (e) {
     console.error("GET /request/exists error:", e);
     return res.status(500).json({ error: "Failed to check." });
@@ -163,6 +121,7 @@ router.get("/exists", async (req, res) => {
 });
 
 module.exports = router;
+
 
 
 
