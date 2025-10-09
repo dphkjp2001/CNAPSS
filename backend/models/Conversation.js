@@ -4,20 +4,22 @@ const mongoose = require("mongoose");
 const ALLOWED_SCHOOLS = ["nyu", "columbia", "boston"];
 
 /**
- * Minimal sources for now:
- *  - "looking_for" : Academic ‘Looking for’에서 생성된 DM
- *  - "dm"          : 사용자가 Messages 화면에서 직접 시작한 DM
+ * We only use:
+ *  - "looking_for" : Academic 'Looking for' → DM
+ *  - "dm"          : User-started direct messages
  *
- * (나중에 세분화하려면 "looking_for/course_materials" 등만 여기 배열에 추가하면 됨)
+ * Legacy sources ("coursehub_wtb", "coursehub", "market") might still be sent
+ * by older routes. We normalize them to "looking_for" in pre-validate hook
+ * so the server won't crash even if an old value is used.
  */
 const ALLOWED_SOURCES = ["looking_for", "dm"];
 
 const conversationSchema = new mongoose.Schema(
   {
-    // (optional) legacy
+    // optional legacy linkage
     itemId: { type: mongoose.Schema.Types.ObjectId, ref: "MarketItem", default: null },
 
-    // (optional) generic resource linkage
+    // optional generic resource linkage
     resourceId: { type: mongoose.Schema.Types.ObjectId, default: null },
     resourceTitle: { type: String, default: "" },
 
@@ -31,7 +33,7 @@ const conversationSchema = new mongoose.Schema(
     // last message preview
     lastMessage: { type: String, default: "" },
 
-    // ✅ minimal source set
+    // minimal source set
     source: { type: String, enum: ALLOWED_SOURCES, required: true, index: true },
 
     // 🔐 tenant scope
@@ -45,6 +47,15 @@ const conversationSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// 🔧 normalize legacy sources before validation
+conversationSchema.pre("validate", function (next) {
+  const legacy = String(this.source || "").toLowerCase();
+  if (["coursehub_wtb", "coursehub", "market"].includes(legacy)) {
+    this.source = "looking_for";
+  }
+  next();
+});
 
 // keep participants in sync
 conversationSchema.pre("save", function (next) {

@@ -32,10 +32,7 @@ router.post("/", async (req, res) => {
     const post = await AcademicPost.findOne({ _id: targetId, school })
       .populate("author", "email _id")
       .lean();
-
-    if (!post) {
-      return res.status(404).json({ message: "Post not found." });
-    }
+    if (!post) return res.status(404).json({ message: "Post not found." });
 
     const authorId = post.author?._id;
     const authorEmail = String(post.author?.email || "").toLowerCase();
@@ -51,7 +48,7 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ message: "Invalid target user." });
     }
 
-    // prevent duplicates (same user → same post)
+    // prevent duplicates
     const exists = await Request.findOne({ school, targetId, fromUser: userId });
     if (exists) {
       return res
@@ -59,7 +56,7 @@ router.post("/", async (req, res) => {
         .json({ message: "Request already sent.", requestId: exists._id, conversationId: exists.conversationId });
     }
 
-    // find or create conversation between requester and author
+    // find or create conversation
     let convo = await Conversation.findOne({
       school,
       $or: [
@@ -69,20 +66,13 @@ router.post("/", async (req, res) => {
     });
 
     if (!convo) {
-      // ✅ must be allowed by Conversation.model enum
-      if (!Conversation.schema.path("source").enumValues.includes("looking_for")) {
-        console.error(
-          'Conversation.source enum must include "looking_for". Please update models/Conversation.js.'
-        );
-        return res.status(500).json({ message: 'Server misconfig: "looking_for" is not allowed as source.' });
-      }
-
+      // always create as "looking_for" (legacy routes will be normalized by model anyway)
       convo = await Conversation.create({
         school,
         buyer: userEmail,
         seller: authorEmail,
         source: "looking_for",
-        itemId: targetId, // optional legacy
+        itemId: targetId, // optional
         resourceTitle: post.title || "Looking for",
         lastMessage: "",
       });
@@ -121,7 +111,6 @@ router.post("/", async (req, res) => {
 
     return res.json({ ok: true, requestId: String(reqDoc._id), conversationId: String(convo._id) });
   } catch (e) {
-    // duplicate key guard (safety)
     if (e && e.code === 11000) {
       return res.status(409).json({ message: "Request already exists." });
     }
@@ -147,6 +136,7 @@ router.get("/exists", async (req, res) => {
 });
 
 module.exports = router;
+
 
 
 
