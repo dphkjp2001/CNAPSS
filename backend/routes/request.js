@@ -47,7 +47,6 @@ router.post("/", async (req, res) => {
     if (!(postMode === "looking_for" || postMode === "seeking")) {
       return res.status(400).json({ message: "Only 'looking for' posts accept requests." });
     }
-
     if (!authorId || authorEmail === userEmail) {
       return res.status(400).json({ message: "Invalid target user." });
     }
@@ -70,19 +69,27 @@ router.post("/", async (req, res) => {
     });
 
     if (!convo) {
+      // ✅ must be allowed by Conversation.model enum
+      if (!Conversation.schema.path("source").enumValues.includes("looking_for")) {
+        console.error(
+          'Conversation.source enum must include "looking_for". Please update models/Conversation.js.'
+        );
+        return res.status(500).json({ message: 'Server misconfig: "looking_for" is not allowed as source.' });
+      }
+
       convo = await Conversation.create({
         school,
         buyer: userEmail,
         seller: authorEmail,
-        source: "looking_for", // ✅ unified minimal source
-        itemId: targetId, // optional legacy field — safe to keep
+        source: "looking_for",
+        itemId: targetId, // optional legacy
         resourceTitle: post.title || "Looking for",
         lastMessage: "",
       });
     }
 
     const text = (initialMessage || "").trim() || "Hi! I'm interested in your post.";
-    const msg = await Message.create({ conversationId: convo._id, sender: userEmail, content: text, school });
+    await Message.create({ conversationId: convo._id, sender: userEmail, content: text, school });
 
     convo.lastMessage = text;
     convo.updatedAt = new Date();
@@ -114,14 +121,16 @@ router.post("/", async (req, res) => {
 
     return res.json({ ok: true, requestId: String(reqDoc._id), conversationId: String(convo._id) });
   } catch (e) {
+    // duplicate key guard (safety)
+    if (e && e.code === 11000) {
+      return res.status(409).json({ message: "Request already exists." });
+    }
     console.error("POST /request error:", e);
     return res.status(500).json({ message: "Failed to create request." });
   }
 });
 
-/**
- * GET /api/:school/request/exists?targetId=...
- */
+/** GET /api/:school/request/exists?targetId=... */
 router.get("/exists", async (req, res) => {
   try {
     const school = String(req.params.school || "").toLowerCase();
@@ -138,6 +147,7 @@ router.get("/exists", async (req, res) => {
 });
 
 module.exports = router;
+
 
 
 

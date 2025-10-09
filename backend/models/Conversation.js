@@ -4,31 +4,28 @@ const mongoose = require("mongoose");
 const ALLOWED_SCHOOLS = ["nyu", "columbia", "boston"];
 
 /**
- * NOTE
- * - Keep sources minimal for now.
- * - We currently allow only:
- *    - "looking_for" : requests created from Academic 'Looking for' posts
- *    - "dm"          : direct messages started from Messages UI
- * - In the future we can refine "looking_for" into:
- *    - "looking_for/course_materials" | "looking_for/study_mate" | "looking_for/coffee_chat"
- *   (When we do, just extend ALLOWED_SOURCES accordingly.)
+ * Minimal sources for now:
+ *  - "looking_for" : Academic ‘Looking for’에서 생성된 DM
+ *  - "dm"          : 사용자가 Messages 화면에서 직접 시작한 DM
+ *
+ * (나중에 세분화하려면 "looking_for/course_materials" 등만 여기 배열에 추가하면 됨)
  */
 const ALLOWED_SOURCES = ["looking_for", "dm"];
 
 const conversationSchema = new mongoose.Schema(
   {
-    // optional legacy fields
+    // (optional) legacy
     itemId: { type: mongoose.Schema.Types.ObjectId, ref: "MarketItem", default: null },
 
-    // optional generic resource linkage
+    // (optional) generic resource linkage
     resourceId: { type: mongoose.Schema.Types.ObjectId, default: null },
     resourceTitle: { type: String, default: "" },
 
-    // participants (emails, normalized to lowercase)
+    // participants (emails, lowercase)
     buyer: { type: String, required: true, index: true, lowercase: true, trim: true },
     seller: { type: String, required: true, index: true, lowercase: true, trim: true },
 
-    // convenience array (kept in sync via pre-save)
+    // convenience array
     participants: { type: [String], default: [] },
 
     // last message preview
