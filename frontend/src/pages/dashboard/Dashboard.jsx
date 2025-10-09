@@ -158,10 +158,12 @@ function Segmented({ value, onChange }) {
     </>
   );
 }
+// ⬇️ replace the whole PostRow with this version
 function PostRow({ post, onOpenDetail, showBadge }) {
   const raw = post.raw || {};
   const t = normalizeType(raw);
   const k = normalizeKind(raw);
+
   const badge =
     t === "seeking"
       ? k === "course_materials"
@@ -172,33 +174,63 @@ function PostRow({ post, onOpenDetail, showBadge }) {
         ? "☕️"
         : "📌"
       : "";
+
+  // materials for course_materials posts
+  const MATERIAL_LABELS = {
+    lecture_notes: "Lecture Notes",
+    syllabus: "Syllabus",
+    past_exams: "Past Exams",
+    quiz_prep: "Quiz Prep",
+  };
+  const materials =
+    Array.isArray(raw.materials) && k === "course_materials" ? raw.materials : [];
+  const materialLabels = materials.map((m) => MATERIAL_LABELS[m] || m);
+
   return (
     <button
       type="button"
       onClick={onOpenDetail}
       className="w-full text-left py-4 px-3 hover:bg-slate-50 transition"
     >
-      <div className="flex items-center gap-3">
+      <div className="flex items-start gap-3">
         {showBadge ? (
-          <span className="text-[18px] w-6 text-center">{badge}</span>
+          <span className="text-[18px] w-6 text-center mt-[2px]">{badge}</span>
         ) : (
           <span className="w-6" />
         )}
-        <div className="h-8 w-8 rounded-full bg-slate-200 flex items-center justify-center">
+
+        {/* avatar placeholder kept (layout balance) */}
+        <div className="h-8 w-8 rounded-full bg-slate-200 flex items-center justify-center mt-[2px]">
           <PersonIcon />
         </div>
-        <div className="min-w-0">
-          <div className="truncate font-semibold text-slate-900">
-            {post.title}
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-3">
+            <div className="truncate font-semibold text-slate-900">{post.title}</div>
+            <div className="text-xs text-slate-500 whitespace-nowrap">
+              {new Date(post.createdAt).toLocaleString()}
+            </div>
           </div>
-          <div className="text-xs text-slate-500">
-            Posted by anonymous • {new Date(post.createdAt).toLocaleString()}
-          </div>
+
+          {/* materials chips (only for seeking:course_materials) */}
+          {materialLabels.length > 0 && (
+            <div className="mt-1 flex flex-wrap gap-1.5">
+              {materialLabels.map((lbl) => (
+                <span
+                  key={lbl}
+                  className="inline-flex items-center rounded-full border border-slate-300 bg-slate-50 px-2.5 py-[3px] text-[11px] text-slate-700"
+                >
+                  {lbl}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </button>
   );
 }
+
 
 /* ===== generic list helpers ===== */
 const pluckArray = (payload) => {

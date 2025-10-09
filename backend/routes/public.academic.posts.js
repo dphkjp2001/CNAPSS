@@ -45,6 +45,10 @@ router.get("/", async (req, res) => {
           kind: 1,
           likesCount: { $size: { $ifNull: ["$likes", []] } },
           author: 1,
+          // ✅ materials meta for course_materials
+          courseName: 1,
+          professor: 1,
+          materials: 1,
         },
       },
       { $project: { school: 0 } },
@@ -64,7 +68,7 @@ router.get("/:id", async (req, res) => {
 
     const post = await AcademicPost.findOne(
       { _id: req.params.id, school },
-      "_id title content images createdAt mode kind author"
+      "_id title content images createdAt mode kind author courseName professor materials"
     ).lean();
     if (!post) return res.status(404).json({ message: "Post not found." });
 
@@ -76,5 +80,7 @@ router.get("/:id", async (req, res) => {
 });
 
 module.exports = router;
+
+
 
 

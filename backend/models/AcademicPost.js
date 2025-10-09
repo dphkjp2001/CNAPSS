@@ -12,6 +12,8 @@ function normalizeMode({ mode, type, postType, lookingFor }) {
   return k === "looking_for" || k === "seeking" || k === "lf" ? "looking_for" : "general";
 }
 
+const MATERIAL_ENUM = ["lecture_notes", "syllabus", "past_exams", "quiz_prep"];
+
 const AcademicPostSchema = new mongoose.Schema(
   {
     school: { type: String, required: true, index: true },
@@ -24,6 +26,11 @@ const AcademicPostSchema = new mongoose.Schema(
 
     title: { type: String, required: true, trim: true },
     content: { type: String, default: "" },
+
+    // seeking:course_materials 전용 메타
+    courseName: { type: String, default: "" },
+    professor: { type: String, default: "" },
+    materials: { type: [String], enum: MATERIAL_ENUM, default: [] },
 
     author: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
     anonymous: { type: Boolean, default: true },
@@ -53,8 +60,14 @@ const AcademicPostSchema = new mongoose.Schema(
 AcademicPostSchema.pre("validate", function (next) {
   this.mode = normalizeMode(this);
   if (this.kind) this.kind = String(this.kind).toLowerCase().replace(/[\s-]+/g, "_");
+
+  // seeking:course_materials일 때 title = courseName 로 자연정규화(있으면)
+  if (this.mode === "looking_for" && this.kind === "course_materials") {
+    if (this.courseName && !this.title) this.title = this.courseName;
+  }
   next();
 });
 
 module.exports = mongoose.model("AcademicPost", AcademicPostSchema);
+
 
