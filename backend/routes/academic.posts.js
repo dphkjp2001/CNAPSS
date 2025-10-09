@@ -89,7 +89,7 @@ router.get("/:school/academic-posts/:id", requireAuth, schoolGuard, async (req, 
   }
 });
 
-/** ---------------- create ---------------- **/
+// ---------------- create ----------------
 router.post("/:school/academic-posts", requireAuth, schoolGuard, async (req, res, next) => {
   try {
     const { school } = req.params;
@@ -102,40 +102,72 @@ router.post("/:school/academic-posts", requireAuth, schoolGuard, async (req, res
       kind = "",
       images = [],
       anonymous = true,
+      // extras for course_materials
+      courseName,
+      professor = "",
+      materials = [],
     } = req.body;
 
+    const normalizedMode = resolveMode({ mode, type, postType });
+    const normalizedKind = String(kind || "").toLowerCase().replace(/[\s-]+/g, "_");
+
+    // 공통 title 필수
     if (!title || typeof title !== "string") {
       return res.status(400).json({ message: "title is required" });
     }
 
-    const normalizedMode = resolveMode({ mode, type, postType });
+    // ✅ seeking:course_materials 강제 규칙
+    if (normalizedMode === "looking_for" && normalizedKind === "course_materials") {
+      const course = String(courseName || title || "").trim();
+      const allowed = new Set(["lecture_notes", "syllabus", "past_exams", "quiz_prep"]);
+      const mats = Array.isArray(materials) ? materials.filter((m) => allowed.has(String(m))) : [];
+      if (!course) return res.status(400).json({ message: "courseName (or title) is required." });
+      if (mats.length === 0) return res.status(400).json({ message: "Select at least one material." });
 
+      const doc = await AcademicPost.create({
+        school,
+        title: course,                 // title = courseName
+        content: "",                   // 내용 비활성
+        mode: normalizedMode,
+        kind: "course_materials",
+        images: [],                    // 이미지 비활성
+        anonymous: !!anonymous,
+        author: req.user.id || req.user._id,
+        // extras
+        courseName: course,
+        professor: String(professor || ""),
+        materials: mats,
+        // legacy aliases for safety
+        type,
+        postType,
+        lookingFor: true,
+      });
+
+      return res.status(201).json(serialize(doc));
+    }
+
+    // ✅ 그 외(일반/질문/다른 seeking)는 기존 로직
     const doc = await AcademicPost.create({
       school,
       title: title.trim(),
       content: String(content || ""),
       mode: normalizedMode,
-      kind: String(kind || "").toLowerCase().replace(/[\s-]+/g, "_"),
-      images: Array.isArray(images)
-        ? images.map((u) => (typeof u === "string" ? { url: u } : u))
-        : [],
+      kind: normalizedKind,
+      images: Array.isArray(images) ? images.map((u) => (typeof u === "string" ? { url: u } : u)) : [],
       anonymous: !!anonymous,
-
-      // ⬇️ 핵심 수정: requireAuth가 req.user.id 형태로 넣어주므로 둘 다 대응
       author: req.user.id || req.user._id,
-
-      // legacy aliases (strict:false 로 저장되어도 무방)
+      // legacy aliases
       type,
       postType,
       lookingFor: normalizedMode === "looking_for",
     });
-
     res.status(201).json(serialize(doc));
   } catch (err) {
     console.error("AcademicPost create error:", err);
     next(err);
   }
 });
+
 
 /** ---------------- update ---------------- **/
 router.patch("/:school/academic-posts/:id", requireAuth, schoolGuard, async (req, res, next) => {
