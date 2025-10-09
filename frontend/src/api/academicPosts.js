@@ -1,9 +1,18 @@
 // frontend/src/api/academicPosts.js
 import { getJson, postJson, putJson, deleteJson } from "./http";
+
 const API_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 
-// Public
-export async function getPublicAcademicPosts({ school, page = 1, limit = 20, q = "", sort = "new", type = "", kind = "" }) {
+// ------- Public (no auth) -------
+export async function getPublicAcademicPosts({
+  school,
+  page = 1,
+  limit = 20,
+  q = "",
+  sort = "new",
+  type = "", // 'question' | 'seeking' | 'looking_for'
+  kind = "", // 'course_materials' | 'study_mate' | 'coffee_chat'
+}) {
   const url = new URL(`${API_URL}/public/${school}/academic-posts`);
   if (page) url.searchParams.set("page", String(page));
   if (limit) url.searchParams.set("limit", String(limit));
@@ -13,12 +22,22 @@ export async function getPublicAcademicPosts({ school, page = 1, limit = 20, q =
   if (kind) url.searchParams.set("kind", kind);
   return getJson(url);
 }
+
 export async function getPublicAcademicPost({ school, id }) {
-  return getJson(`${API_URL}/public/${school}/academic-posts/${id}`);
+  const url = `${API_URL}/public/${school}/academic-posts/${id}`;
+  return getJson(url);
 }
 
-// Protected
-export async function listAcademicPosts({ school, page = 1, limit = 20, q = "", sort = "new", type = "", kind = "" } = {}) {
+// ------- Protected (auth) -------
+export async function listAcademicPosts({
+  school,
+  page = 1,
+  limit = 20,
+  q = "",
+  sort = "new",
+  type = "",
+  kind = "",
+} = {}) {
   const url = new URL(`${API_URL}/${school}/academic-posts`);
   if (page) url.searchParams.set("page", String(page));
   if (limit) url.searchParams.set("limit", String(limit));
@@ -28,15 +47,39 @@ export async function listAcademicPosts({ school, page = 1, limit = 20, q = "", 
   if (kind) url.searchParams.set("kind", kind);
   return getJson(url);
 }
+
 export async function getAcademicPost({ school, id }) {
-  return getJson(`${API_URL}/${school}/academic-posts/${id}`);
+  const url = `${API_URL}/${school}/academic-posts/${id}`;
+  return getJson(url);
 }
-export async function createAcademicPost({ school, title, content = "", postType, type, mode, kind = "", tags = [], images = [] }) {
-  return postJson(`${API_URL}/${school}/academic-posts`, { title, content, postType, type, mode, kind, tags, images });
+
+/**
+ * Create
+ * - mode: 'general' | 'looking_for'  (aliases: postType/type 'question'|'seeking' OK)
+ * - kind: only for seeking ('course_materials'|'study_mate'|'coffee_chat')
+ */
+export async function createAcademicPost({
+  school,
+  title,
+  content = "",
+  postType, // 'question' | 'seeking' (alias)
+  type,     // alias
+  mode,     // 'general' | 'looking_for'
+  kind = "",
+  tags = [],
+  images = [],
+}) {
+  const url = `${API_URL}/${school}/academic-posts`;
+  return postJson(url, { title, content, postType, type, mode, kind, tags, images });
 }
+
 export async function updateAcademicPost({ school, id, title, content, postType, type, mode, kind, tags, images }) {
-  return putJson(`${API_URL}/${school}/academic-posts/${id}`, { title, content, postType, type, mode, kind, tags, images });
+  const url = `${API_URL}/${school}/academic-posts/${id}`;
+  return putJson(url, { title, content, postType, type, mode, kind, tags, images });
 }
+
 export async function deleteAcademicPost({ school, id }) {
-  return deleteJson(`${API_URL}/${school}/academic-posts/${id}`);
+  const url = `${API_URL}/${school}/academic-posts/${id}`;
+  return deleteJson(url);
 }
+

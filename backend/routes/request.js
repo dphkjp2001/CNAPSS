@@ -22,34 +22,45 @@ router.use(requireAuth, schoolGuard);
  */
 router.post("/", async (req, res) => {
   try {
-    const school = req.params.school;
+    const school = String(req.params.school || "").toLowerCase();
     const { targetId, initialMessage } = req.body || {};
-    if (!mongoose.isValidObjectId(targetId)) return res.status(400).json({ error: "Invalid targetId." });
 
-    const post = await AcademicPost.findOne({ _id: targetId, school }).populate("author", "email _id").lean();
-    if (!post) return res.status(404).json({ error: "Post not found." });
+    if (!mongoose.isValidObjectId(targetId)) {
+      return res.status(400).json({ message: "Invalid targetId." });
+    }
+
+    const post = await AcademicPost.findOne({ _id: targetId, school })
+      .populate("author", "email _id")
+      .lean();
+
+    if (!post) {
+      return res.status(404).json({ message: "Post not found." });
+    }
 
     const authorId = post.author?._id;
     const authorEmail = String(post.author?.email || "").toLowerCase();
     const userId = req.user._id;
     const userEmail = String(req.user.email || "").toLowerCase();
 
-    // only seeking posts accept requests
+    // Only 'looking_for' posts accept requests
     const postMode = String(post.mode || post.postType || post.type || "").toLowerCase();
     if (!(postMode === "looking_for" || postMode === "seeking")) {
-      return res.status(400).json({ error: "Only 'seeking' posts accept requests." });
+      return res.status(400).json({ message: "Only 'looking for' posts accept requests." });
     }
+
     if (!authorId || authorEmail === userEmail) {
-      return res.status(400).json({ error: "Invalid target user." });
+      return res.status(400).json({ message: "Invalid target user." });
     }
 
     // prevent duplicates (same user → same post)
     const exists = await Request.findOne({ school, targetId, fromUser: userId });
     if (exists) {
-      return res.status(409).json({ error: "Already requested.", requestId: exists._id, conversationId: exists.conversationId });
+      return res
+        .status(409)
+        .json({ message: "Request already sent.", requestId: exists._id, conversationId: exists.conversationId });
     }
 
-    // conversation (email 기반으로 맞춰서)
+    // find or create conversation between requester and author
     let convo = await Conversation.findOne({
       school,
       $or: [
@@ -57,13 +68,14 @@ router.post("/", async (req, res) => {
         { buyer: authorEmail, seller: userEmail },
       ],
     });
+
     if (!convo) {
       convo = await Conversation.create({
         school,
         buyer: userEmail,
         seller: authorEmail,
-        source: "academic_looking_for",
-        itemId: targetId,
+        source: "looking_for", // ✅ unified minimal source
+        itemId: targetId, // optional legacy field — safe to keep
         resourceTitle: post.title || "Looking for",
         lastMessage: "",
       });
@@ -71,6 +83,7 @@ router.post("/", async (req, res) => {
 
     const text = (initialMessage || "").trim() || "Hi! I'm interested in your post.";
     const msg = await Message.create({ conversationId: convo._id, sender: userEmail, content: text, school });
+
     convo.lastMessage = text;
     convo.updatedAt = new Date();
     await convo.save();
@@ -87,7 +100,7 @@ router.post("/", async (req, res) => {
       conversationId: convo._id,
     });
 
-    // socket notify (best-effort)
+    // best-effort socket notify
     try {
       const io = req.app.get("io");
       if (io) {
@@ -102,25 +115,30 @@ router.post("/", async (req, res) => {
     return res.json({ ok: true, requestId: String(reqDoc._id), conversationId: String(convo._id) });
   } catch (e) {
     console.error("POST /request error:", e);
-    return res.status(500).json({ error: "Failed to create request." });
+    return res.status(500).json({ message: "Failed to create request." });
   }
 });
 
-/** GET /api/:school/request/exists?targetId=... */
+/**
+ * GET /api/:school/request/exists?targetId=...
+ */
 router.get("/exists", async (req, res) => {
   try {
-    const school = req.params.school;
+    const school = String(req.params.school || "").toLowerCase();
     const { targetId } = req.query || {};
-    if (!mongoose.isValidObjectId(targetId)) return res.status(400).json({ error: "Invalid targetId." });
+    if (!mongoose.isValidObjectId(targetId)) {
+      return res.status(400).json({ message: "Invalid targetId." });
+    }
     const found = await Request.findOne({ school, targetId, fromUser: req.user._id }).select("_id conversationId");
     return res.json({ exists: !!found, requestId: found?._id, conversationId: found?.conversationId });
   } catch (e) {
     console.error("GET /request/exists error:", e);
-    return res.status(500).json({ error: "Failed to check." });
+    return res.status(500).json({ message: "Failed to check." });
   }
 });
 
 module.exports = router;
+
 
 
 

@@ -7,7 +7,13 @@ import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import "dayjs/locale/en";
 
-import { getPost, getPublicPost, deletePost, toggleThumbs, updatePost } from "../../api/posts";
+import {
+  getPost,
+  getPublicPost,
+  deletePost,
+  toggleThumbs,
+  updatePost,
+} from "../../api/posts";
 import { useAuth } from "../../contexts/AuthContext";
 import { useSchool } from "../../contexts/SchoolContext";
 import { apiFetch } from "../../api/http";
@@ -32,21 +38,45 @@ export default function FreeBoardDetail() {
   const [editContent, setEditContent] = useState("");
   const [saving, setSaving] = useState(false);
 
+  const isAuthed = !!(user?.email || (token && String(token).length > 0));
+
   const loadPost = async () => {
+    setError("");
     try {
-      const data = token ? await getPost({ school, id }) : await getPublicPost({ school, id });
-      setPost(data);
-      setEditTitle(data?.title || "");
-      setEditContent(data?.content || "");
+      // ✅ 항상 공개 엔드포인트를 **먼저** 시도
+      const pub = await getPublicPost({ school, id });
+      setPost(pub);
+      setEditTitle(pub?.title || "");
+      setEditContent(pub?.content || "");
+      return;
     } catch (err) {
-      setError(err.message || "Failed to load the post.");
+      // 공개 엔드포인트가 404일 때만 보호 엔드포인트로 폴백
+      if (!(err?.status === 404)) {
+        setError(err?.message || "Failed to load the post.");
+        return;
+      }
+    }
+
+    // 🔐 보호 엔드포인트 폴백 (로그인 상태에서만)
+    if (isAuthed) {
+      try {
+        const data = await getPost({ school, id });
+        setPost(data);
+        setEditTitle(data?.title || "");
+        setEditContent(data?.content || "");
+      } catch (err) {
+        setError(err?.message || "Failed to load the post.");
+      }
+    } else {
+      setError("Post not found.");
     }
   };
 
   useEffect(() => {
+    if (!school || !id) return;
     loadPost();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, school, token]);
+  }, [id, school, isAuthed]);
 
   // ✅ 알림 딥링크로 진입 시 서버에 읽음 반영
   useEffect(() => {
@@ -61,7 +91,9 @@ export default function FreeBoardDetail() {
           headers: { "Content-Type": "application/json" },
           body: { commentId: nid, email: user.email },
         });
-      } catch {}
+      } catch {
+        /* no-op */
+      }
     }
     markRead();
   }, [location.search, user?.email, school]);
@@ -69,13 +101,17 @@ export default function FreeBoardDetail() {
   // 🔎 스크롤/하이라이트 대상 comment id 추출
   const highlightId = useMemo(() => {
     const hash = location.hash || "";
-    const fromHash = hash.startsWith("#comment-") ? hash.slice("#comment-".length) : null;
+    const fromHash = hash.startsWith("#comment-")
+      ? hash.slice("#comment-".length)
+      : null;
     const nid = new URLSearchParams(location.search).get("nid");
     return fromHash || nid || null;
   }, [location.hash, location.search]);
 
   const isAuthor = useMemo(
-    () => (user?.email || "").toLowerCase() === (post?.email || "").toLowerCase(),
+    () =>
+      (user?.email || "").toLowerCase() ===
+      (post?.email || "").toLowerCase(),
     [user, post]
   );
 
@@ -84,9 +120,9 @@ export default function FreeBoardDetail() {
     try {
       await deletePost({ school, id: post._id });
       alert("Post deleted.");
-      navigate(schoolPath("/dashboard?tab=free")); // ✅ 변경
+      navigate(schoolPath("/dashboard?tab=free"));
     } catch (err) {
-      alert("Delete failed: " + (err.message || "Unknown error"));
+      alert("Delete failed: " + (err?.message || "Unknown error"));
     }
   };
 
@@ -99,16 +135,25 @@ export default function FreeBoardDetail() {
           ? p
           : {
               ...p,
-              thumbsUpUsers: (p.thumbsUpUsers || []).includes((user?.email || "").toLowerCase())
-                ? p.thumbsUpUsers.filter(
-                    (e) => e.toLowerCase() !== (user?.email || "").toLowerCase()
-                  )
-                : [...(p.thumbsUpUsers || []), (user?.email || "").toLowerCase()],
+              thumbsUpUsers: (p.thumbsUpUsers || []).includes(
+                (user?.email || "").toLowerCase()
+              )
+                ? p
+                    .thumbsUpUsers
+                    .filter(
+                      (e) =>
+                        e.toLowerCase() !==
+                        (user?.email || "").toLowerCase()
+                    )
+                : [
+                    ...(p.thumbsUpUsers || []),
+                    (user?.email || "").toLowerCase(),
+                  ],
             }
       );
       await loadPost();
     } catch (err) {
-      alert("Failed to like: " + (err.message || "Unknown error"));
+      alert("Failed to like: " + (err?.message || "Unknown error"));
     }
   };
 
@@ -118,12 +163,17 @@ export default function FreeBoardDetail() {
     if (!title || !content) return;
     setSaving(true);
     try {
-      const updated = await updatePost({ school, id: post._id, title, content });
+      const updated = await updatePost({
+        school,
+        id: post._id,
+        title,
+        content,
+      });
       const next = updated?.post || updated;
       setPost(next);
       setIsEditing(false);
     } catch (err) {
-      alert("Update failed: " + (err.message || "Unknown error"));
+      alert("Update failed: " + (err?.message || "Unknown error"));
     } finally {
       setSaving(false);
     }
@@ -190,7 +240,9 @@ export default function FreeBoardDetail() {
               />
             ) : (
               <div className="prose prose-sm max-w-none text-gray-800">
-                <p className="whitespace-pre-wrap leading-relaxed">{post.content}</p>
+                <p className="whitespace-pre-wrap leading-relaxed">
+                  {post.content}
+                </p>
               </div>
             )}
 
@@ -239,7 +291,11 @@ export default function FreeBoardDetail() {
                     {saving ? "Saving…" : "Save"}
                   </button>
                   <button
-                    onClick={handleCancelEdit}
+                    onClick={() => {
+                      setEditTitle(post?.title || "");
+                      setEditContent(post?.content || "");
+                      setIsEditing(false);
+                    }}
                     className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-800 shadow-sm hover:bg-gray-50"
                   >
                     Cancel
@@ -248,7 +304,7 @@ export default function FreeBoardDetail() {
               )}
 
               <Link
-                to={schoolPath("/dashboard?tab=free")} // ✅ 변경
+                to={schoolPath("/dashboard?tab=free")}
                 className="ml-auto text-sm font-medium text-blue-600 underline underline-offset-2"
               >
                 ← Back to List
@@ -270,6 +326,8 @@ export default function FreeBoardDetail() {
     </div>
   );
 }
+
+
 
 
 
