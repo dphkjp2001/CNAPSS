@@ -1,4 +1,3 @@
-// src/components/Layout.jsx
 import React, { useEffect, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
@@ -35,11 +34,10 @@ function NavItem({ to, children }) {
 
 export default function Layout() {
   const { user, logout } = useAuth();
-  const { school, schoolTheme } = useSchool();
+  const { school } = useSchool();
   const navigate = useNavigate();
   const schoolPath = useSchoolPath();
 
-  // notifications
   const { items, count, markAsRead, markAllAsRead } = useNotificationsPolling(
     user?.email,
     5000,
@@ -49,7 +47,6 @@ export default function Layout() {
 
   const [showNoti, setShowNoti] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
-  const [showQuick, setShowQuick] = useState(false);
   const [bump, setBump] = useState(false);
   const prevCountRef = useRef(count);
   useEffect(() => {
@@ -68,23 +65,6 @@ export default function Layout() {
 
   const nickname = user?.nickname || (user?.email ? user.email.split("@")[0] : "GU");
 
-  // ✅ Quick Actions → 대시보드 탭으로 이동
-  const goReviewsHub = () => {
-    if (!school) return navigate("/select-school");
-    navigate(schoolPath("/reviews"));
-    setShowQuick(false);
-  };
-  const goAskQuestion = () => {
-    if (!school) return navigate("/select-school");
-    navigate(schoolPath("/dashboard?tab=academic"));
-    setShowQuick(false);
-  };
-  const goLookingFor = () => {
-    if (!school) return navigate("/select-school");
-    navigate(schoolPath("/dashboard?tab=academic"));
-    setShowQuick(false);
-  };
-
   return (
     <div className="min-h-screen flex bg-gray-50">
       {/* === Left Sidebar === */}
@@ -97,21 +77,10 @@ export default function Layout() {
           {school && <div className="mt-1 text-xs text-gray-500 truncate">{String(school)}</div>}
         </div>
 
+        {/* 👉 Sidebar: Dashboard, Messages만 노출 */}
         <nav className="p-3 space-y-1">
           <NavItem to={schoolPath("/dashboard")}>Dashboard</NavItem>
-          {/* ✅ 리스트 메뉴는 탭으로 연결 */}
-          <NavItem to={schoolPath("/dashboard?tab=free")}>Free Board</NavItem>
-          <NavItem to={schoolPath("/dashboard?tab=academic")}>Career Board</NavItem>
-          <NavItem to={schoolPath("/courses")}>Course Hub</NavItem>
-          <NavItem to={schoolPath("/reviews")}>Reviews</NavItem>
-          <NavItem to={schoolPath("/market")}>Marketplace</NavItem>
           <NavItem to={schoolPath("/messages")}>Messages</NavItem>
-          <NavItem to={schoolPath("/foodmap")}>Food Map</NavItem>
-          <div className="mt-4 border-t pt-3">
-            <NavItem to={schoolPath("/myposts")}>My Posts</NavItem>
-            <NavItem to={schoolPath("/liked")}>Liked</NavItem>
-            <NavItem to={schoolPath("/commented")}>Commented</NavItem>
-          </div>
         </nav>
 
         <div className="mt-auto p-3 text-[11px] text-gray-400">Stay anonymous. Be kind.</div>
@@ -122,61 +91,12 @@ export default function Layout() {
         {/* Top bar */}
         <header className="w-full border-b bg-white">
           <div className="mx-auto max-w-6xl px-4 h-14 flex items-center justify-end gap-2">
-            {/* Quick Actions */}
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowQuick((v) => !v);
-                  setShowProfile(false);
-                  setShowNoti(false);
-                }}
-                className="px-3 py-2 text-sm rounded-md border hover:bg-gray-50"
-                title="Quick Actions"
-                aria-label="Quick Actions"
-              >
-                ⭐ Quick
-              </button>
-              {showQuick && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setShowQuick(false)} />
-                  <div className="absolute right-0 z-50 mt-2 w-56 rounded-xl border bg-white shadow-lg">
-                    <div className="p-1 text-sm">
-                      <button
-                        className="w-full text-left rounded-lg px-3 py-2 hover:bg-gray-100"
-                        onClick={goReviewsHub}
-                      >
-                        ⭐ Rate Course / Professor
-                      </button>
-                      <button
-                        className="w-full text-left rounded-lg px-3 py-2 hover:bg-gray-100"
-                        onClick={goAskQuestion}
-                      >
-                        ❓ Ask Academic Question
-                      </button>
-                      <div className="my-1 border-t" />
-                      <button
-                        className="w-full text-left rounded-lg px-3 py-2 hover:bg-gray-100"
-                        onClick={goLookingFor}
-                      >
-                        📥 Post “Looking For”
-                      </button>
-                    </div>
-                    <div className="px-3 py-2 border-t text-[11px] text-gray-500">
-                      No public links; exchange via DMs.
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-
             {/* Notifications */}
             <button
               type="button"
               onClick={() => {
                 setShowNoti((v) => !v);
                 setShowProfile(false);
-                setShowQuick(false);
                 if (!showNoti && count > 0) markAllAsRead();
               }}
               className="relative ml-1 px-3 py-2 text-sm rounded-md hover:bg-violet-50"
@@ -303,9 +223,6 @@ function ProfileMenu({ nickname, email, onLogout, schoolPath, showProfile, setSh
               <MenuItem to={schoolPath("/market")} onClick={() => setShowProfile(false)}>
                 Marketplace
               </MenuItem>
-              <MenuItem to={schoolPath("/foodmap")} onClick={() => setShowProfile(false)}>
-                Food Map
-              </MenuItem>
             </div>
             <div className="border-t p-1">
               <button onClick={onLogout} className="w-full rounded-lg px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50">
@@ -326,6 +243,8 @@ function MenuItem({ to, children, onClick }) {
     </Link>
   );
 }
+
+
 
 
 
