@@ -167,6 +167,7 @@ const schoolGuard = require("../middleware/schoolGuard");
 const Comment = require("../models/Comment");
 const Post = require("../models/Post");
 const CareerPost = require("../models/CareerPost");
+const AcademicPost = require("../models/AcademicPost");
 const User = require("../models/User");
 
 router.use(requireAuth, schoolGuard);
@@ -176,15 +177,16 @@ function isValidObjectId(id) {
 }
 
 /**
- * 대상 글 존재 확인 (Freeboard Post 또는 CareerPost)
- * - 둘 중 하나라도 같은 school로 존재하면 OK
+ * Find target post across multiple boards within the same school.
+ * Supports: Freeboard(Post), CareerPost, AcademicPost
  */
 async function findAnyPostById(postId, school) {
-  const [free, career] = await Promise.all([
+  const [free, career, academic] = await Promise.all([
     Post.findOne({ _id: postId, school }).select("_id").lean(),
     CareerPost.findOne({ _id: postId, school }).select("_id").lean(),
+    AcademicPost.findOne({ _id: postId, school }).select("_id").lean(),
   ]);
-  return free || career; // 하나라도 있으면 truthy
+  return free || career || academic;
 }
 
 // GET /api/:school/comments/:postId
@@ -240,13 +242,13 @@ router.post("/:postId", async (req, res) => {
     const doc = await Comment.create({
       postId,
       email: req.user.email,
-      nickname: me.nickname, // nickname은 DB에 저장(표시는 프론트에서 정책대로)
+      nickname: me.nickname,
       content,
       parentId: parent ? parent._id : null,
       school: req.user.school,
     });
 
-    // 🔔 실시간 전파(기존 채널명 그대로 유지)
+    // Realtime broadcast
     try {
       const io = req.app.get("io");
       if (io) {
@@ -325,7 +327,6 @@ router.delete("/:id", async (req, res) => {
 });
 
 // POST /api/:school/comments/:commentId/thumbs
-// 👉 자기 댓글 좋아요 금지
 router.post("/:commentId/thumbs", async (req, res) => {
   try {
     const { commentId } = req.params;
@@ -372,10 +373,3 @@ router.post("/:commentId/thumbs", async (req, res) => {
 });
 
 module.exports = router;
-
-
-
-
-
-
-

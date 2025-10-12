@@ -31,6 +31,14 @@ const TOKENS = {
   red: "#FF7A70",
 };
 
+/* ===== Course-materials options (composer 전용) ===== */
+const MATERIAL_OPTIONS = [
+  { key: "lecture_notes", label: "Lecture Notes" },
+  { key: "syllabus", label: "Syllabus" },
+  { key: "past_exams", label: "Past Exams" },
+  { key: "quiz_prep", label: "Quiz Prep" },
+];
+
 /* ===== utils (type/kind normalization) ===== */
 const toSlug = (v = "") =>
   String(v).toLowerCase().trim().replace(/[\s_-]+/g, "_");
@@ -158,7 +166,8 @@ function Segmented({ value, onChange }) {
     </>
   );
 }
-// ⬇️ replace the whole PostRow with this version
+
+// ⬇️ PostRow (리스트 아이템 – materials 뱃지/날짜 우측 정렬)
 function PostRow({ post, onOpenDetail, showBadge }) {
   const raw = post.raw || {};
   const t = normalizeType(raw);
@@ -175,7 +184,6 @@ function PostRow({ post, onOpenDetail, showBadge }) {
         : "📌"
       : "";
 
-  // materials for course_materials posts
   const MATERIAL_LABELS = {
     lecture_notes: "Lecture Notes",
     syllabus: "Syllabus",
@@ -199,7 +207,6 @@ function PostRow({ post, onOpenDetail, showBadge }) {
           <span className="w-6" />
         )}
 
-        {/* avatar placeholder kept (layout balance) */}
         <div className="h-8 w-8 rounded-full bg-slate-200 flex items-center justify-center mt-[2px]">
           <PersonIcon />
         </div>
@@ -212,7 +219,6 @@ function PostRow({ post, onOpenDetail, showBadge }) {
             </div>
           </div>
 
-          {/* materials chips (only for seeking:course_materials) */}
           {materialLabels.length > 0 && (
             <div className="mt-1 flex flex-wrap gap-1.5">
               {materialLabels.map((lbl) => (
@@ -230,7 +236,6 @@ function PostRow({ post, onOpenDetail, showBadge }) {
     </button>
   );
 }
-
 
 /* ===== generic list helpers ===== */
 const pluckArray = (payload) => {
@@ -423,7 +428,6 @@ function AcademicSearchBar({ value, onSubmit, onReset }) {
   );
 
   const Panel = () => {
-    // narrow width, centered under the bar
     const maxW = 520;
     const minW = 300;
     const pad = 16;
@@ -439,12 +443,10 @@ function AcademicSearchBar({ value, onSubmit, onReset }) {
       <div data-acad-popover className="z-50 fixed" style={{ left, top, width }}>
         <div className="rounded-[24px] bg-white shadow-2xl border border-slate-200 overflow-hidden">
           <div className="max-h-[70vh] overflow-auto p-3">
-            {/* Step header */}
             <div className="px-1 pb-2 text-[11.5px] font-semibold text-slate-500">
               {step === "type" ? "Type" : "Seeking · choose kind"}
             </div>
 
-            {/* Step: type */}
             {step === "type" && (
               <div className="space-y-2">
                 {TYPE_ROWS.map((row) => (
@@ -470,7 +472,6 @@ function AcademicSearchBar({ value, onSubmit, onReset }) {
               </div>
             )}
 
-            {/* Step: kind */}
             {step === "kind" && (
               <div className="space-y-2">
                 {KIND_ROWS.map((row) => (
@@ -570,7 +571,7 @@ function AcademicSearchBar({ value, onSubmit, onReset }) {
 }
 
 /* ===== Composer header ===== */
-function ComposerHeader({ title, setTitle, active, mode }) {
+function ComposerHeader({ title, setTitle, active, mode, lookingKind }) {
   return (
     <div className="flex items-center gap-3 p-4 border-b border-slate-200">
       <div className="shrink-0 h-10 w-10 rounded-full bg-slate-200 flex items-center justify-center">
@@ -588,6 +589,8 @@ function ComposerHeader({ title, setTitle, active, mode }) {
               ? "Write a catchy title for your post…"
               : mode === "question"
               ? "Ask an academic/career question…"
+              : lookingKind === "course_materials"
+              ? "Course name (e.g., STAT101)"
               : "Seeking… (short title)"
           }
           className="w-full rounded-xl border border-slate-300 px-3 py-2 text-[15px] font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900"
@@ -606,7 +609,7 @@ export default function Dashboard() {
   const location = useLocation();
   const { school } = useSchool();
   const { user } = useAuth();
-  const schoolPath = useSchoolPath(); // ✅ keep a single hook call
+  const schoolPath = useSchoolPath();
 
   const schoolKey = school || "nyu";
   const isAuthed = !!user;
@@ -620,14 +623,14 @@ export default function Dashboard() {
     else if (tab === "academic") setActive("academic");
   }, [location.search]);
 
-  /* ---------- FREEBOARD (client-side progressive list) ---------- */
+  /* ---------- FREEBOARD ---------- */
   const [generalRaw, setGeneralRaw] = useState({
     loading: true,
     items: [],
     error: "",
   });
   const [freeQuery, setFreeQuery] = useState({ q: "" });
-  const [freeVisible, setFreeVisible] = useState(12); // show count
+  const [freeVisible, setFreeVisible] = useState(12);
 
   const filteredGeneral = useMemo(() => {
     const { q } = freeQuery;
@@ -650,7 +653,7 @@ export default function Dashboard() {
     hasMore: filteredGeneral.length > freeVisible,
   };
 
-  /* ---------- ACADEMIC (server-side pagination + infinite scroll) ---------- */
+  /* ---------- ACADEMIC ---------- */
   const [acadQuery, setAcadQuery] = useState({ q: "", type: "all", kind: "" });
   const [acad, setAcad] = useState({
     items: [],
@@ -801,7 +804,7 @@ export default function Dashboard() {
     const id = post.raw?._id || post._id || post.raw?.id || post.id;
     if (!id) return;
     const to = tab === "general" ? `/freeboard/${id}` : `/academic/${id}`;
-    navigate(schoolPath(to)); // ✅ use the existing hook result (no second hook call)
+    navigate(schoolPath(to));
   };
 
   /* ---------- composer states ---------- */
@@ -812,13 +815,24 @@ export default function Dashboard() {
   const [mode, setMode] = useState("question"); // 'question' | 'seeking'
   const [lookingKind, setLookingKind] = useState("course_materials");
 
+  // ✅ course materials 전용 상태
+  const [professor, setProfessor] = useState("");
+  const [materials, setMaterials] = useState([]); // array of keys
+  const toggleMaterial = (k) =>
+    setMaterials((arr) => (arr.includes(k) ? arr.filter((x) => x !== k) : [...arr, k]));
+
   const [posting, setPosting] = useState(false);
   const [msg, setMsg] = useState({ type: "", text: "" });
 
   const canPostGeneral =
     isAuthed && title.trim() && (content.trim() || images.length);
-  const canPostAcademic =
-    isAuthed && title.trim() && (mode === "question" ? content.trim() : true);
+  const canPostAcademic = isAuthed && (
+    mode === "question"
+      ? title.trim() && content.trim()
+      : lookingKind === "course_materials"
+        ? title.trim() && materials.length > 0   // ✅ 과목명 + 1개 이상 선택
+        : title.trim()
+  );
 
   const uploadFiles = async (files) => {
     const urls = [];
@@ -865,31 +879,51 @@ export default function Dashboard() {
         }));
       } else {
         if (!canPostAcademic) throw new Error("Missing fields");
-        const base = {
-          school: schoolKey,
-          title: title.trim(),
-          content: content.trim(),
-        };
+        const base = { school: schoolKey };
 
         if (mode === "question") {
-          await createAcademicPost({ ...base, postType: "question" });
+          await createAcademicPost({
+            ...base,
+            title: title.trim(),
+            content: content.trim(),
+            postType: "question",
+          });
+        } else if (lookingKind === "course_materials") {
+          // ✅ 전용 페이로드: title=courseName, content=""
+          await createAcademicPost({
+            ...base,
+            title: title.trim(),
+            content: "",
+            postType: "seeking",
+            kind: "course_materials",
+            courseName: title.trim(),
+            professor: professor.trim(),
+            materials,
+            tags: ["seeking", "course_materials"],
+          });
         } else {
           await createAcademicPost({
             ...base,
+            title: title.trim(),
+            content: content.trim(),
             postType: "seeking",
             kind: lookingKind,
             tags: ["seeking", lookingKind],
           });
         }
+
         setAcad((s) => ({ ...s, loading: true }));
         await fetchAcademicPage(1, false);
       }
 
+      // ✅ reset
       setTitle("");
       setContent("");
       setImages([]);
       setMode("question");
       setLookingKind("course_materials");
+      setProfessor("");
+      setMaterials([]);
 
       setMsg({ type: "success", text: "Posted!" });
       setTimeout(() => setMsg({ type: "", text: "" }), 1200);
@@ -1004,6 +1038,7 @@ export default function Dashboard() {
                 setTitle={setTitle}
                 active={active}
                 mode={mode}
+                lookingKind={lookingKind}
               />
 
               <div className="p-4 space-y-4">
@@ -1048,23 +1083,66 @@ export default function Dashboard() {
                   </div>
                 )}
 
-                <textarea
-                  value={content}
-                  onChange={(e) => setContent(e.target.value)}
-                  placeholder={
-                    active === "general"
-                      ? "Write your content here…"
-                      : mode === "question"
-                      ? "Describe your academic/career question…"
-                      : lookingKind === "course_materials"
-                      ? "Describe what you need or any context…"
-                      : lookingKind === "study_mate"
-                      ? "Describe schedule, level, topic…"
-                      : "Say hello and what you'd like to chat about…"
-                  }
-                  className="w-full min-h-[120px] rounded-xl border border-slate-300 px-3 py-2 text-[14px] text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900"
-                />
+                {/* Body fields */}
+                {active === "academic" && mode === "seeking" && lookingKind === "course_materials" ? (
+                  // ✅ Course Materials 전용 폼: 교수(옵션) + 체크박스(복수)
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700">Professor (optional)</label>
+                      <input
+                        type="text"
+                        value={professor}
+                        onChange={(e) => setProfessor(e.target.value)}
+                        placeholder="Professor name (optional)"
+                        className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900"
+                      />
+                    </div>
 
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">
+                        Personal Materials (choose one or more)
+                      </label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {MATERIAL_OPTIONS.map((opt) => (
+                          <label
+                            key={opt.key}
+                            className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm cursor-pointer
+                            ${materials.includes(opt.key) ? "border-slate-900 bg-slate-900/5" : "border-slate-300 hover:bg-slate-50"}`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={materials.includes(opt.key)}
+                              onChange={() => toggleMaterial(opt.key)}
+                              className="accent-black"
+                            />
+                            <span>{opt.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                      <p className="mt-2 text-xs text-slate-500">
+                        You can select multiple. Title will be used as course name.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  // ✅ 기존 textarea (general / question / seeking-others)
+                  <textarea
+                    value={content}
+                    onChange={(e) => setContent(e.target.value)}
+                    placeholder={
+                      active === "general"
+                        ? "Write your content here…"
+                        : mode === "question"
+                        ? "Describe your academic/career question…"
+                        : lookingKind === "study_mate"
+                        ? "Describe schedule, level, topic…"
+                        : "Say hello and what you'd like to chat about…"
+                    }
+                    className="w-full min-h-[120px] rounded-xl border border-slate-300 px-3 py-2 text-[14px] text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900"
+                  />
+                )}
+
+                {/* Images: freeboard 전용 */}
                 {active === "general" && (
                   <div className="space-y-2">
                     <label className="block text-sm font-medium text-slate-700">
@@ -1147,3 +1225,4 @@ export default function Dashboard() {
     </div>
   );
 }
+

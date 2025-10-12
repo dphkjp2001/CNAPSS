@@ -179,12 +179,14 @@ export default function AcademicDetail() {
           </div>
         ) : (
           <div className="px-5 py-5 border-t border-slate-200 bg-white">
-            <CommentSection targetId={id} targetType="academic" />
+            {/* ✅ FIX: pass postId (NOT targetId) */}
+            <CommentSection postId={id} />
           </div>
         )}
       </article>
     </div>
   );
 }
+
 
 
