@@ -53,7 +53,15 @@ class VoteService {
         }
 
         // 3. Update target content
-        const Model = targetType === "Post" ? Post : Comment;
+        // const Model = targetType === "Post" ? Post : Comment;
+        const AcademicPost = require("../models/AcademicPost");
+
+        let Model;
+        if (targetType === "Post") Model = Post;
+        else if (targetType === "Comment") Model = Comment;
+        else if (targetType === "AcademicPost") Model = AcademicPost;
+        else throw new Error("Unsupported targetType");
+        
         const target = await Model.findById(targetId).session(session);
         if (!target) throw new Error("Target not found");
 
