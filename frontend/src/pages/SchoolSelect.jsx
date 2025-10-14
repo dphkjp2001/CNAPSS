@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useSchool } from "../contexts/SchoolContext";
+import {Link} from "react-router-dom"
 
 const TOKENS = {
   pageBg: "#F7F8FA",
@@ -75,59 +76,193 @@ export default function SchoolSelect() {
 
   return (
     <div className="min-h-screen" style={{ background: TOKENS.pageBg }}>
-      {/* === HERO === */}
-      <HeroRed>
-        <div className="mx-auto max-w-6xl px-4 py-50 md:py-[18vh]">
-          <div className="text-center md:text-left">
-            <span className="block font-black leading-none tracking-[-0.02em] text-white/90 text-[72px] sm:text-[112px] md:text-[270px]">
-              CNAPSS
-            </span>
-          </div>
-        </div>
-      </HeroRed>
+      {/* === TOP NAV (with text outline for light backgrounds) === */}
+<header className="fixed inset-x-0 top-0 z-30 bg-transparent nav-contrast">
+  <div className="mx-auto max-w-6xl h-16 px-4 md:px-6 flex items-center justify-between">
+    {/* Left: Logo */}
+    <Link to="/" className="brand text-white font-extrabold tracking-tight text-2xl">
+      CNAPSS
+    </Link>
 
-      {/* === HEADLINE === */}
-      <Band bg="white">
-        <div className="mx-auto max-w-6xl px-4 md:px-6 text-center">
-          <h1 className="text-[40px] sm:text-[56px] md:text-[64px] font-black tracking-tight">
-            What AI can’t answer, your campus peers can.
+    {/* Center: About us */}
+    <nav className="absolute inset-x-0 mx-auto hidden sm:flex justify-center">
+      <Link to="/about" className="navlink text-white/90 hover:text-white text-sm font-semibold tracking-wide">
+        About us
+      </Link>
+    </nav>
+
+    {/* Right: Auth */}
+    <div className="flex items-center gap-2">
+      <Link to="/auth/login" className="navlink px-3 py-1.5 text-sm font-semibold text-white/90 hover:text-white">
+        Sign in
+      </Link>
+      <Link
+        to="/auth/register"
+        className="rounded-xl bg-white/90 hover:bg-white text-rose-600 px-3.5 py-1.5 text-sm font-bold shadow-sm btn-outline-text"
+      >
+        Sign up
+      </Link>
+    </div>
+  </div>
+
+  {/* ✨ Text outline so white text stays readable on white backgrounds */}
+  <style>{`
+    .nav-contrast .brand,
+    .nav-contrast .navlink {
+      /* 우선 깔끔한 윤곽선(크롬/사파리) */
+      -webkit-text-stroke: 0.6px rgba(0,0,0,.35);
+      paint-order: stroke fill;
+      /* 파이어폭스 등 폴백: 소프트 그림자 */
+      text-shadow:
+        0 1px 1px rgba(0,0,0,.30),
+        0 0 3px rgba(0,0,0,.35),
+        0 0 8px rgba(0,0,0,.15);
+    }
+    /* 버튼 텍스트도 살짝 윤곽 (배경 흰색이라 약하게만) */
+    .nav-contrast .btn-outline-text {
+      text-shadow:
+        0 0 1px rgba(0,0,0,.25),
+        0 1px 1px rgba(0,0,0,.20);
+    }
+    /* 호버 시 윤곽 유지 + 살짝 또렷 */
+    .nav-contrast .navlink:hover,
+    .nav-contrast .brand:hover {
+      -webkit-text-stroke: 0.7px rgba(0,0,0,.4);
+      text-shadow:
+        0 1px 1px rgba(0,0,0,.35),
+        0 0 4px rgba(0,0,0,.4);
+    }
+  `}</style>
+</header>
+
+
+      <section
+        className="relative isolate text-white min-h-screen flex flex-col justify-center"
+        style={{
+          background: "linear-gradient(180deg, #EE5C5C 0%, #F16969 40%, #F78A8A 80%, #F59F9F 100%)",
+        }}
+      >
+        {/* 🔥 흐림(뿌연) 효과 완전 제거 — 기존 bg-white/10 overlay 삭제 */}
+
+        <div className="relative mx-auto max-w-6xl px-4 md:px-6 pt-32 pb-24 text-center">
+          <h1
+            className="font-black tracking-tight leading-tight drop-shadow-md
+                      text-[40px] sm:text-[52px] md:text-[68px]"
+          >
+            What <span className="chip chip--ai">AI</span> can’t answer,<br />
+            Campus <span className="chip chip--peers">Peers</span> can.
           </h1>
-        </div>
-      </Band>
 
-      {/* === COPY === */}
-      <div className="bg-white py-2">
-        <div className="mx-auto max-w-4xl px-4 md:px-6 text-center">
-          <p className="text-[18px] sm:text-[20px] leading-[1.9]" style={{ color: TOKENS.sub }}>
-            In the age of AI, information is everywhere.<br />
-            But campus life isn’t data — it’s stories, opinions, and shared experiences.<br />
-            <span className="font-semibold" style={{ color: TOKENS.red }}>CNAPSS</span>{" "}
-            connects verified students, anonymously, to build a smarter campus together.
+          <p className="mt-14 text-white/95 text-base sm:text-lg md:text-xl leading-relaxed max-w-4xl mx-auto drop-shadow-md">
+            <span className="font-semibold">AI</span> knows facts.
+            <span className="px-2 font-extrabold tracking-wide">BUT</span>
+            your <span className="font-semibold">Peers</span> know campus life.
+            <br className="hidden sm:block" />
+            <span className="font-semibold">CNAPSS</span> connects verified students —
+            sharing <span className="font-semibold">Real Stories, Opinions, and Experiences.</span>
           </p>
         </div>
-      </div>
 
-      {/* === VALUE CARDS === */}
-      <Band bg="white" >
-        <div className="mx-auto max-w-6xl px-4 md:px-6">
-          <div className="grid gap-5 md:grid-cols-2">
-            <ValueCard
-              eyebrow="ANONYMITY"
-              title="Anonymity"
-              emoji="🫥"
-              text="“Post freely. Your name stays hidden.”"
-              tone="slate"
+        <style>{`
+          .chip {
+            display: inline-block;
+            padding: .1em .5em;
+            border-radius: .7em;
+            line-height: 1;
+            white-space: nowrap;
+          }
+          .chip--ai {
+            background: #fff;
+            color: #E11D48; /* rose-600 */
+            box-shadow: 0 4px 14px rgba(0,0,0,.2);
+          }
+          .chip--peers {
+            color: #fff;
+            border: 2px solid rgba(255,255,255,.85);
+            box-shadow: inset 0 0 8px rgba(255,255,255,.15);
+            border-radius: 1em;
+            padding: .1em .7em;
+          }
+        `}</style>
+      </section>
+
+
+
+
+
+      {/* === ANONYMITY · BUT · VERIFIED (Apple-like full width panel) === */}
+      <section className="relative w-full pt-10 pb-0 md:pt-12 md:pb-2 -mb-10 md:-mb-16">
+        {/* bleed to viewport edges */}
+        <div className="-mx-4 md:-mx-6">
+          <div className="relative mx-0 rounded-3xl overflow-hidden shadow-[0_24px_80px_rgba(0,0,0,.12)]">
+            {/* background split: left gray ↔ right (current hero) rose, with soft blend in the middle */}
+            <div
+              className="absolute inset-0"
+              style={{
+                background:
+                  "linear-gradient(90deg, #E5E9EE 0%, #D8DEE6 46%, #EBDADA 50%, #EE5C5C 54%, #F16969 72%, #F59F9F 100%)",
+              }}
             />
-            <ValueCard
-              eyebrow="VERIFIED"
-              title="Verified"
-              emoji="🎓"
-              text="“Only real students can enter.”"
-              tone="rose"
+            {/* center glow to smooth the join */}
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                background:
+                  "radial-gradient(600px 220px at 50% 50%, rgba(255,255,255,.35), rgba(255,255,255,0) 60%)",
+              }}
             />
+
+            {/* content */}
+            <div className="relative">
+              {/* desktop: 3 columns; mobile: stacked with BUT in middle */}
+              <div className="hidden md:grid grid-cols-3 place-items-center h-[320px] lg:h-[360px]">
+                {/* left: Anonymous */}
+                <div className="text-center">
+                  <div className="text-[12px] font-extrabold tracking-[.25em] text-slate-600 mb-3">ANONYMITY</div>
+                  <div className="text-white drop-shadow-sm">
+                    <h3 className="text-[38px] lg:text-[46px] font-black">Anonymous</h3>
+                  </div>
+                </div>
+
+                {/* middle: BUT */}
+                <div className="flex items-center justify-center">
+                  <span className="rounded-full bg-black/80 text-white px-6 py-2.5 text-[14px] lg:text-[16px] font-black shadow-[0_12px_28px_rgba(0,0,0,.25)]">
+                    BUT
+                  </span>
+                </div>
+
+                {/* right: Verified */}
+                <div className="text-center">
+                  <div className="text-[12px] font-extrabold tracking-[.25em] text-white/80 mb-3">VERIFIED</div>
+                  <div className="text-white drop-shadow-sm">
+                    <h3 className="text-[38px] lg:text-[46px] font-black">Verified</h3>
+                  </div>
+                </div>
+              </div>
+
+              {/* mobile layout */}
+              <div className="md:hidden flex flex-col items-center text-center py-12 gap-6">
+                <div>
+                  <div className="text-[11px] font-extrabold tracking-[.25em] text-slate-700 mb-2">ANONYMITY</div>
+                  <h3 className="text-white text-[32px] font-black drop-shadow-sm">Anonymous</h3>
+                </div>
+
+                <span className="rounded-full bg-black/80 text-white px-5 py-2 text-[13px] font-black shadow-md">
+                  BUT
+                </span>
+
+                <div>
+                  <div className="text-[11px] font-extrabold tracking-[.25em] text-white/85 mb-2">VERIFIED</div>
+                  <h3 className="text-white text-[32px] font-black drop-shadow-sm">Verified</h3>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
-      </Band>
+      </section>
+
+
+
 
       {/* === FEATURE SHOWCASE === */}
       <Band bg="white" roomy>
