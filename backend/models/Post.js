@@ -50,6 +50,13 @@ const PostSchema = new mongoose.Schema(
     downvoters: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
 
     commentCount: { type: Number, default: 0 },
+    
+    // Voting
+    counts: {
+      up: { type: Number, default: 0 },
+      down: { type: Number, default: 0 }
+    },
+    hotScore: { type: Number, default: 0, index: true },
   },
   {
     timestamps: true,
