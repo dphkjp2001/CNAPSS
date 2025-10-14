@@ -33,7 +33,7 @@ const AcademicPostSchema = new mongoose.Schema(
     materials: { type: [String], enum: MATERIAL_ENUM, default: [] },
 
     author: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
-    anonymous: { type: Boolean, default: true },
+    anonymous: { type: Boolean, default: false },
 
     images: { type: [ImageSchema], default: [] },
 
