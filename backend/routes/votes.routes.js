@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const voteService = require("../services/vote.service");
 const requireAuth = require("../middleware/requireAuth");
-const { schoolGuard } = require("../middleware/schoolGuard");
+const schoolGuard = require("../middleware/schoolGuard");
 
 /**
  * Cast a vote for a post or comment
