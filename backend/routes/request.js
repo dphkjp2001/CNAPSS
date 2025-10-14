@@ -12,13 +12,16 @@ const requireAuth = require("../middleware/requireAuth");
 const schoolGuard = require("../middleware/schoolGuard");
 
 const router = express.Router({ mergeParams: true });
-
 router.use(requireAuth, schoolGuard);
 
 /**
  * POST /api/:school/request
  * body: { targetId, initialMessage }
  * result: { ok, requestId, conversationId }
+ *
+ * ✅ 변경사항
+ *  - Conversation을 찾을 때 "같은 글(resourceId) + 같은 참여자" 조건으로만 재사용
+ *  - Conversation 생성 시 seekingKind, resourceId, resourceTitle 정확히 기록
  */
 router.post("/", async (req, res) => {
   try {
@@ -39,7 +42,6 @@ router.post("/", async (req, res) => {
     const userId = req.user._id;
     const userEmail = String(req.user.email || "").toLowerCase();
 
-    // Only 'looking_for' posts accept requests
     const postMode = String(post.mode || post.postType || post.type || "").toLowerCase();
     if (!(postMode === "looking_for" || postMode === "seeking")) {
       return res.status(400).json({ message: "Only 'looking for' posts accept requests." });
@@ -48,17 +50,16 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ message: "Invalid target user." });
     }
 
-    // prevent duplicates
-    const exists = await Request.findOne({ school, targetId, fromUser: userId });
-    if (exists) {
-      return res
-        .status(409)
-        .json({ message: "Request already sent.", requestId: exists._id, conversationId: exists.conversationId });
-    }
+    // seeking kind 정규화
+    const seekingKind = String(post.kind || "")
+      .toLowerCase()
+      .replace(/[\s-]+/g, "_"); // 'course_materials' | 'study_mate' | 'coffee_chat'
 
-    // find or create conversation
+    // ✅ 같은 글 + 같은 참여자일 때만 기존 대화 재사용
     let convo = await Conversation.findOne({
       school,
+      source: "looking_for",
+      resourceId: targetId,
       $or: [
         { buyer: userEmail, seller: authorEmail },
         { buyer: authorEmail, seller: userEmail },
@@ -66,16 +67,21 @@ router.post("/", async (req, res) => {
     });
 
     if (!convo) {
-      // always create as "looking_for" (legacy routes will be normalized by model anyway)
       convo = await Conversation.create({
         school,
         buyer: userEmail,
         seller: authorEmail,
         source: "looking_for",
-        itemId: targetId, // optional
-        resourceTitle: post.title || "Looking for",
+        resourceId: targetId,                 // ← 글 ID를 명확히 저장
+        resourceTitle: post.title || "Seeking",
+        seekingKind,                          // ← 3가지 분류 저장
         lastMessage: "",
       });
+    } else {
+      // 기존 대화가 있는데 seekingKind가 비어있다면 보정
+      if (!convo.seekingKind && seekingKind) {
+        convo.seekingKind = seekingKind;
+      }
     }
 
     const text = (initialMessage || "").trim() || "Hi! I'm interested in your post.";
@@ -136,6 +142,7 @@ router.get("/exists", async (req, res) => {
 });
 
 module.exports = router;
+
 
 
 
