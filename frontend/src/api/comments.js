@@ -1,6 +1,8 @@
 // frontend/src/api/comments.js
 import { apiFetch } from "./http";
-import schoolPath from "../utils/schoolPath";
+// import { useSchoolPath } from "../utils/schoolPath";
+// const schoolPath = useSchoolPath();
+
 
 // NOTE: VITE_API_URL may already include `/api` (e.g., https://api.cnapss.com/api).
 // We will NOT add another `/api`. Just append endpoint paths after this base.

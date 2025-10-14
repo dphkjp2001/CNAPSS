@@ -23,6 +23,10 @@ const userSchema = new mongoose.Schema(
       default: null,
       index: true,
     },
+
+    // Voting & reputation
+    netUpvotes: { type: Number, default: 0, index: true },
+    tier: { type: String, default: "bronze", enum: ["bronze", "silver", "gold", "platinum"] },
   },
   { timestamps: true }
 );
