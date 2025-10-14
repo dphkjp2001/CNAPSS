@@ -17,7 +17,7 @@ import AuthRequired from "./pages/auth/AuthRequired";
 // Dashboard + Boards
 const Dashboard = lazy(() => import("./pages/dashboard/Dashboard"));
 const FreeBoardDetail = lazy(() => import("./pages/freeboard/FreeBoardDetail"));
-const AcademicDetail = lazy(() => import("./pages/academic/AcademicDetail")); // ✅ NEW (career 대체)
+const AcademicDetail = lazy(() => import("./pages/academic/AcademicDetail")); // ✅ NEW
 
 // Market + Messages
 const MarketList = lazy(() => import("./pages/market/MarketList"));
@@ -65,8 +65,13 @@ export default function App() {
     <AuthGateProvider>
       <Suspense fallback={<div className="p-6 text-sm text-gray-500">Loading…</div>}>
         <Routes>
-          <Route element={<PublicLayout />}>
+          {/* ✅ 랜딩(학교 선택)만 fullBleed: 사이드바 제거 */}
+          <Route element={<PublicLayout fullBleed />}>
             <Route path="/" element={<SchoolSelect />} />
+          </Route>
+
+          {/* 공개 페이지(사이드바 유지) */}
+          <Route element={<PublicLayout />}>
             <Route path="/about" element={<About />} />
             <Route path="/login" element={<LoginRoute />} />
             <Route path="/register" element={<RegisterRoute />} />
@@ -75,6 +80,7 @@ export default function App() {
 
           <Route path="/dashboard/*" element={<NormalizeDashboard />} />
 
+          {/* 보호 레이아웃 (/:school) */}
           <Route
             path="/:school"
             element={
@@ -88,21 +94,77 @@ export default function App() {
 
             {/* Free & Academic boards (detail only) */}
             <Route path="freeboard/:id" element={<FreeBoardDetail />} />
-            <Route path="academic/:id" element={<AcademicDetail />} /> {/* ✅ career → academic */}
+            <Route path="academic/:id" element={<AcademicDetail />} />
 
             {/* Marketplace */}
             <Route path="market" element={<MarketList />} />
             <Route path="market/:id" element={<MarketDetail />} />
-            <Route path="market/write" element={<RequireAuth><MarketWrite /></RequireAuth>} />
-            <Route path="market/edit/:id" element={<RequireAuth><MarketEdit /></RequireAuth>} />
+            <Route
+              path="market/write"
+              element={
+                <RequireAuth>
+                  <MarketWrite />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="market/edit/:id"
+              element={
+                <RequireAuth>
+                  <MarketEdit />
+                </RequireAuth>
+              }
+            />
 
             {/* Protected pages */}
-            <Route path="myposts" element={<RequireAuth><Dashboard /></RequireAuth>} />
-            <Route path="liked" element={<RequireAuth><Dashboard /></RequireAuth>} />
-            <Route path="commented" element={<RequireAuth><Dashboard /></RequireAuth>} />
-            <Route path="messages" element={<RequireAuth><Messages /></RequireAuth>} />
-            <Route path="schedule" element={<RequireAuth><PersonalSchedule /></RequireAuth>} />
-            <Route path="group-availability" element={<RequireAuth><GroupAvailability /></RequireAuth>} />
+            <Route
+              path="myposts"
+              element={
+                <RequireAuth>
+                  <Dashboard />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="liked"
+              element={
+                <RequireAuth>
+                  <Dashboard />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="commented"
+              element={
+                <RequireAuth>
+                  <Dashboard />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="messages"
+              element={
+                <RequireAuth>
+                  <Messages />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="schedule"
+              element={
+                <RequireAuth>
+                  <PersonalSchedule />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="group-availability"
+              element={
+                <RequireAuth>
+                  <GroupAvailability />
+                </RequireAuth>
+              }
+            />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />
@@ -111,6 +173,7 @@ export default function App() {
     </AuthGateProvider>
   );
 }
+
 
 
 
