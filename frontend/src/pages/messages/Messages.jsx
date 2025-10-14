@@ -7,12 +7,15 @@ import { useSocket } from "../../contexts/SocketContext";
 import * as chatApi from "../../api/chat";
 
 /**
- * ✅ 레거시 제거 버전
- * - Marketplace / CourseHub 관련 필터/배지/표시는 모두 삭제
- * - 오직 두 가지 소스만 사용:
- *    1) "looking_for"  → Academic Board Seeking 에서 생성된 DM
- *    2) "dm"           → 사용자가 직접 시작한 일반 DM
- * - 필터 탭: All / Seeking
+ * Seeking 3가지 분리 표시:
+ * - course_materials = 📝 Course Materials
+ * - study_mate       = 👥 Study Buddy
+ * - coffee_chat      = ☕ Coffee Chat
+ * 그 외는 💬 DM
+ *
+ * 탭:
+ * - All
+ * - Materials / Study Buddy / Coffee Chat (각각 looking_for + kind로 필터)
  */
 export default function Messages() {
   const { user, token } = useAuth() || {};
@@ -24,7 +27,7 @@ export default function Messages() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
 
-  // "all" | "looking_for"
+  // 'all' | 'lf_course_materials' | 'lf_study_mate' | 'lf_coffee_chat'
   const [filter, setFilter] = useState("all");
 
   const school = (schoolParam || "").toLowerCase();
@@ -43,7 +46,6 @@ export default function Messages() {
     }
   }, [school, token]);
 
-  // 초기 로드 + socket preview 시 새로고침
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -55,7 +57,7 @@ export default function Messages() {
         const found = arr.find((c) => String(c._id) === String(qId));
         if (found) {
           setSelected(found);
-          setFilter(found?.source === "looking_for" ? "looking_for" : "all");
+          setFilter(autoFilter(found));
         }
       }
     })();
@@ -70,26 +72,39 @@ export default function Messages() {
     };
   }, [fetchConversations, onSocket, sp]);
 
-  // ---- helper ----
+  // helpers
+  const normKind = (k) => String(k || "").toLowerCase().replace(/[\s-]+/g, "_");
+  const isLF = (c) => String(c?.source).toLowerCase() === "looking_for";
   const otherEmail = (c) => {
     const b = String(c?.buyer || "").toLowerCase();
     const s = String(c?.seller || "").toLowerCase();
     return b === myEmail ? s : b;
   };
   const displayNameFromEmail = (email) => (email ? String(email).split("@")[0] : "Unknown");
+  const titleOf = (c) => (c?.resourceTitle && c.resourceTitle.trim()) || displayNameFromEmail(otherEmail(c));
 
-  const titleOf = (c) => {
-    const t = c?.resourceTitle;
-    if (t && t.trim()) return t;
-    return displayNameFromEmail(otherEmail(c));
+  const badgeText = (c) => {
+    if (!isLF(c)) return "💬 DM";
+    const k = normKind(c?.seekingKind);
+    if (k === "course_materials") return "📝 Materials";
+    if (k === "study_mate") return "👥 Study Buddy";
+    if (k === "coffee_chat") return "☕ Coffee Chat";
+    return "🎓 Seeking";
   };
 
-  // 배지: looking_for / dm
-  const typeBadge = (c) => (String(c?.source).toLowerCase() === "looking_for" ? "🎓 Seeking" : "💬 DM");
+  const autoFilter = (c) => {
+    if (!isLF(c)) return "all";
+    const k = normKind(c?.seekingKind);
+    if (k === "course_materials") return "lf_course_materials";
+    if (k === "study_mate") return "lf_study_mate";
+    if (k === "coffee_chat") return "lf_coffee_chat";
+    return "all";
+  };
 
   const filtered = useMemo(() => {
     if (filter === "all") return list;
-    return list.filter((c) => String(c?.source).toLowerCase() === "looking_for");
+    const want = filter.replace(/^lf_/, ""); // course_materials | study_mate | coffee_chat
+    return list.filter((c) => isLF(c) && normKind(c?.seekingKind) === want);
   }, [list, filter]);
 
   // URL 동기화
@@ -106,14 +121,11 @@ export default function Messages() {
     <div className="mx-auto flex h-[calc(100vh-120px)] max-w-6xl gap-4 p-4">
       {/* 좌측 리스트 */}
       <div className="flex w-[340px] shrink-0 flex-col rounded-2xl border bg-white">
-        {/* 탭(레거시 제거) */}
         <div className="flex flex-wrap gap-2 p-3">
-          <Chip active={filter === "all"} onClick={() => setFilter("all")}>
-            All
-          </Chip>
-          <Chip active={filter === "looking_for"} onClick={() => setFilter("looking_for")}>
-            Academic Seeking
-          </Chip>
+          <Chip active={filter === "all"} onClick={() => setFilter("all")}>All</Chip>
+          <Chip active={filter === "lf_course_materials"} onClick={() => setFilter("lf_course_materials")}>Materials</Chip>
+          <Chip active={filter === "lf_study_mate"} onClick={() => setFilter("lf_study_mate")}>Study Buddy</Chip>
+          <Chip active={filter === "lf_coffee_chat"} onClick={() => setFilter("lf_coffee_chat")}>Coffee Chat</Chip>
         </div>
 
         <div className="min-h-0 grow overflow-y-auto">
@@ -130,7 +142,7 @@ export default function Messages() {
                     <button
                       onClick={() => {
                         setSelected(c);
-                        setFilter(String(c?.source).toLowerCase() === "looking_for" ? "looking_for" : "all");
+                        setFilter(autoFilter(c));
                       }}
                       className={
                         "flex w-full items-center justify-between gap-2 px-3 py-3 text-left hover:bg-gray-50 " +
@@ -140,7 +152,7 @@ export default function Messages() {
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="whitespace-nowrap rounded-full bg-gray-800 px-2 py-0.5 text-[11px] font-semibold text-white">
-                            {typeBadge(c)}
+                            {badgeText(c)}
                           </span>
                           <span className="truncate text-sm font-semibold text-gray-900">{titleOf(c)}</span>
                         </div>
@@ -188,6 +200,7 @@ function Chip({ active, children, onClick }) {
     </button>
   );
 }
+
 
 
 
