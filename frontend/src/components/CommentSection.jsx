@@ -14,7 +14,7 @@ import {
   addComment,
   updateComment as apiUpdateComment,
   deleteComment as apiDeleteComment,
-  toggleCommentThumbs,
+  toggleCommentThumbs, // correct name
 } from "../api/comments";
 
 dayjs.extend(relativeTime);
@@ -23,13 +23,6 @@ dayjs.locale("en");
 const toId = (v) => (v == null ? "" : String(v));
 const norm = (e) => String(e || "").toLowerCase().trim();
 
-/**
- * 요구사항
- * - 비로그인도: 댓글 목록 보기 가능, 입력창 타이핑 가능
- * - "등록(Submit)"을 누르는 순간에만 로그인 요구(게이트 오픈)
- * - 좋아요/수정/삭제는 비로그인 시 전부 불가능(비활성화)
- *   (로그인 유저의 기존 동작은 유지)
- */
 export default function CommentSection({ postId, authorEmail = "", highlightId = null }) {
   const { user, token } = useAuth();
   const { school } = useSchool();
@@ -64,7 +57,7 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
 
   const [flashId, setFlashId] = useState(highlightId || null);
 
-  // ✅ 목록은 토큰 없어도 로드 시도 (백엔드가 공개 조회 허용해야 함)
+  // ---------- load list ----------
   const load = useCallback(async () => {
     if (!postId || !school) return;
     setListLoading(true);
@@ -83,7 +76,7 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
 
   useEffect(() => { load(); }, [load]);
 
-  // 🔌 socket join/leave & events
+  // ---------- socket sync ----------
   useEffect(() => {
     if (!socket?.emit || !socket?.on || !postId) return;
 
@@ -125,7 +118,7 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
     };
   }, [socket, postId]);
 
-  // 익명 라벨 맵
+  // ---------- anonymous labels ----------
   const anonLabelByEmail = useMemo(() => {
     const firstSeen = new Map();
     for (const c of comments) {
@@ -149,7 +142,7 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
     [anonLabelByEmail]
   );
 
-  // 하이라이트 페이드
+  // highlight fade
   useEffect(() => {
     if (!highlightId) return;
     setFlashId(highlightId);
@@ -157,7 +150,7 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
     return () => clearTimeout(t);
   }, [highlightId]);
 
-  // 트리 구성
+  // build tree
   const { roots, childrenMap } = useMemo(() => {
     const list = (comments || []).map((c) => ({ ...c, _id: toId(c._id), parentId: toId(c.parentId) || null }));
     const byParent = new Map();
@@ -171,13 +164,13 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
     return { roots, childrenMap: byParent };
   }, [comments]);
 
-  // ---------- 액션 가드: submit 시점에만 로그인 요구 ----------
+  // action-gate
   const ensureBeforeAction = () => {
     if (!user || !token) { ensureAuth(); return false; }
     return true;
   };
 
-  // Root 댓글 등록
+  // ---------- create (root) ----------
   const submitRoot = async () => {
     const content = rootText.trim();
     if (!content) return;
@@ -185,7 +178,10 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
 
     setPostingRoot(true);
     try {
-      await addComment({ school, token, postId, content, parentId: null });
+      const newCmt = await addComment({ school, token, postId, content });
+      if (newCmt?._id) {
+        setComments((prev) => (prev.some((x) => toId(x._id) === toId(newCmt._id)) ? prev : [...prev, newCmt]));
+      }
       setRootText("");
     } catch (e) {
       console.error("comments:add root failed", e);
@@ -195,7 +191,7 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
     }
   };
 
-  // 대댓글 등록
+  // ---------- create (reply) ----------
   const submitReply = async (parentId) => {
     const content = replyText.trim();
     if (!content) return;
@@ -204,7 +200,10 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
     const pid = toId(parentId);
     setPostingReplyId(pid);
     try {
-      await addComment({ school, token, postId, content, parentId: pid });
+      const newCmt = await addComment({ school, token, postId, content, parentId: pid });
+      if (newCmt?._id) {
+        setComments((prev) => (prev.some((x) => toId(x._id) === toId(newCmt._id)) ? prev : [...prev, newCmt]));
+      }
       setReplyingId(null);
       setReplyText("");
     } catch (e) {
@@ -215,18 +214,29 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
     }
   };
 
-  // 편집/삭제/좋아요 (비로그인 차단, 로그인 시 기존 로직 유지)
+  // ---------- edit (optimistic) ----------
   const saveEdit = async () => {
     const content = editText.trim();
     if (!content || !editingId) return;
     if (!ensureBeforeAction()) return;
 
-    setSavingId(editingId);
+    const id = editingId;
+    setSavingId(id);
+
+    // optimistic apply
+    const prev = comments;
+    setComments((list) =>
+      list.map((c) => (toId(c._id) === toId(id) ? { ...c, content, updatedAt: new Date().toISOString() } : c))
+    );
+
     try {
-      await apiUpdateComment({ school, token, commentId: editingId, content });
+      await apiUpdateComment({ school, token, commentId: id, content });
       setEditingId(null);
       setEditText("");
+      // socket will also broadcast; our optimistic update keeps UI instant.
     } catch (e) {
+      // revert on failure
+      setComments(prev);
       console.error("comments:update failed", e);
       alert("Failed to update comment.");
     } finally {
@@ -234,15 +244,24 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
     }
   };
 
+  // ---------- delete (optimistic) ----------
   const deleteOne = async (id) => {
     if (!ensureBeforeAction()) return;
     if (!window.confirm("Delete this comment?")) return;
 
     const target = toId(id);
     setDeletingId(target);
+
+    const prev = comments;
+    // optimistic remove
+    setComments((list) => list.filter((x) => toId(x._id) !== target && toId(x.parentId) !== target));
+
     try {
       await apiDeleteComment({ school, token, commentId: target });
+      // socket will also broadcast; nothing else to do
     } catch (e) {
+      // revert on failure
+      setComments(prev);
       console.error("comments:delete failed", e);
       alert("Failed to delete comment.");
     } finally {
@@ -250,22 +269,39 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
     }
   };
 
+  // ---------- like (optimistic) ----------
   const toggleLike = async (id, ownerEmail) => {
     if (!ensureBeforeAction()) return;
-    if (norm(ownerEmail) === me) return; // 자기 댓글 좋아요 방지(UI)
+    if (norm(ownerEmail) === me) return; // no self-like
+
     const target = toId(id);
     setLikingId(target);
+
+    const prev = comments;
+    // optimistic toggle
+    setComments((list) =>
+      list.map((c) => {
+        if (toId(c._id) !== target) return c;
+        const arr = (c.thumbsUpUsers || []).map((e) => norm(e));
+        const mine = norm(user?.email);
+        const has = arr.includes(mine);
+        const nextArr = has ? arr.filter((e) => e !== mine) : [...arr, mine];
+        return { ...c, thumbsUpUsers: nextArr, thumbsCount: nextArr.length };
+      })
+    );
+
     try {
       await toggleCommentThumbs({ school, token, commentId: target });
-      // socket이 동기화해 줄 것
+      // socket will normalize counts for everyone else
     } catch (e) {
+      // revert on failure
+      setComments(prev);
       console.error("comments:thumb toggle failed", e);
     } finally {
       setLikingId(null);
     }
   };
 
-  // ❗️중요: 입력창은 로그인 여부와 무관하게 항상 활성화(disabled=false)
   return (
     <div className="mt-8">
       <h3 className="mb-3 text-lg font-semibold text-gray-900">Comments</h3>
@@ -285,7 +321,6 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
           }}
           placeholder="Write a comment…"
           className="h-20 w-full resize-none rounded-lg border px-3 py-2 text-sm"
-          // 로그인 여부와 무관하게 타이핑 가능
         />
         <div className="mt-2 flex items-center justify-between">
           {!user && <span className="text-xs text-gray-500">You’ll be asked to log in when you post.</span>}
@@ -422,7 +457,6 @@ function ThreadNode({
           )}
 
           <div className="mt-2 flex items-center gap-3 text-xs text-gray-600">
-            {/* 좋아요: 비로그인 불가 */}
             <button
               onClick={() => onToggleLike(node._id, node.email)}
               disabled={likingId === node._id || isMine || !isAuthed}
@@ -432,7 +466,6 @@ function ThreadNode({
               👍 {likeCount}
             </button>
 
-            {/* Reply: 에디터는 누구나 열 수 있게(쓰기 시점에서 게이트) */}
             <button
               onClick={() => {
                 setReplyingId(toId(node._id));
@@ -444,7 +477,6 @@ function ThreadNode({
               Reply
             </button>
 
-            {/* Edit/Delete: 본인 + 로그인에만 노출 */}
             {isAuthed && isMine && (
               <>
                 <button onClick={() => onStartEdit(node)} className="rounded px-2 py-1 hover:bg-gray-100">
@@ -461,7 +493,6 @@ function ThreadNode({
             )}
           </div>
 
-          {/* inline reply editor (에디터는 항상 열 수 있음) */}
           {replyingId === toId(node._id) && (
             <div className="mt-2 rounded-lg border bg-white p-2">
               <textarea
@@ -490,7 +521,6 @@ function ThreadNode({
         </div>
       </div>
 
-      {/* children */}
       {children.length > 0 && (
         <ul className="mt-2 space-y-3">
           {children.map((child) => (
@@ -526,6 +556,9 @@ function ThreadNode({
     </li>
   );
 }
+
+
+
 
 
 

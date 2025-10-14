@@ -14,7 +14,7 @@ function SideLink({ to, children }) {
   );
 }
 
-export default function PublicLayout() {
+export default function PublicLayout({ fullBleed = false }) {
   const { user, logout } = useAuth();
   const location = useLocation();
   const [flash, setFlash] = useState(null);
@@ -32,6 +32,23 @@ export default function PublicLayout() {
     }
   }, [location.state]);
 
+  // ✅ 사이드바 없이 전폭 레이아웃 (랜딩/히어로 전용)
+  if (fullBleed) {
+    return (
+      <div className="min-h-screen flex flex-col bg-white">
+        {flash && (
+          <div className="border-b bg-amber-50 text-amber-900">
+            <div className="mx-auto max-w-6xl px-4 py-2 text-sm">{flash.message}</div>
+          </div>
+        )}
+        <main className="flex-1">
+          <Outlet />
+        </main>
+      </div>
+    );
+  }
+
+  // 기본: 사이드바 포함
   return (
     <div className="min-h-screen flex bg-gray-50">
       {/* Left Sidebar */}
@@ -99,6 +116,7 @@ export default function PublicLayout() {
     </div>
   );
 }
+
 
 
 
