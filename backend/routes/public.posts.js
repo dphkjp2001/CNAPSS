@@ -8,7 +8,7 @@ const ALLOWED_SCHOOLS = ["nyu", "columbia", "boston"];
 
 /**
  * GET /api/public/:school/posts
- * Query: page, limit, q, sort(new|old)
+ * Query: page, limit, q, sort(new|old|score)
  */
 router.get("/", async (req, res) => {
   try {
@@ -21,15 +21,28 @@ router.get("/", async (req, res) => {
     const limit = Math.min(Math.max(parseInt(req.query.limit || "20", 10), 1), 50);
     const q = (req.query.q || "").trim();
     const sortOpt = String(req.query.sort || "new").toLowerCase();
-    const sortStage = sortOpt === "old" ? { createdAt: 1, _id: 1 } : { createdAt: -1, _id: -1 };
 
     const match = { school };
     if (q) match.title = { $regex: q, $options: "i" };
 
-    const total = await Post.countDocuments(match);
+    let sortStage = { createdAt: -1, _id: -1 };
+    if (sortOpt === "old") sortStage = { createdAt: 1, _id: 1 };
+    if (sortOpt === "score") sortStage = { score: -1, createdAt: -1, _id: -1 };
 
-    const items = await Post.aggregate([
+    const pipeline = [
       { $match: match },
+      {
+        $addFields: {
+          upCount: { $size: { $ifNull: ["$upvoters", []] } },
+          downCount: { $size: { $ifNull: ["$downvoters", []] } },
+          score: {
+            $subtract: [
+              { $size: { $ifNull: ["$upvoters", []] } },
+              { $size: { $ifNull: ["$downvoters", []] } },
+            ],
+          },
+        },
+      },
       { $sort: sortStage },
       { $skip: (page - 1) * limit },
       { $limit: limit },
@@ -37,15 +50,18 @@ router.get("/", async (req, res) => {
         $project: {
           _id: 1,
           title: 1,
-          content: 1,   // ✅ preview 허용
-          images: 1,    // ✅ 이미지 포함
+          content: 1,
+          images: 1,
           createdAt: 1,
-          school: 1,
-          likesCount: { $size: { $ifNull: ["$thumbsUpUsers", []] } },
+          upCount: 1,
+          downCount: 1,
+          score: 1,
         },
       },
-      { $project: { school: 0 } },
-    ]);
+    ];
+
+    const total = await Post.countDocuments(match);
+    const items = await Post.aggregate(pipeline);
 
     res.json({ page, limit, total, items });
   } catch (err) {
@@ -65,13 +81,22 @@ router.get("/:id", async (req, res) => {
       return res.status(400).json({ message: "Invalid school." });
     }
 
-    const post = await Post.findOne(
-      { _id: req.params.id, school },
-      "_id title content images createdAt"
-    ).lean();
+    const post = await Post.findOne({ _id: req.params.id, school }).lean();
     if (!post) return res.status(404).json({ message: "Post not found." });
 
-    res.json(post);
+    const upCount = Array.isArray(post.upvoters) ? post.upvoters.length : 0;
+    const downCount = Array.isArray(post.downvoters) ? post.downvoters.length : 0;
+
+    res.json({
+      _id: post._id,
+      title: post.title,
+      content: post.content,
+      images: post.images,
+      createdAt: post.createdAt,
+      upCount,
+      downCount,
+      score: upCount - downCount,
+    });
   } catch (err) {
     console.error("Public post detail error:", err);
     res.status(500).json({ message: "Failed to load public post." });
@@ -79,5 +104,6 @@ router.get("/:id", async (req, res) => {
 });
 
 module.exports = router;
+
 
 
