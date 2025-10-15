@@ -1,4 +1,4 @@
-import { http } from './http';
+import { postJson, getJson } from './http';
 
 const baseUrl = '/votes';
 
@@ -14,7 +14,7 @@ export const voteApi = {
    * @param {number} params.value Vote value (-1, 0, or 1)
    */
   async vote({ targetType, targetId, value }) {
-    return http.post(`${baseUrl}/${targetType}/${targetId}`, { value });
+    return postJson(`${baseUrl}/${targetType}/${targetId}`, { value });
   },
 
   /**
@@ -24,8 +24,9 @@ export const voteApi = {
    * @param {string[]} params.targetIds Array of target IDs
    */
   async getVotesForTargets({ targetType, targetIds }) {
-    return http.get(`${baseUrl}/${targetType}`, {
-      params: { targetIds }
-    });
+    // Build ?targetIds[]=id1&targetIds[]=id2&targetIds[]=id3
+    const params = new URLSearchParams();
+    targetIds.forEach(id => params.append("targetIds", id));
+    return getJson(`${baseUrl}/${targetType}?${params.toString()}`);
   }
 };

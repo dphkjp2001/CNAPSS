@@ -76,115 +76,95 @@ export default function SchoolSelect() {
 
   return (
     <div className="min-h-screen" style={{ background: TOKENS.pageBg }}>
-      {/* === TOP NAV (with text outline for light backgrounds) === */}
-<header className="fixed inset-x-0 top-0 z-30 bg-transparent nav-contrast">
+      {/* === TOP NAV (Black Glass Overlay) === */}
+{/* === TOP NAV (White header, brand in HERO color, black links) === */}
+<header className="fixed inset-x-0 top-0 z-30 bg-white border-b border-slate-200">
   <div className="mx-auto max-w-6xl h-16 px-4 md:px-6 flex items-center justify-between">
-    {/* Left: Logo */}
-    <Link to="/" className="brand text-white font-extrabold tracking-tight text-2xl">
+    {/* Left: Brand */}
+    <Link
+      to="/"
+      className="font-extrabold tracking-tight text-2xl"
+      style={{ color: "#EE5C5C" }}  // HERO 시작 색상
+    >
       CNAPSS
     </Link>
 
-    {/* Center: About us */}
-    <nav className="absolute inset-x-0 mx-auto hidden sm:flex justify-center">
-      <Link to="/about" className="navlink text-white/90 hover:text-white text-sm font-semibold tracking-wide">
-        About us
+    {/* Middle: Contact us (slightly left-biased) */}
+    <nav className="absolute inset-x-0 flex justify-center pointer-events-none">
+      <Link
+        to="/contact"
+        className="pointer-events-auto text-slate-900 hover:text-black text-sm font-semibold tracking-wide
+                   transform -translate-x-[6%]"  // 중앙에서 왼쪽으로 약간 이동
+      >
+        Contact us
       </Link>
     </nav>
 
-    {/* Right: Auth */}
-    <div className="flex items-center gap-2">
-      <Link to="/auth/login" className="navlink px-3 py-1.5 text-sm font-semibold text-white/90 hover:text-white">
+    {/* Right: Auth (unified black text) */}
+    <div className="flex items-center gap-4">
+      <Link
+        to="/auth/login"
+        className="text-slate-900 hover:text-black text-sm font-semibold"
+      >
         Sign in
       </Link>
       <Link
         to="/auth/register"
-        className="rounded-xl bg-white/90 hover:bg-white text-rose-600 px-3.5 py-1.5 text-sm font-bold shadow-sm btn-outline-text"
+        className="text-slate-900 hover:text-black text-sm font-semibold"
       >
         Sign up
       </Link>
     </div>
   </div>
-
-  {/* ✨ Text outline so white text stays readable on white backgrounds */}
-  <style>{`
-    .nav-contrast .brand,
-    .nav-contrast .navlink {
-      /* 우선 깔끔한 윤곽선(크롬/사파리) */
-      -webkit-text-stroke: 0.6px rgba(0,0,0,.35);
-      paint-order: stroke fill;
-      /* 파이어폭스 등 폴백: 소프트 그림자 */
-      text-shadow:
-        0 1px 1px rgba(0,0,0,.30),
-        0 0 3px rgba(0,0,0,.35),
-        0 0 8px rgba(0,0,0,.15);
-    }
-    /* 버튼 텍스트도 살짝 윤곽 (배경 흰색이라 약하게만) */
-    .nav-contrast .btn-outline-text {
-      text-shadow:
-        0 0 1px rgba(0,0,0,.25),
-        0 1px 1px rgba(0,0,0,.20);
-    }
-    /* 호버 시 윤곽 유지 + 살짝 또렷 */
-    .nav-contrast .navlink:hover,
-    .nav-contrast .brand:hover {
-      -webkit-text-stroke: 0.7px rgba(0,0,0,.4);
-      text-shadow:
-        0 1px 1px rgba(0,0,0,.35),
-        0 0 4px rgba(0,0,0,.4);
-    }
-  `}</style>
 </header>
 
 
-      <section
-        className="relative isolate text-white min-h-screen flex flex-col justify-center"
-        style={{
-          background: "linear-gradient(180deg, #EE5C5C 0%, #F16969 40%, #F78A8A 80%, #F59F9F 100%)",
-        }}
-      >
-        {/* 🔥 흐림(뿌연) 효과 완전 제거 — 기존 bg-white/10 overlay 삭제 */}
 
-        <div className="relative mx-auto max-w-6xl px-4 md:px-6 pt-32 pb-24 text-center">
-          <h1
-            className="font-black tracking-tight leading-tight drop-shadow-md
-                      text-[40px] sm:text-[52px] md:text-[68px]"
-          >
-            What <span className="chip chip--ai">AI</span> can’t answer,<br />
-            Campus <span className="chip chip--peers">Peers</span> can.
-          </h1>
+{/* === HERO (no text shadows, same gradient) === */}
+<section
+  className="relative isolate text-white min-h-screen flex flex-col justify-center"
+  style={{
+    background:
+      "linear-gradient(180deg, #EE5C5C 0%, #F16969 40%, #F78A8A 80%, #F59F9F 100%)",
+  }}
+>
+  <div className="relative mx-auto max-w-6xl px-4 md:px-6 pt-32 pb-24 text-center">
+    <h1 className="font-black tracking-tight leading-tight text-[40px] sm:text-[52px] md:text-[68px]">
+      What <span className="chip chip--ai">AI</span> can’t answer,<br />
+      Campus <span className="chip chip--peers">Peers</span> can.
+    </h1>
 
-          <p className="mt-14 text-white/95 text-base sm:text-lg md:text-xl leading-relaxed max-w-4xl mx-auto drop-shadow-md">
-            <span className="font-semibold">AI</span> knows facts.
-            <span className="px-2 font-extrabold tracking-wide">BUT</span>
-            your <span className="font-semibold">Peers</span> know campus life.
-            <br className="hidden sm:block" />
-            <span className="font-semibold">CNAPSS</span> connects verified students —
-            sharing <span className="font-semibold">Real Stories, Opinions, and Experiences.</span>
-          </p>
-        </div>
+    <p className="mt-14 text-white/95 text-base sm:text-lg md:text-xl leading-relaxed max-w-4xl mx-auto">
+      <span className="font-semibold">AI</span> knows facts.
+      <span className="px-2 font-extrabold tracking-wide">BUT</span>
+      your <span className="font-semibold">Peers</span> know campus life.
+      <br className="hidden sm:block" />
+      <span className="font-semibold">CNAPSS</span> connects verified students —
+      sharing <span className="font-semibold">Real Stories, Opinions, and Experiences.</span>
+    </p>
+  </div>
 
-        <style>{`
-          .chip {
-            display: inline-block;
-            padding: .1em .5em;
-            border-radius: .7em;
-            line-height: 1;
-            white-space: nowrap;
-          }
-          .chip--ai {
-            background: #fff;
-            color: #E11D48; /* rose-600 */
-            box-shadow: 0 4px 14px rgba(0,0,0,.2);
-          }
-          .chip--peers {
-            color: #fff;
-            border: 2px solid rgba(255,255,255,.85);
-            box-shadow: inset 0 0 8px rgba(255,255,255,.15);
-            border-radius: 1em;
-            padding: .1em .7em;
-          }
-        `}</style>
-      </section>
+  {/* Chips */}
+  <style>{`
+    .chip {
+      display: inline-block;
+      padding: .1em .5em;
+      border-radius: .7em;
+      line-height: 1;
+      white-space: nowrap;
+    }
+    .chip--ai {
+      background: #fff;
+      color: #E11D48; /* rose-600 */
+    }
+    .chip--peers {
+      color: #fff;
+      border: 2px solid rgba(255,255,255,.85);
+      border-radius: 1em;
+      padding: .1em .7em;
+    }
+  `}</style>
+</section>
 
 
 
