@@ -21,7 +21,7 @@ const PostSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
-    // NEW: Post mode (for Academic board only)
+    // Academic board only
     mode: {
       type: String,
       enum: ["general", "looking_for"],
@@ -42,17 +42,29 @@ const PostSchema = new mongoose.Schema(
 
     images: { type: [ImageSchema], default: [] },
 
-    // optional/common counters
+    // (legacy thumbs) kept for compatibility
     likes: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+
+    // ✅ New: Up/Down vote (Freeboard 전용으로 사용)
+    upvoters: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+    downvoters: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+
     commentCount: { type: Number, default: 0 },
+    
+    // Voting
+    counts: {
+      up: { type: Number, default: 0 },
+      down: { type: Number, default: 0 }
+    },
+    hotScore: { type: Number, default: 0, index: true },
   },
   {
     timestamps: true,
-    strict: false, // keep unknown fields to avoid breaking existing code
+    strict: false,
     toJSON: {
       virtuals: true,
       transform: (_doc, ret) => {
-        // Normalize outbound shape for FE compatibility
+        // Normalize mode for FE compatibility
         const inbound =
           ret.mode ||
           ret.kind ||
@@ -66,15 +78,18 @@ const PostSchema = new mongoose.Schema(
             ? "looking_for"
             : "general";
 
-        // academic board일 때만 looking_for 허용, 나머지는 강제로 general
         ret.mode = ret.board === "academic" ? normalized : "general";
 
-        // Backward-compat aliases the FE might be using
         if (typeof ret.lookingFor === "undefined") {
           ret.lookingFor = ret.mode === "looking_for";
         }
         if (!ret.kind) ret.kind = ret.mode;
         if (!ret.type) ret.type = ret.mode;
+
+        // ✅ add counts for convenience
+        ret.upCount = Array.isArray(ret.upvoters) ? ret.upvoters.length : 0;
+        ret.downCount = Array.isArray(ret.downvoters) ? ret.downvoters.length : 0;
+        ret.score = ret.upCount - ret.downCount;
 
         return ret;
       },
@@ -97,6 +112,7 @@ PostSchema.pre("validate", function (next) {
 });
 
 module.exports = mongoose.model("Post", PostSchema);
+
 
 
 

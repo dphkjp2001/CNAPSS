@@ -34,6 +34,14 @@ router.get("/", async (req, res) => {
       { $skip: (page - 1) * limit },
       { $limit: limit },
       {
+        $lookup: {
+          from: 'users',
+          localField: 'author',
+          foreignField: '_id',
+          as: 'authorData'
+        }
+      },
+      {
         $project: {
           _id: 1,
           title: 1,
@@ -43,8 +51,11 @@ router.get("/", async (req, res) => {
           school: 1,
           mode: 1,
           kind: 1,
-          likesCount: { $size: { $ifNull: ["$likes", []] } },
+          counts: 1,
+          hotScore: 1,
           author: 1,
+          authorNickname: { $arrayElemAt: ['$authorData.nickname', 0] },
+          authorTier: { $arrayElemAt: ['$authorData.tier', 0] },
           // ✅ materials meta for course_materials
           courseName: 1,
           professor: 1,
@@ -67,9 +78,8 @@ router.get("/:id", async (req, res) => {
     if (!ALLOWED_SCHOOLS.includes(school)) return res.status(400).json({ message: "Invalid school." });
 
     const post = await AcademicPost.findOne(
-      { _id: req.params.id, school },
-      "_id title content images createdAt mode kind author courseName professor materials"
-    ).lean();
+      { _id: req.params.id, school }
+    ).populate('author', 'nickname tier').lean();
     if (!post) return res.status(404).json({ message: "Post not found." });
 
     res.json(post);

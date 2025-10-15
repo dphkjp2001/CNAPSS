@@ -22,6 +22,10 @@ module.exports = {
     },
   },
   plugins: [],
+
+    experimental: {
+    oxide: false, // force Tailwind to use pure JS, skip native oxide binary
+  },
 };
 
 

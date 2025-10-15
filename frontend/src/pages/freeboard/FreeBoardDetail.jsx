@@ -11,8 +11,8 @@ import {
   getPost,
   getPublicPost,
   deletePost,
-  toggleThumbs,
   updatePost,
+  votePost, // ✅ Up/Down API
 } from "../../api/posts";
 import { useAuth } from "../../contexts/AuthContext";
 import { useSchool } from "../../contexts/SchoolContext";
@@ -40,35 +40,42 @@ export default function FreeBoardDetail() {
 
   const isAuthed = !!(user?.email || (token && String(token).length > 0));
 
+  // ✅ 투표 로컬 상태(낙관적 업데이트)
+  const [upCount, setUpCount] = useState(0);
+  const [downCount, setDownCount] = useState(0);
+  const [myVote, setMyVote] = useState(null); // "up" | "down" | null
+  const score = upCount - downCount;
+
   const loadPost = async () => {
     setError("");
     try {
-      // ✅ 항상 공개 엔드포인트를 **먼저** 시도
+      // 1) 공개 상세(비로그인도 확인 가능)
       const pub = await getPublicPost({ school, id });
       setPost(pub);
       setEditTitle(pub?.title || "");
       setEditContent(pub?.content || "");
-      return;
+      setUpCount(pub?.upCount || 0);
+      setDownCount(pub?.downCount || 0);
     } catch (err) {
-      // 공개 엔드포인트가 404일 때만 보호 엔드포인트로 폴백
       if (!(err?.status === 404)) {
         setError(err?.message || "Failed to load the post.");
         return;
       }
     }
 
-    // 🔐 보호 엔드포인트 폴백 (로그인 상태에서만)
+    // 2) 로그인 상태면 보호 상세로 내 투표 상태(myVote)까지 보강
     if (isAuthed) {
       try {
-        const data = await getPost({ school, id });
-        setPost(data);
-        setEditTitle(data?.title || "");
-        setEditContent(data?.content || "");
-      } catch (err) {
-        setError(err?.message || "Failed to load the post.");
+        const prot = await getPost({ school, id });
+        setPost(prot);
+        setEditTitle(prot?.title || "");
+        setEditContent(prot?.content || "");
+        setUpCount(prot?.upCount || 0);
+        setDownCount(prot?.downCount || 0);
+        setMyVote(prot?.myVote || null);
+      } catch {
+        /* public 성공했으면 보호 실패는 무시 */
       }
-    } else {
-      setError("Post not found.");
     }
   };
 
@@ -78,7 +85,7 @@ export default function FreeBoardDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, school, isAuthed]);
 
-  // ✅ 알림 딥링크로 진입 시 서버에 읽음 반영
+  // ✅ 알림 딥링크 읽음 반영
   useEffect(() => {
     const sp = new URLSearchParams(location.search);
     const nid = sp.get("nid");
@@ -91,14 +98,12 @@ export default function FreeBoardDetail() {
           headers: { "Content-Type": "application/json" },
           body: { commentId: nid, email: user.email },
         });
-      } catch {
-        /* no-op */
-      }
+      } catch {}
     }
     markRead();
   }, [location.search, user?.email, school]);
 
-  // 🔎 스크롤/하이라이트 대상 comment id 추출
+  // 🔎 하이라이트 대상 comment id
   const highlightId = useMemo(() => {
     const hash = location.hash || "";
     const fromHash = hash.startsWith("#comment-")
@@ -109,9 +114,7 @@ export default function FreeBoardDetail() {
   }, [location.hash, location.search]);
 
   const isAuthor = useMemo(
-    () =>
-      (user?.email || "").toLowerCase() ===
-      (post?.email || "").toLowerCase(),
+    () => (user?.email || "").toLowerCase() === (post?.email || "").toLowerCase(),
     [user, post]
   );
 
@@ -126,34 +129,54 @@ export default function FreeBoardDetail() {
     }
   };
 
-  const handleThumb = async () => {
-    if (!user) return; // 게스트는 비활성
+  // ✅ 낙관적 투표
+  const optimisticVote = (dir) => {
+    const prev = { upCount, downCount, myVote };
+    let nextUp = upCount;
+    let nextDown = downCount;
+    let nextMy = myVote;
+
+    if (dir === "up") {
+      if (myVote === "up") {
+        nextUp -= 1; nextMy = null;
+      } else if (myVote === "down") {
+        nextDown -= 1; nextUp += 1; nextMy = "up";
+      } else {
+        nextUp += 1; nextMy = "up";
+      }
+    } else {
+      if (myVote === "down") {
+        nextDown -= 1; nextMy = null;
+      } else if (myVote === "up") {
+        nextUp -= 1; nextDown += 1; nextMy = "down";
+      } else {
+        nextDown += 1; nextMy = "down";
+      }
+    }
+
+    setUpCount(nextUp);
+    setDownCount(nextDown);
+    setMyVote(nextMy);
+    return prev; // 롤백용 스냅샷
+  };
+
+  const handleVote = async (dir) => {
+    if (!user) {
+      alert("Please log in to vote.");
+      return;
+    }
+    const snapshot = optimisticVote(dir);
     try {
-      await toggleThumbs({ school, id: post._id });
-      setPost((p) =>
-        !p
-          ? p
-          : {
-              ...p,
-              thumbsUpUsers: (p.thumbsUpUsers || []).includes(
-                (user?.email || "").toLowerCase()
-              )
-                ? p
-                    .thumbsUpUsers
-                    .filter(
-                      (e) =>
-                        e.toLowerCase() !==
-                        (user?.email || "").toLowerCase()
-                    )
-                : [
-                    ...(p.thumbsUpUsers || []),
-                    (user?.email || "").toLowerCase(),
-                  ],
-            }
-      );
-      await loadPost();
+      const result = await votePost({ school, id: post._id, dir });
+      if (typeof result?.upCount === "number") setUpCount(result.upCount);
+      if (typeof result?.downCount === "number") setDownCount(result.downCount);
+      if (typeof result?.myVote !== "undefined") setMyVote(result.myVote);
     } catch (err) {
-      alert("Failed to like: " + (err?.message || "Unknown error"));
+      // 실패 시 롤백
+      setUpCount(snapshot.upCount);
+      setDownCount(snapshot.downCount);
+      setMyVote(snapshot.myVote);
+      alert("Vote failed: " + (err?.message || "Unknown error"));
     }
   };
 
@@ -163,12 +186,7 @@ export default function FreeBoardDetail() {
     if (!title || !content) return;
     setSaving(true);
     try {
-      const updated = await updatePost({
-        school,
-        id: post._id,
-        title,
-        content,
-      });
+      const updated = await updatePost({ school, id: post._id, title, content });
       const next = updated?.post || updated;
       setPost(next);
       setIsEditing(false);
@@ -177,12 +195,6 @@ export default function FreeBoardDetail() {
     } finally {
       setSaving(false);
     }
-  };
-
-  const handleCancelEdit = () => {
-    setEditTitle(post?.title || "");
-    setEditContent(post?.content || "");
-    setIsEditing(false);
   };
 
   if (error) {
@@ -246,22 +258,53 @@ export default function FreeBoardDetail() {
               </div>
             )}
 
+            {/* ✅ Vote controls — 👍 / 👎 아이콘으로 변경 */}
             <div className="mt-6 flex flex-wrap items-center gap-3">
-              <button
-                onClick={handleThumb}
-                disabled={!user || isAuthor}
-                className="rounded-xl border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-800 shadow-sm hover:bg-gray-50 disabled:opacity-60"
-                aria-label="like post"
-                title={
-                  !user
-                    ? "Log in to like (disabled for guests)"
-                    : isAuthor
-                    ? "You can’t like your own post."
-                    : "Like post"
-                }
-              >
-                👍 {post.thumbsUpUsers?.length || 0}
-              </button>
+              <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-2 py-1">
+                <button
+                  onClick={() => handleVote("up")}
+                  disabled={!user || isAuthor}
+                  className={`rounded-md px-3 py-1 text-sm font-semibold ${
+                    myVote === "up"
+                      ? "bg-green-600 text-white"
+                      : "bg-gray-100 text-gray-800 hover:bg-gray-200"
+                  } disabled:opacity-60`}
+                  title={
+                    !user
+                      ? "Log in to vote"
+                      : isAuthor
+                      ? "You can’t vote on your own post."
+                      : "Upvote"
+                  }
+                  aria-label="Upvote"
+                >
+                  👍 {upCount}
+                </button>
+
+                <button
+                  onClick={() => handleVote("down")}
+                  disabled={!user || isAuthor}
+                  className={`rounded-md px-3 py-1 text-sm font-semibold ${
+                    myVote === "down"
+                      ? "bg-red-600 text-white"
+                      : "bg-gray-100 text-gray-800 hover:bg-gray-200"
+                  } disabled:opacity-60`}
+                  title={
+                    !user
+                      ? "Log in to vote"
+                      : isAuthor
+                      ? "You can’t vote on your own post."
+                      : "Downvote"
+                  }
+                  aria-label="Downvote"
+                >
+                  👎 {downCount}
+                </button>
+
+                <span className="ml-2 text-sm font-medium text-gray-700">
+                  Score: {score}
+                </span>
+              </div>
 
               {isAuthor && !isEditing && (
                 <>
@@ -326,6 +369,8 @@ export default function FreeBoardDetail() {
     </div>
   );
 }
+
+
 
 
 

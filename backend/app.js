@@ -90,6 +90,9 @@ app.use("/api", academicPostsRoutes);
 // (Optional)
 app.use("/api/:school/reviews", requireAuth, schoolGuard, reviewsRoutes);
 
+// Voting routes
+app.use("/api/:school/votes", require("./routes/votes.routes"));
+
 // (예: places 프록시가 school 스코프가 아니라면 별도 경로로 마운트)
 app.use("/api/places", placesRouter);
 

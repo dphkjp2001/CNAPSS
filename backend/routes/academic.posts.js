@@ -101,7 +101,7 @@ router.post("/:school/academic-posts", requireAuth, schoolGuard, async (req, res
       postType,
       kind = "",
       images = [],
-      anonymous = true,
+      anonymous = false, //!!anonymous
       // extras for course_materials
       courseName,
       professor = "",
@@ -131,7 +131,7 @@ router.post("/:school/academic-posts", requireAuth, schoolGuard, async (req, res
         mode: normalizedMode,
         kind: "course_materials",
         images: [],                    // 이미지 비활성
-        anonymous: !!anonymous,
+        anonymous: false, //!!anonymous
         author: req.user.id || req.user._id,
         // extras
         courseName: course,
@@ -148,13 +148,14 @@ router.post("/:school/academic-posts", requireAuth, schoolGuard, async (req, res
 
     // ✅ 그 외(일반/질문/다른 seeking)는 기존 로직
     const doc = await AcademicPost.create({
-      school,
+  //t.create({
+     school,
       title: title.trim(),
       content: String(content || ""),
       mode: normalizedMode,
       kind: normalizedKind,
       images: Array.isArray(images) ? images.map((u) => (typeof u === "string" ? { url: u } : u)) : [],
-      anonymous: !!anonymous,
+      anonymous: false, //!!anonymous
       author: req.user.id || req.user._id,
       // legacy aliases
       type,
@@ -189,7 +190,7 @@ router.patch("/:school/academic-posts/:id", requireAuth, schoolGuard, async (req
       doc.images = Array.isArray(images)
         ? images.map((u) => (typeof u === "string" ? { url: u } : u))
         : [];
-    if (typeof anonymous !== "undefined") doc.anonymous = !!anonymous;
+    if (typeof anonymous !== "undefined") doc.anonymous = false; //!!anonymous
 
     if (typeof kind !== "undefined")
       doc.kind = String(kind || "").toLowerCase().replace(/[\s-]+/g, "_");

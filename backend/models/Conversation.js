@@ -2,44 +2,30 @@
 const mongoose = require("mongoose");
 
 const ALLOWED_SCHOOLS = ["nyu", "columbia", "boston"];
-<<<<<<< HEAD
-// ✅ WTB 소스 정식 추가
-const ALLOWED_SOURCES = ["market", "coursehub", "coursehub_wtb", "dm"];
-
-const conversationSchema = new mongoose.Schema(
-  {
-    // legacy (market only)
-    itemId: { type: mongoose.Schema.Types.ObjectId, ref: "MarketItem", default: null },
-
-    // common resource (market/material 공통)
-    resourceId: { type: mongoose.Schema.Types.ObjectId, default: null },
-    resourceTitle: { type: String, default: "" },
-
-    // participants (email, lowercased)
-=======
 
 /**
- * We only use:
- *  - "looking_for" : Academic 'Looking for' → DM
+ * Sources:
+ *  - "looking_for" : Academic 'Seeking' → DM
  *  - "dm"          : User-started direct messages
- *
- * Legacy sources ("coursehub_wtb", "coursehub", "market") might still be sent
- * by older routes. We normalize them to "looking_for" in pre-validate hook
- * so the server won't crash even if an old value is used.
  */
 const ALLOWED_SOURCES = ["looking_for", "dm"];
 
+/** Seeking 세부 분류(3가지) */
+const SEEKING_KINDS = ["course_materials", "study_mate", "coffee_chat", ""];
+
 const conversationSchema = new mongoose.Schema(
   {
-    // optional legacy linkage
+    // legacy linkage (market)
     itemId: { type: mongoose.Schema.Types.ObjectId, ref: "MarketItem", default: null },
 
-    // optional generic resource linkage
-    resourceId: { type: mongoose.Schema.Types.ObjectId, default: null },
+    // generic resource linkage (academic post 등)
+    resourceId: { type: mongoose.Schema.Types.ObjectId, default: null, index: true },
     resourceTitle: { type: String, default: "" },
 
+    /** seeking일 때만 의미: 3가지 분류 */
+    seekingKind: { type: String, enum: SEEKING_KINDS, default: "" , index: true },
+
     // participants (emails, lowercase)
->>>>>>> f2287354f8462a2325c134a89862ed85319e742d
     buyer: { type: String, required: true, index: true, lowercase: true, trim: true },
     seller: { type: String, required: true, index: true, lowercase: true, trim: true },
 
@@ -49,11 +35,7 @@ const conversationSchema = new mongoose.Schema(
     // last message preview
     lastMessage: { type: String, default: "" },
 
-<<<<<<< HEAD
-    // ✅ 대화 소스 (market / coursehub / coursehub_wtb / dm)
-=======
     // minimal source set
->>>>>>> f2287354f8462a2325c134a89862ed85319e742d
     source: { type: String, enum: ALLOWED_SOURCES, required: true, index: true },
 
     // 🔐 tenant scope
@@ -68,18 +50,20 @@ const conversationSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-<<<<<<< HEAD
-=======
 // 🔧 normalize legacy sources before validation
 conversationSchema.pre("validate", function (next) {
   const legacy = String(this.source || "").toLowerCase();
   if (["coursehub_wtb", "coursehub", "market"].includes(legacy)) {
     this.source = "looking_for";
   }
+  // normalize seekingKind
+  if (this.seekingKind) {
+    this.seekingKind = String(this.seekingKind).toLowerCase().replace(/[\s-]+/g, "_");
+    if (!SEEKING_KINDS.includes(this.seekingKind)) this.seekingKind = "";
+  }
   next();
 });
 
->>>>>>> f2287354f8462a2325c134a89862ed85319e742d
 // keep participants in sync
 conversationSchema.pre("save", function (next) {
   const set = new Set([this.buyer, this.seller].filter(Boolean));
@@ -92,11 +76,7 @@ conversationSchema.index({ school: 1, updatedAt: -1 });
 conversationSchema.index({ school: 1, buyer: 1, updatedAt: -1 });
 conversationSchema.index({ school: 1, seller: 1, updatedAt: -1 });
 
-<<<<<<< HEAD
-// unique per item/resource (if resourceId exists)
-=======
-// unique per resource when present
->>>>>>> f2287354f8462a2325c134a89862ed85319e742d
+/** 같은 글(=resourceId), 같은 상대와는 1개의 대화만 존재 */
 conversationSchema.index(
   { school: 1, source: 1, resourceId: 1, buyer: 1, seller: 1 },
   { unique: true, partialFilterExpression: { resourceId: { $ne: null } } }
@@ -106,7 +86,4 @@ module.exports = mongoose.model("Conversation", conversationSchema);
 
 
 
-<<<<<<< HEAD
-=======
 
->>>>>>> f2287354f8462a2325c134a89862ed85319e742d

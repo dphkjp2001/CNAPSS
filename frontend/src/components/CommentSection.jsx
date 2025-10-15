@@ -4,6 +4,8 @@ import { useAuth } from "../contexts/AuthContext";
 import { useSchool } from "../contexts/SchoolContext";
 import { useSocket } from "../contexts/SocketContext";
 import AsyncButton from "./AsyncButton";
+import UserBadge from "./UserBadge";
+import VoteButtons from "./VoteButtons";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import "dayjs/locale/en";
@@ -423,9 +425,22 @@ function ThreadNode({
       >
         <div className="h-8 w-8 shrink-0 rounded-full bg-gray-200" />
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-gray-900">{labelOf(node.email)}</span>
-            <span className="text-xs text-gray-500">• {dayjs(node.createdAt).fromNow()}</span>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <UserBadge 
+                username={node.anonymous ? labelOf(node.email) : node.nickname}
+                tier={node.authorTier}
+                className="text-sm"
+              />
+              <span className="text-xs text-gray-500">• {dayjs(node.createdAt).fromNow()}</span>
+            </div>
+            <VoteButtons 
+              targetType="Comment"
+              targetId={node._id}
+              initialCounts={node.counts}
+              initialVote={node.myVote}
+              className="scale-75"
+            />
           </div>
 
           {editingId === toId(node._id) ? (

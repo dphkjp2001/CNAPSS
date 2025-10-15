@@ -33,12 +33,18 @@ const AcademicPostSchema = new mongoose.Schema(
     materials: { type: [String], enum: MATERIAL_ENUM, default: [] },
 
     author: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
-    anonymous: { type: Boolean, default: true },
+    anonymous: { type: Boolean, default: false },
 
     images: { type: [ImageSchema], default: [] },
 
     likes: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
     commentCount: { type: Number, default: 0 },
+    
+    counts: {
+      up: { type: Number, default: 0 },
+      down: { type: Number, default: 0 }
+    },
+    hotScore: { type: Number, default: 0, index: true },
   },
   {
     timestamps: true,

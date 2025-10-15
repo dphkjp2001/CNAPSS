@@ -45,6 +45,7 @@ const CommentSchema = new mongoose.Schema(
     school: { type: String, required: true, index: true },
 
     // 작성자 정보
+    authorId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
     email: { type: String, required: true, index: true },
     nickname: { type: String },
 
@@ -59,7 +60,14 @@ const CommentSchema = new mongoose.Schema(
       index: true,
     },
 
-    // 좋아요
+    // Voting
+    counts: {
+      up: { type: Number, default: 0 },
+      down: { type: Number, default: 0 }
+    },
+    hotScore: { type: Number, default: 0, index: true },
+
+    // Legacy: To be deprecated
     thumbsUpUsers: { type: [String], default: [] },
   },
   { timestamps: true }

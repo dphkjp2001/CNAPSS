@@ -6,6 +6,8 @@ import { useAuth } from "../../contexts/AuthContext";
 import { getPublicAcademicPost } from "../../api/academicPosts";
 import { createRequest, checkRequestExists } from "../../api/request";
 import CommentSection from "../../components/CommentSection";
+import VoteButtons from '../../components/VoteButtons';
+import UserBadge from '../../components/UserBadge';
 
 const MATERIAL_LABELS = {
   lecture_notes: "Lecture Notes",
@@ -114,6 +116,22 @@ export default function AcademicDetail() {
             <time dateTime={createdAt}>{new Date(createdAt).toLocaleString()}</time>
           </div>
           <h1 className="mt-2 text-2xl font-semibold text-slate-900">{title}</h1>
+          
+          {/* Author & Voting */}
+          <div className="mt-3 flex items-center justify-between">
+            <UserBadge 
+              username={state.post.nickname} 
+              tier={state.post.authorTier}
+              className="text-sm"
+            />
+            <VoteButtons
+              targetType="Post"
+              targetId={id}
+              initialCounts={state.post.counts}
+              initialVote={state.post.myVote}
+              className="scale-90"
+            />
+          </div>
 
           {/* materials & professor badges */}
           {isCourseMaterials && (materialLabels.length || professor) ? (
