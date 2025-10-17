@@ -362,6 +362,7 @@ export default function FreeBoardDetail() {
               postId={post._id}
               authorEmail={post.email}
               highlightId={highlightId}
+              anonymousMode={true}
             />
           </div>
         )}

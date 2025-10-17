@@ -25,7 +25,12 @@ dayjs.locale("en");
 const toId = (v) => (v == null ? "" : String(v));
 const norm = (e) => String(e || "").toLowerCase().trim();
 
-export default function CommentSection({ postId, authorEmail = "", highlightId = null }) {
+export default function CommentSection({ 
+  postId, 
+  authorEmail = "", 
+  highlightId = null, 
+  anonymousMode = false 
+}) {
   const { user, token } = useAuth();
   const { school } = useSchool();
   const socket = useSocket();
@@ -143,7 +148,6 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
     (email) => anonLabelByEmail.get(norm(email)) || "anonymous",
     [anonLabelByEmail]
   );
-
   // highlight fade
   useEffect(() => {
     if (!highlightId) return;
@@ -375,6 +379,7 @@ export default function CommentSection({ postId, authorEmail = "", highlightId =
                 editingId={editingId}
                 flashId={flashId}
                 isAuthed={!!user}
+                anonymousMode={anonymousMode}
               />
             ))}
           </ul>
@@ -428,7 +433,7 @@ function ThreadNode({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <UserBadge 
-                username={node.anonymous ? labelOf(node.email) : node.nickname}
+                username={anonymousMode ? labelOf(node.email) : (node.nickname || "Unknown")}
                 tier={node.authorTier}
                 className="text-sm"
               />
