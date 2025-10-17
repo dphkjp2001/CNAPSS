@@ -35,16 +35,20 @@ function notifyExpired() {
 }
 
 async function request(url, options = {}) {
+  console.log('http.request called with:', { url, options });
   const token = readToken();
   const headers = new Headers(options.headers || {});
+  console.log('http.request headers before setting Content-Type and Authorization:', headers);
   if (!headers.has("Content-Type") && !(options.body instanceof FormData)) {
+    console.log('Setting Content-Type to application/json');
     headers.set("Content-Type", "application/json");
   }
   if (token) headers.set("Authorization", `Bearer ${token}`);
-
+  console.log('Final headers for fetch:', headers);
   const res = await fetch(url, { ...options, headers, credentials: "include" });
 
   if (res.status === 401) {
+    console.log('Received 401 Unauthorized response');
     let body = {};
     try { body = await res.clone().json(); } catch {}
     const expired = res.headers.get("x-token-expired") === "1" || body?.code === "TOKEN_EXPIRED";
@@ -56,12 +60,14 @@ async function request(url, options = {}) {
   }
 
   const data = await (async () => {
+    console.log('Response headers:', res.headers);
     const ct = res.headers.get("Content-Type") || "";
     if (ct.includes("application/json")) return res.json();
     return res.text();
   })();
 
   if (!res.ok) {
+    console.log('Response not OK:', res.status, data);
     const msg = typeof data === "object" && data?.message ? data.message : String(data);
     const err = new Error(msg || `HTTP ${res.status}`);
     err.status = res.status;
@@ -76,8 +82,10 @@ export function getJson(url) {
   return request(full, { method: "GET" });
 }
 export function postJson(url, body) {
+  console.log('postJson called with:', { url, body });
   const full = url.toString().startsWith("http") ? url : `${API_URL}${url}`;
   const opts = { method: "POST" };
+  console.log('postJson opts before body assignment:', opts);
   if (body instanceof FormData) opts.body = body;
   else opts.body = JSON.stringify(body || {});
   return request(full, opts);

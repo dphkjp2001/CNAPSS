@@ -14,6 +14,7 @@ export const voteApi = {
    * @param {number} params.value Vote value (-1, 0, or 1)
    */
   async vote({ targetType, targetId, value }) {
+    console.log('voteApi.vote called with:', { targetType, targetId, value });
     return postJson(`${baseUrl}/${targetType}/${targetId}`, { value });
   },
 
