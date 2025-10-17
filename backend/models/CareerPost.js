@@ -1,18 +1,6 @@
 // backend/models/CareerPost.js
 const mongoose = require("mongoose");
 
-<<<<<<< HEAD
-const careerPostSchema = new mongoose.Schema(
-  {
-    title: { type: String, required: true },
-    content: { type: String, required: true },
-
-    nickname: { type: String, required: true }, // display
-    email: { type: String, required: true },    // author identity
-    thumbsUpUsers: { type: [String], default: [] },
-
-    // School scope: always lowercase
-=======
 /**
  * Academic board post
  * - postType: 'question' | 'seeking'   (legacy 'looking_for' accepted on input, stored as 'seeking')
@@ -32,7 +20,6 @@ const careerPostSchema = new mongoose.Schema(
     thumbsUpUsers: { type: [String], default: [] }, // lowercased emails
 
     // school tenant
->>>>>>> f2287354f8462a2325c134a89862ed85319e742d
     school: {
       type: String,
       required: true,
@@ -41,9 +28,7 @@ const careerPostSchema = new mongoose.Schema(
       index: true,
     },
 
-<<<<<<< HEAD
     createdAt: { type: Date, default: Date.now },
-=======
     // ===== Classification =====
     postType: {
       type: String,
@@ -64,7 +49,6 @@ const careerPostSchema = new mongoose.Schema(
     lookingFor: { type: Boolean, default: false },
     isLookingFor: { type: Boolean, default: false },
     tags: { type: [String], default: [] },
->>>>>>> f2287354f8462a2325c134a89862ed85319e742d
   },
   { timestamps: true }
 );
