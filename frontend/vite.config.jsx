@@ -1,4 +1,6 @@
 // vite.config.js
+console.log("✅ Loaded env:", process.env.VITE_API_URL);
+
 import { defineConfig } from "vite";
 import react from "vite-plugin-react-swc";
 import tailwindcss from "tailwindcss";
