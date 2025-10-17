@@ -413,6 +413,7 @@ function ThreadNode({
   editingId,
   flashId,
   isAuthed,
+  anonymousMode,
 }) {
   const isMine = norm(node.email) === me;
   const thumbsArr = node.thumbs ?? node.thumbsUpUsers ?? [];
@@ -569,6 +570,7 @@ function ThreadNode({
               editingId={editingId}
               flashId={flashId}
               isAuthed={isAuthed}
+              anonymousMode={anonymousMode}
             />
           ))}
         </ul>
