@@ -182,6 +182,7 @@ export default function Layout() {
 }
 
 function ProfileMenu({ nickname, email, onLogout, schoolPath, showProfile, setShowProfile }) {
+  const [showPointInfo, setShowPointInfo] = useState(false);
   return (
     <div className="relative">
       <button
@@ -224,11 +225,40 @@ function ProfileMenu({ nickname, email, onLogout, schoolPath, showProfile, setSh
                 Marketplace
               </MenuItem>
             </div>
+            <div className="border-t p-3 text-sm text-gray-700 relative">
+              <div className="flex items-center justify-between">
+                <span className="font-medium">Cnapss Point accumulated:</span>
+                <div className="flex items-center gap-1">
+                  <span className="font-semibold">15</span>
+                  <button
+                    onClick={() => setShowPointInfo((v) => !v)}
+                    className="text-gray-400 hover:text-gray-600"
+                    title="About Cnapss Points"
+                  >
+                    ?
+                  </button>
+                </div>
+              </div>
+
+              {showPointInfo && (
+                <div className="absolute bottom-12 right-3 z-50 w-64 text-xs bg-white border border-gray-300 rounded-lg shadow-md p-3 text-gray-600">
+                  During the beta version, Cnapss Point system is not active.
+                  <br />
+                  After the beta, every engagement you make, such as writing a reply, will be accounted to the Cnapss Point.
+                  <br />
+                  You can use this point to make a seeking post, emergent help post, or for club promotion.
+                </div>
+              )}
+            </div>
             <div className="border-t p-1">
-              <button onClick={onLogout} className="w-full rounded-lg px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50">
+              <button
+                onClick={onLogout}
+                className="w-full rounded-lg px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+              >
                 Log out
               </button>
             </div>
+
           </div>
         </>
       )}
