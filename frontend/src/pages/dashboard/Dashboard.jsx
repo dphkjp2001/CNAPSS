@@ -1194,17 +1194,45 @@ export default function Dashboard() {
                     </strong>
                     .
                   </p>
-                  <button
-                    type="submit"
-                    disabled={
-                      posting ||
-                      (active === "general" ? !canPostGeneral : !canPostAcademic)
-                    }
-                    className="rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-900 disabled:opacity-60"
-                  >
-                    {posting ? "Posting…" : "Post"}
-                  </button>
+
+                  {active === "academic" && mode === "seeking" ? (
+                    <div className="flex flex-col items-end">
+                      <button
+                        type="submit"
+                        disabled={!canPostAcademic || posting}
+                        className="rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-900 disabled:opacity-60"
+                      >
+                        {posting ? (
+                          "Posting…"
+                        ) : (
+                          <>
+                            Post{" "}
+                            <span className="line-through text-[11px] text-gray-400 ml-1">
+                              6 C point
+                            </span>
+                          </>
+                        )}
+                      </button>
+
+                      {/* compact helper text */}
+                      <span className="text-[10px] text-gray-400 mt-[2px]">
+                        0 point during beta season
+                      </span>
+                    </div>
+                  ) : (
+                    <button
+                      type="submit"
+                      disabled={
+                        posting ||
+                        (active === "general" ? !canPostGeneral : !canPostAcademic)
+                      }
+                      className="rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-900 disabled:opacity-60"
+                    >
+                      {posting ? "Posting…" : "Post"}
+                    </button>
+                  )}
                 </div>
+
 
                 {!!msg.text && (
                   <div
