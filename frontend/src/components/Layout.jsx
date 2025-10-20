@@ -225,23 +225,23 @@ function ProfileMenu({ nickname, email, onLogout, schoolPath, showProfile, setSh
                 Marketplace
               </MenuItem>
             </div>
-            <div className="border-t p-3 text-sm text-gray-700 relative">
-              <div className="flex items-center justify-between">
-                <span className="font-medium">Cnapss Point accumulated:</span>
-                <div className="flex items-center gap-1">
-                  <span className="font-semibold">15</span>
-                  <button
-                    onClick={() => setShowPointInfo((v) => !v)}
-                    className="text-gray-400 hover:text-gray-600"
-                    title="About Cnapss Points"
-                  >
-                    ?
-                  </button>
-                </div>
-              </div>
+            <div className="border-t p-3 text-sm text-gray-700 relative flex items-center gap-2">
+              {/* Question mark button */}
+              <button
+                onClick={() => setShowPointInfo((v) => !v)}
+                className="text-red-300 hover:text-red-500 font-bold"
+                title="About Cnapss Points"
+              >
+                ?
+              </button>
 
+              {/* Label and points */}
+              <span className="font-medium text-gray-700">Cnapss Points:</span>
+              <span className="text-base font-semibold text-gray-900">{15}</span>
+
+              {/* Tooltip */}
               {showPointInfo && (
-                <div className="absolute bottom-12 right-3 z-50 w-64 text-xs bg-white border border-gray-300 rounded-lg shadow-md p-3 text-gray-600">
+                <div className="absolute bottom-10 left-3 z-50 w-64 text-xs bg-white border border-gray-300 rounded-lg shadow-md p-3 text-gray-600">
                   During the beta version, Cnapss Point system is not active.
                   <br />
                   After the beta, every engagement you make, such as writing a reply, will be accounted to the Cnapss Point.
@@ -250,6 +250,7 @@ function ProfileMenu({ nickname, email, onLogout, schoolPath, showProfile, setSh
                 </div>
               )}
             </div>
+
             <div className="border-t p-1">
               <button
                 onClick={onLogout}
