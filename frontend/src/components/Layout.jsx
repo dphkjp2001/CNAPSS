@@ -225,23 +225,25 @@ function ProfileMenu({ nickname, email, onLogout, schoolPath, showProfile, setSh
                 Marketplace
               </MenuItem>
             </div>
-            <div className="border-t p-3 text-sm text-gray-700 relative flex items-center gap-2">
-              {/* Question mark button */}
+            <div className="border-t p-3 text-sm text-gray-700 relative flex items-center justify-between">
+              {/* Label and points */}
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-gray-700">Cnapss Points:</span>
+                <span className="text-base font-semibold text-gray-900">15</span>
+              </div>
+
+              {/* Question mark button (on the right) */}
               <button
                 onClick={() => setShowPointInfo((v) => !v)}
-                className="text-red-300 hover:text-red-500 font-bold"
+                className="flex items-center justify-center w-5 h-5 text-red-400 border border-red-200 rounded-full hover:text-red-500 hover:border-red-400 transition"
                 title="About Cnapss Points"
               >
                 ?
               </button>
 
-              {/* Label and points */}
-              <span className="font-medium text-gray-700">Cnapss Points:</span>
-              <span className="text-base font-semibold text-gray-900">{15}</span>
-
               {/* Tooltip */}
               {showPointInfo && (
-                <div className="absolute bottom-10 left-3 z-50 w-64 text-xs bg-white border border-gray-300 rounded-lg shadow-md p-3 text-gray-600">
+                <div className="absolute bottom-10 right-3 z-50 w-64 text-xs bg-white border border-gray-300 rounded-lg shadow-md p-3 text-gray-600">
                   During the beta version, Cnapss Point system is not active.
                   <br />
                   After the beta, every engagement you make, such as writing a reply, will be accounted to the Cnapss Point.
@@ -250,7 +252,6 @@ function ProfileMenu({ nickname, email, onLogout, schoolPath, showProfile, setSh
                 </div>
               )}
             </div>
-
             <div className="border-t p-1">
               <button
                 onClick={onLogout}
