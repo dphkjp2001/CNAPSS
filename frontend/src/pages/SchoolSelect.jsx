@@ -77,46 +77,43 @@ export default function SchoolSelect() {
   return (
     <div className="min-h-screen" style={{ background: TOKENS.pageBg }}>
       {/* === TOP NAV (Black Glass Overlay) === */}
-{/* === TOP NAV (White header, brand in HERO color, black links) === */}
-<header className="fixed inset-x-0 top-0 z-30 bg-white border-b border-slate-200">
-  <div className="mx-auto max-w-6xl h-16 px-4 md:px-6 flex items-center justify-between">
-    {/* Left: Brand */}
-    <Link
-      to="/"
-      className="font-extrabold tracking-tight text-2xl"
-      style={{ color: "#EE5C5C" }}  // HERO 시작 색상
-    >
-      CNAPSS
-    </Link>
-
-    {/* Middle: Contact us (slightly left-biased) */}
-    <nav className="absolute inset-x-0 flex justify-center pointer-events-none">
+<header className="fixed inset-x-0 top-0 z-30 bg-white border-b border-black/10">
+  <div className="w-full h-16 px-0 flex items-center justify-between">
+    {/* left: CNAPSS + About us + Contacts */}
+    <div className="flex items-center gap-10 md:gap-12 pl-28 md:pl-32 [&>a]:tracking-[.02em]">
+      <Link
+        to="/"
+        className="font-semibold tracking-[.01em] text-2xl md:text-3xl"
+        style={{ color: "#EF4444" }}
+      >
+        CNAPSS
+      </Link>
+      <Link
+        to="/about"
+        className="text-black hover:opacity-70 text-sm font-semibold"
+      >
+        About us
+      </Link>
       <Link
         to="/contact"
-        className="pointer-events-auto text-slate-900 hover:text-black text-sm font-semibold tracking-wide
-                   transform -translate-x-[6%]"  // 중앙에서 왼쪽으로 약간 이동
+        className="text-black hover:opacity-70 text-sm font-semibold"
       >
-        Contact us
+        Contacts
       </Link>
-    </nav>
+    </div>
 
-    {/* Right: Auth (unified black text) */}
-    <div className="flex items-center gap-4">
-      <Link
-        to="/auth/login"
-        className="text-slate-900 hover:text-black text-sm font-semibold"
-      >
-        Sign in
-      </Link>
+    {/* right: Click to enter */}
+    <div className="pr-10 md:pr-12">
       <Link
         to="/auth/register"
-        className="text-slate-900 hover:text-black text-sm font-semibold"
+        className="text-sm font-semibold text-black hover:opacity-70"
       >
-        Sign up
+        Click to enter
       </Link>
     </div>
   </div>
 </header>
+
 
 
 
@@ -1057,8 +1054,6 @@ function QComments({ show, thread, playKey }) {
 }
 
 /* ================== Academic Board — Seeking (full, drop-in) ================== */
-import * as React from "react";
-
 /** 
  * Usage (in SchoolSelect.jsx):
  *   <section className="...">
@@ -1069,348 +1064,323 @@ import * as React from "react";
  *   </section>
  */
 
-export function SeekingDesktop({ play = true }) {
-  // 0: feed scroll, 2: request composer, 3: DM
-  const [step, setStep] = React.useState(0);
-  const [activePost, setActivePost] = React.useState(null);
-  const [composerText, setComposerText] = React.useState("");
-  const [messages, setMessages] = React.useState([]);
-  const [offerPulse, setOfferPulse] = React.useState(false);
-  const [selectedId, setSelectedId] = React.useState(null);
+function SeekingDesktop({ play }) {
+  const [step, setStep] = useState(0); // 0: feed scroll, 2: detail, 3: DM
+  const [activePost, setActivePost] = useState(null);
+  const [composerText, setComposerText] = useState("");
+  const [messages, setMessages] = useState([]);
+  const [offerPulse, setOfferPulse] = useState(false);
+  const [clickedFeedId, setClickedFeedId] = useState(null);
 
-  const feedRef = React.useRef(null);
-  const scrollTimerRef = React.useRef(null);
-  const dmBodyRef = React.useRef(null);
-  const timersRef = React.useRef([]);
+  const feedRef = useRef(null);
+  const scrollTimerRef = useRef(null);
+  const chatRef = useRef(null);
+  const hasRunRef = useRef(false);
 
-  /* ---------- Seed (no duplicates, short & fast scroll) ---------- */
-  const SEED = React.useMemo(
+  // Seed posts
+  const SEED = useMemo(
     () => [
-      // Course materials — title MUST be the course name only
-      { id: "c1", icon: "📄", title: "Principles of Statistics", badges: ["Lecture Notes", "Syllabus", "Past Exams"], kind: "Course Materials", author: "Mina" },
-      { id: "c2", icon: "📄", title: "Microeconomics",            badges: ["Lecture Notes", "Quiz Prep"],            kind: "Course Materials", author: "Sam"  },
-      { id: "c3", icon: "📄", title: "Linear Algebra",            badges: ["Lecture Notes"],                           kind: "Course Materials", author: "Noah" },
-      { id: "c4", icon: "📄", title: "ECON-101",                  badges: ["Lecture Notes", "Past Exams"],            kind: "Course Materials", author: "Sam"  },
-      // Study mate — prefix with people emoji
-      { id: "s1", icon: "👥", title: "Study Mate for Calc II",    preview: "Looking for 2 peers · weekends",          kind: "Study Mate",        author: "Yuna" },
-      // Coffee chat — no bubbles/tags; just 1-line preview
-      { id: "k1", icon: "☕", title: "Coffee chat: SWE internships", preview: "looking for a senior in CS major who can share insights…", kind: "Coffee Chat", author: "Leo" },
-      { id: "k2", icon: "☕", title: "Coffee chat: Product internships", preview: "quick coffee chat on campus (15–20m)", kind: "Coffee Chat", author: "Alex" },
+      { id: "p1", icon: "📝", title: "Principles of Microeconomics", meta: "", badges: ["Lecture Notes", "Syllabus", "Quiz Prep"], author: "Mina", kind: "Course Materials", time: "" },
+      { id: "p3", icon: "👥", title: "Study Mate for Calc II", meta: "Looking for 2 peers · Weekends", badges: ["Study Group"], author: "Yuna", kind: "Study Mate", time: "" },
+      { id: "p4", icon: "☕", title: "Coffee chat: SWE internships", meta: "Looking for a senior in CS major who can share internship tips…", badges: [], author: "Leo", kind: "Coffee Chat", time: "" },
+      { id: "p5", icon: "📝", title: "Linear Algebra", meta: "", badges: ["Lecture Notes"], author: "Noah", kind: "Course Materials", time: "" },
+      { id: "p6", icon: "👥", title: "Study Mate for DS-UA 201", meta: "Afternoons preferred", badges: ["Study Group"], author: "Irene", kind: "Study Mate", time: "" },
+      { id: "p8", icon: "📝", title: "Principles of Statistics", meta: "", badges: ["Lecture Notes", "Quiz Prep"], author: "Sam", kind: "Course Materials", time: "" },
     ],
     []
   );
 
-  // What appears in the left column in Step 2 (course-only list)
-  const COURSE_LIST = React.useMemo(() => SEED.filter(p => p.kind === "Course Materials"), [SEED]);
-
-  /* ---------- Helpers ---------- */
-  const stopScroll = React.useCallback(() => {
-    if (scrollTimerRef.current) {
-      clearInterval(scrollTimerRef.current);
-      scrollTimerRef.current = null;
+  // FEED: build → de-dup by title (keep first occurrence) → trim length
+  const FEED = useMemo(() => {
+    const arr = [];
+    const copies = 3;
+    for (let i = 0; i < copies; i++) {
+      const chunk = [...SEED];
+      if (i % 2 === 0) chunk.reverse();
+      chunk.forEach((p, idx) => arr.push({ ...p, id: `${p.id}-${i}-${idx}` }));
     }
-  }, []);
+    const seen = new Set();
+    const uniq = arr.filter((p) => {
+      if (seen.has(p.title)) return false;
+      seen.add(p.title);
+      return true;
+    });
+    return uniq.slice(0, 9);
+  }, [SEED]);
 
-  const clearTimers = React.useCallback(() => {
-    timersRef.current.forEach(clearTimeout);
-    timersRef.current = [];
-  }, []);
+  // auto scroll chat
+  useEffect(() => {
+    if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
+  }, [messages]);
 
-  const startAutoScroll = React.useCallback(() => {
-    const node = feedRef.current;
-    if (!node) return;
-    // fast & smooth (≈ 360–400px/s)
-    const PX = 6.0;
-    stopScroll();
-    scrollTimerRef.current = setInterval(() => {
-      node.scrollTop += PX;
-      if (node.scrollTop + node.clientHeight >= node.scrollHeight - 1) {
-        node.scrollTop = 0;
+  useEffect(() => {
+    let timers = [];
+
+    const stopScroll = () => {
+      if (scrollTimerRef.current) {
+        clearInterval(scrollTimerRef.current);
+        scrollTimerRef.current = null;
       }
-    }, 16);
-  }, [stopScroll]);
+    };
 
-  // Auto-run demo
-  const runScript = React.useCallback(() => {
-    clearTimers();
-    stopScroll();
-    setStep(0);
-    setActivePost(null);
-    setComposerText("");
-    setMessages([]);
-    setOfferPulse(false);
-    setSelectedId(null);
-
-    // reset feed scroll to top
-    if (feedRef.current) feedRef.current.scrollTop = 0;
-
-    // Start fast auto-scroll
-    timersRef.current.push(
-      setTimeout(() => startAutoScroll(), 600)
-    );
-
-    // Select a course materials post (Principles of Statistics)
-    timersRef.current.push(
-      setTimeout(() => {
-        stopScroll();
-        setSelectedId("c1");
-      }, 3800)
-    );
-
-    // Go to Step 2 with that post
-    timersRef.current.push(
-      setTimeout(() => {
-        const pick = SEED.find(p => p.id === "c1") || COURSE_LIST[0] || SEED[0];
-        setActivePost(pick);
-        setStep(2);
-      }, 4500)
-    );
-
-    // Fill composer & pulse "Send offer"
-    timersRef.current.push(
-      setTimeout(() => {
-        // First reply should be from YOU: “I have it for ~$10…” (as requested)
-        setComposerText("Hi! I have clean lecture notes for Principles of Statistics. I can do $10 — does that work?");
-        setOfferPulse(true);
-        timersRef.current.push(setTimeout(() => setOfferPulse(false), 1400));
-      }, 5900)
-    );
-
-    // Auto-send → DM (first message is the offer you wrote)
-    timersRef.current.push(
-      setTimeout(() => {
-        setStep(3);
-        setMessages([
-          { who: "You", text: "Hi! I have clean lecture notes for Principles of Statistics. I can do $10 — does that work?" },
-        ]);
-        // Seller reply
-        timersRef.current.push(
-          setTimeout(() => setMessages(m => [...m, { who: activePost?.author || "Mina", text: "Yes, that works. Notes are concise and complete (weeks 1–7)." }]), 1100)
-        );
-        timersRef.current.push(
-          setTimeout(() => setMessages(m => [...m, { who: "You", text: "Great—can we meet at the library today evening?" }]), 2200)
-        );
-        timersRef.current.push(
-          setTimeout(() => setMessages(m => [...m, { who: activePost?.author || "Mina", text: "Sure, main entrance at 7PM. Cash or Venmo is fine." }]), 3300)
-        );
-      }, 7200)
-    );
-  }, [SEED, COURSE_LIST, clearTimers, stopScroll, startAutoScroll, activePost?.author]);
-
-  // Reset & replay when play toggles (e.g., when user navigates away and back)
-  React.useEffect(() => {
-    if (play) runScript();
-    else {
-      clearTimers();
-      stopScroll();
+    const resetState = () => {
       setStep(0);
       setActivePost(null);
       setComposerText("");
       setMessages([]);
       setOfferPulse(false);
-      setSelectedId(null);
+      setClickedFeedId(null);
+      stopScroll();
       if (feedRef.current) feedRef.current.scrollTop = 0;
+    };
+
+    const run = () => {
+      if (hasRunRef.current) return;
+      hasRunRef.current = true;
+
+      resetState();
+
+      const TARGET_SEED =
+        SEED.find((p) => p.title === "Principles of Microeconomics") ||
+        SEED.find((p) => p.kind === "Course Materials") ||
+        SEED[0];
+
+      // fast scroll
+      const SCROLL_PX_PER_TICK = 16;
+      timers.push(
+        setTimeout(() => {
+          const node = feedRef.current;
+          if (!node) return;
+          node.scrollTop = 0;
+          scrollTimerRef.current = setInterval(() => {
+            node.scrollTop += SCROLL_PX_PER_TICK;
+          }, 16);
+        }, 350)
+      );
+
+      // select only the first visible target card (no duplicates now)
+      timers.push(
+        setTimeout(() => {
+          stopScroll();
+          const targetFeed = FEED.find((f) => f.title === TARGET_SEED.title);
+          if (targetFeed) setClickedFeedId(targetFeed.id);
+        }, 2000)
+      );
+
+      // go detail
+      timers.push(
+        setTimeout(() => {
+          setActivePost(TARGET_SEED);
+          setStep(2);
+        }, 2500)
+      );
+
+      // request text (you as seller)
+      const YOU_OPENING =
+        "Hey! I saw your post looking for microeconomics notes. I have a clean set from this semester — thinking around $10. What price did you have in mind?";
+      timers.push(
+        setTimeout(() => {
+          setComposerText(YOU_OPENING);
+          setOfferPulse(true);
+          timers.push(setTimeout(() => setOfferPulse(false), 900));
+        }, 3300)
+      );
+
+      // DM — first msg is yours (black/right)
+      timers.push(
+        setTimeout(() => {
+          setStep(3);
+          setMessages([{ who: "You", text: YOU_OPENING }]);
+          timers.push(
+            setTimeout(
+              () => setMessages((m) => [...m, { who: "Sam", text: "That sounds good to me. $10 works!" }]),
+              900
+            )
+          );
+          timers.push(
+            setTimeout(
+              () => setMessages((m) => [...m, { who: "You", text: "Awesome — want to meet at Bobst Library today around 7:00 PM?" }]),
+              1700
+            )
+          );
+          timers.push(
+            setTimeout(
+              () => setMessages((m) => [...m, { who: "Sam", text: "Perfect. Cash or Venmo—either is fine. See you at the main entrance!" }]),
+              2500
+            )
+          );
+        }, 4100)
+      );
+    };
+
+    if (play) {
+      run();
+    } else {
+      hasRunRef.current = false;
+      resetState();
     }
+
     return () => {
-      clearTimers();
+      timers.forEach(clearTimeout);
       stopScroll();
     };
-  }, [play, runScript, clearTimers, stopScroll]);
-
-  // Auto scroll DM body to bottom when messages change
-  React.useEffect(() => {
-    if (dmBodyRef.current) {
-      dmBodyRef.current.scrollTop = dmBodyRef.current.scrollHeight;
-    }
-  }, [messages]);
+  }, [play]);
 
   return (
-    <div className="h-full w-full rounded-3xl overflow-hidden shadow-2xl bg-white">
-      {/* Mock browser bar */}
-      <div className="h-12 flex items-center justify-between px-6 border-b bg-slate-50 border-slate-200">
-        <div className="flex items-center gap-2">
-          <span className="h-3 w-3 rounded-full bg-red-400" />
-          <span className="h-3 w-3 rounded-full bg-yellow-400" />
-          <span className="h-3 w-3 rounded-full bg-green-400" />
+    <>
+      <Keyframes />
+      <div className="h-full w-full rounded-3xl overflow-hidden shadow-2xl bg-white">
+        {/* Mock browser bar */}
+        <div className="h-12 flex items-center justify-between px-6 border-b bg-slate-50" style={{ borderColor: TOKENS.border }}>
+          <div className="flex items-center gap-2">
+            <span className="h-3 w-3 rounded-full bg-red-400" />
+            <span className="h-3 w-3 rounded-full bg-yellow-400" />
+            <span className="h-3 w-3 rounded-full bg-green-400" />
+          </div>
+          <div className="flex-1 mx-8 px-5 py-1.5 rounded-lg bg-white text-xs text-slate-600 text-center" style={{ border: `1px solid ${TOKENS.border}` }}>
+            cnapss.com/academic
+          </div>
+          <div className="text-xs text-slate-400">⋯</div>
         </div>
-        <div className="flex-1 mx-8 px-5 py-1.5 rounded-lg bg-white text-xs text-slate-600 text-center border border-slate-200">
-          cnapss.com/academic
-        </div>
-        <div className="text-xs text-slate-400">⋯</div>
-      </div>
 
-      {/* Canvas */}
-      <div className="relative h-[calc(100%-48px)]">
-        {/* ===== Step 0: Mixed feed with auto-scroll ===== */}
-        <div
-          className="absolute inset-0 grid grid-rows-[auto_1fr] min-h-0"
-          style={{
-            opacity: step === 0 ? 1 : 0,
-            transition: "opacity 600ms ease",
-            pointerEvents: step === 0 ? "auto" : "none",
-          }}
-        >
-          {/* Header */}
-          <div className="px-8 py-6 border-b border-slate-200">
-            <div className="max-w-4xl mx-auto flex items-center gap-3">
-              <input
-                disabled
-                placeholder="Keyword"
-                className="flex-1 rounded-xl border px-4 py-3 text-sm bg-white border-slate-200"
-              />
-              <button disabled className="rounded-xl border px-3 py-2.5 text-sm bg-white flex items-center gap-2 border-slate-200">
-                <span className="text-slate-500">Type</span>
-                <strong className="text-slate-900">Seeking</strong>
-                <span className="text-slate-400">▾</span>
-              </button>
-              <Pill label="School" value="NYU" />
-              <Pill label="Sort" value="Latest" />
+        {/* Canvas */}
+        <div className="relative h-[calc(100%-48px)]">
+          {/* ===== Step 0: Feed ===== */}
+          <div
+            className="absolute inset-0 grid grid-rows-[auto_1fr] min-h-0"
+            style={{ opacity: step === 0 ? 1 : 0, transition: "opacity 600ms ease", pointerEvents: step === 0 ? "auto" : "none" }}
+          >
+            <div className="px-8 py-6 border-b" style={{ borderColor: TOKENS.border }}>
+              <div className="max-w-4xl mx-auto flex items-center gap-3">
+                <input disabled placeholder="Keyword" className="flex-1 rounded-xl border px-4 py-3 text-sm bg-white" style={{ borderColor: TOKENS.border }} />
+                <button disabled className="rounded-xl border px-3 py-2.5 text-sm bg-white flex items-center gap-2" style={{ borderColor: TOKENS.border }}>
+                  <span className="text-slate-500">Type</span>
+                  <strong className="text-slate-900">Seeking</strong>
+                  <span className="text-slate-400">▾</span>
+                </button>
+                <Pill label="School" value="NYU" />
+                <Pill label="Sort" value="Latest" />
+              </div>
+            </div>
+
+            <div className="overflow-y-hidden">
+              <div ref={feedRef} className="h-full overflow-y-auto scroll-smooth px-8 py-6">
+                <div className="max-w-4xl mx-auto space-y-4">
+                  {FEED.map((p, idx) => (
+                    <FeedCard
+                      key={p.id}
+                      index={idx}
+                      icon={p.icon}
+                      title={p.title}
+                      meta={p.meta}
+                      badges={p.badges}
+                      selected={clickedFeedId === p.id}
+                      kind={p.kind}
+                    />
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Feed */}
-          <div className="overflow-y-hidden">
-            <div ref={feedRef} className="h-full overflow-y-auto scroll-smooth px-8 py-6">
-              <div className="max-w-4xl mx-auto space-y-4">
-                {SEED.map((p, idx) => (
-                  <FeedCard
-                    key={p.id}
-                    index={idx}
-                    icon={p.icon}
-                    title={p.title}
-                    // Two-line rule:
-                    // 1) First line: avatar + title (handled in card)
-                    // 2) Second line:
-                    //    - Course Materials: tags only
-                    //    - Study Mate: preview
-                    //    - Coffee Chat: preview only (no tag bubbles)
-                    secondLine={
-                      p.kind === "Course Materials"
-                        ? null
-                        : p.preview || ""
-                    }
-                    badges={p.kind === "Course Materials" ? p.badges : []}
-                    selected={selectedId === p.id}
-                    // highlight ONLY when selected (green)
-                    highlight={selectedId === p.id}
-                  />
+          {/* ===== Step 2: Detail (request only) ===== */}
+          <div
+            className="absolute inset-0 min-h-0"
+            style={{ opacity: step === 2 ? 1 : 0, transform: step === 2 ? "translateX(0)" : "translateX(24px)", transition: "all 700ms cubic-bezier(0.34,1.56,0.64,1)", pointerEvents: step === 2 ? "auto" : "none" }}
+          >
+            <div className="p-10 max-w-3xl mx-auto min-h-0 flex flex-col">
+              <div className="flex items-center gap-4 mb-6">
+                <span className="text-4xl">{activePost?.icon || "📝"}</span>
+                <div>
+                  <h4 className="text-2xl font-black text-slate-900">{activePost?.title}</h4>
+                  <p className="text-sm text-slate-500 mt-1">Seeking · Course Materials</p>
+                </div>
+              </div>
+
+              <div className="mb-6 flex flex-wrap gap-2">
+                {(activePost?.badges || []).map((b) => (
+                  <Tag key={b} label={b} />
                 ))}
               </div>
-            </div>
-          </div>
-        </div>
 
-        {/* ===== Step 2: Request (composer only, no left list) ===== */}
-        <div
-          className="absolute inset-0 min-h-0"
-          style={{
-            opacity: step === 2 ? 1 : 0,
-            transform: step === 2 ? "translateX(0)" : "translateX(24px)",
-            transition: "all 700ms cubic-bezier(0.34,1.56,0.64,1)",
-            pointerEvents: step === 2 ? "auto" : "none",
-          }}
-        >
-          <div className="h-full p-10 flex flex-col">
-            <div className="flex items-center gap-4 mb-6">
-              <span className="text-4xl">{activePost?.icon || "📄"}</span>
-              <div>
-                <h4 className="text-xl font-black text-slate-900">{activePost?.title || "Course material"}</h4>
-                <p className="text-xs text-slate-500 mt-1">Seeking · Course Materials</p>
-              </div>
-            </div>
-
-            <div className="rounded-2xl ring-1 p-5 bg-white ring-slate-200">
-              <div className="text-[13px] font-semibold mb-2 text-slate-800">
-                Send a Request
-              </div>
-              <textarea
-                disabled
-                rows={4}
-                value={composerText}
-                placeholder="Write a short message (who you are / what you have / price)…"
-                className="w-full rounded-xl border px-4 py-3 text-sm bg-slate-50 border-slate-200"
-              />
-              <div className="mt-3 flex items-center justify-between">
-                <div className="text-[12px] text-slate-500">
-                  Target: <strong>Academic · course_materials</strong>
+              <div className="rounded-2xl ring-1 p-5 bg-white" style={{ borderColor: TOKENS.border }}>
+                <div className="text-[13px] font-semibold mb-2" style={{ color: TOKENS.text }}>
+                  Send a Request
                 </div>
-                <button
+                <textarea
                   disabled
-                  className={`rounded-xl px-5 py-2.5 text-sm font-bold text-white transition ${
-                    offerPulse ? "animate-[pulse_1200ms_ease_infinite] bg-emerald-600" : "bg-black"
-                  }`}
-                >
-                  Send offer
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* ===== Step 3: Messages (first message = your offer) ===== */}
-        <div
-          className="absolute inset-0 grid grid-cols-5 min-h-0"
-          style={{
-            opacity: step === 3 ? 1 : 0,
-            transform: step === 3 ? "translateX(0)" : "translateX(24px)",
-            transition: "all 700ms cubic-bezier(0.34,1.56,0.64,1)",
-            pointerEvents: step === 3 ? "auto" : "none",
-          }}
-        >
-          {/* Sidebar list (compact) */}
-          <div className="col-span-2 border-r p-6 space-y-3 min-h-0 border-slate-200">
-            <div className="px-1 pb-2 text-[12px] font-semibold text-slate-500 uppercase tracking-wide">
-              Messages
-            </div>
-            <SideChatItem active icon={activePost?.icon || "📄"} title={activePost?.title || "Post"} />
-            <SideChatItem icon="👥" title="Study Mate for Calc II" />
-            <SideChatItem icon="☕" title="Coffee chat: SWE internships" />
-          </div>
-
-          {/* Chat area */}
-          <div className="col-span-3 p-8 flex flex-col min-h-0">
-            <div className="flex items-center gap-3 pb-5 border-b border-slate-200">
-              <div className="h-9 w-9 rounded-full bg-purple-100 flex items-center justify-center text-sm font-bold">M</div>
-              <div>
-                <div className="text-sm font-bold">{activePost?.author || "Mina"}</div>
-                {/* Removed "Online" as requested */}
-              </div>
-              <span className="ml-auto text-[12px] rounded-full bg-black/5 px-2.5 py-1 font-semibold text-slate-700">
-                Seeking · Course Materials
-              </span>
-            </div>
-
-            <div ref={dmBodyRef} className="flex-1 min-h-0 py-5 space-y-4 overflow-y-auto">
-              {messages.map((msg, i) => (
-                <div
-                  key={i}
-                  className={`flex ${msg.who === "You" ? "justify-end" : "justify-start"}`}
-                  style={{ opacity: 0, animation: "fadeSlideUp 480ms ease forwards", animationDelay: `${i * 90}ms` }}
-                >
-                  <div
-                    className={`max-w-[75%] rounded-2xl px-4 py-3 text-[14px] leading-6 ${
-                      msg.who === "You" ? "bg-black text-white" : "bg-slate-100 text-slate-900"
+                  rows={4}
+                  value={composerText}
+                  placeholder="Write a short message (who you are / what you need)…"
+                  className="w-full rounded-xl border px-4 py-3 text-sm bg-slate-50"
+                  style={{ borderColor: TOKENS.border }}
+                />
+                <div className="mt-3 flex items-center justify-between">
+                  <div className="text-[12px] text-slate-500">
+                    Target: <strong>Academic · course_materials</strong>
+                  </div>
+                  <button
+                    disabled
+                    className={`rounded-xl px-5 py-2.5 text-sm font-bold text-white transition ${
+                      offerPulse ? "animate-[softPulse_1200ms_ease_infinite] bg-emerald-600" : "bg-black hover:bg-black/90"
                     }`}
                   >
-                    {msg.text}
-                  </div>
+                    Send offer
+                  </button>
                 </div>
-              ))}
+              </div>
+            </div>
+          </div>
+
+          {/* ===== Step 3: Messages ===== */}
+          <div
+            className="absolute inset-0 grid grid-cols-5 min-h-0"
+            style={{ opacity: step === 3 ? 1 : 0, transform: step === 3 ? "translateX(0)" : "translateX(24px)", transition: "all 700ms cubic-bezier(0.34,1.56,0.64,1)", pointerEvents: step === 3 ? "auto" : "none" }}
+          >
+            <div className="col-span-2 border-r p-6 space-y-3 min-h-0" style={{ borderColor: TOKENS.border }}>
+              <div className="px-1 pb-2 text-[12px] font-semibold text-slate-500 uppercase tracking-wide">Messages</div>
+              <SideChatItem active icon={activePost?.icon || "📝"} title={activePost?.title || "Post"} />
+              <SideChatItem icon="👥" title="Study Mate for Calc II" />
+              <SideChatItem icon="☕" title="Coffee chat: SWE internships" />
             </div>
 
-            <div className="pt-5 border-t flex gap-3 border-slate-200">
-              <input disabled placeholder="Type a message..." className="flex-1 rounded-xl border px-4 py-3 text-sm bg-slate-50 border-slate-200" />
-              <button disabled className="rounded-xl bg-slate-200 px-5 py-3 text-sm font-semibold text-slate-400 cursor-not-allowed">Send</button>
-            </div>
+            <div className="col-span-3 p-8 flex flex-col min-h-0">
+              <div className="flex items-center gap-3 pb-5 border-b" style={{ borderColor: TOKENS.border }}>
+                <div className="h-9 w-9 rounded-full bg-purple-100 flex items-center justify-center text-sm font-bold">S</div>
+                <div><div className="text-sm font-bold">Sam</div></div>
+                <span className="ml-auto text-[12px] rounded-full bg-black/5 px-2.5 py-1 font-semibold text-slate-700">
+                  Seeking · Course Materials
+                </span>
+              </div>
 
-            <div className="mt-4 flex flex-wrap gap-2 justify-center">
-              <span className="rounded-full bg-black/5 px-3 py-1 text-[12px] font-semibold text-slate-700">Student verified</span>
-              <span className="rounded-full bg-black/5 px-3 py-1 text-[12px] font-semibold text-slate-700">No in-app payment</span>
+              <div ref={chatRef} className="flex-1 min-h-0 py-5 space-y-4 overflow-y-auto">
+                {messages.map((msg, i) => (
+                  <div
+                    key={i}
+                    className={`flex ${msg.who === "You" ? "justify-end" : "justify-start"}`}
+                    style={{ opacity: 0, animation: "fadeSlideUp 500ms ease forwards", animationDelay: `${i * 110}ms` }}
+                  >
+                    <div className={`max-w-[75%] rounded-2xl px-4 py-3 text-[14px] leading-6 ${msg.who === "You" ? "bg-black text-white" : "bg-slate-100 text-slate-900"}`}>
+                      {msg.text}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="pt-5 border-t flex gap-3" style={{ borderColor: TOKENS.border }}>
+                <input disabled placeholder="Type a message..." className="flex-1 rounded-xl border px-4 py-3 text-sm bg-slate-50" style={{ borderColor: TOKENS.border }} />
+                <button disabled className="rounded-xl bg-slate-200 px-5 py-3 text-sm font-semibold text-slate-400 cursor-not-allowed">Send</button>
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-2 justify-center">
+                <span className="rounded-full bg-black/5 px-3 py-1 text-[12px] font-semibold text-slate-700">Student verified</span>
+                <span className="rounded-full bg-black/5 px-3 py-1 text-[12px] font-semibold text-slate-700">No in-app payment</span>
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -1418,7 +1388,7 @@ export function SeekingDesktop({ play = true }) {
 
 function Pill({ label, value }) {
   return (
-    <div className="text-[12px] rounded-full bg-slate-50 px-3 py-1.5 ring-1 ring-slate-200">
+    <div className="text-[12px] rounded-full bg-slate-50 px-3 py-1.5 ring-1" style={{ borderColor: TOKENS.border }}>
       <span className="text-slate-400 mr-1">{label}:</span>
       <span className="font-semibold text-slate-700">{value}</span>
     </div>
@@ -1433,17 +1403,16 @@ function Tag({ label }) {
   );
 }
 
-function FeedCard({ index, icon, title, secondLine, badges, selected, highlight }) {
+function FeedCard({ index, icon, title, meta, badges, selected, kind }) {
+  const showTags = kind === "Course Materials";
+  const showPreview = kind === "Coffee Chat";
+  const showMeta = kind === "Study Mate";
+
   return (
     <div
-      className={`rounded-2xl p-5 ring-1 transition ${
-        selected
-          ? "bg-emerald-50 ring-emerald-400 scale-[0.995]"
-          : highlight
-          ? "bg-emerald-50/40 ring-slate-200"
-          : "bg-white ring-slate-200"
-      }`}
+      className={`rounded-2xl p-5 ring-1 transition ${selected ? "bg-emerald-50 ring-emerald-400 scale-[0.995]" : "bg-white"}`}
       style={{
+        borderColor: selected ? "rgb(52 211 153)" : TOKENS.border,
         opacity: 0,
         transform: "translateY(10px)",
         animation: "fadeSlideUp 600ms ease forwards",
@@ -1454,22 +1423,21 @@ function FeedCard({ index, icon, title, secondLine, badges, selected, highlight 
       <div className="flex items-start gap-4">
         <div className="text-2xl leading-none">{icon}</div>
         <div className="flex-1">
-          {/* Line 1: avatar + title */}
-          <div className="flex items-center gap-2">
-            <div className="h-6 w-6 rounded-full bg-slate-200" />
-            <div className="text-[16px] font-semibold">{title}</div>
-          </div>
+          <div className="text-[16px] font-semibold">{title}</div>
 
-          {/* Line 2: tags or preview (NO dates/gray extras) */}
-          {badges && badges.length > 0 ? (
+          {showTags && (
             <div className="mt-3 flex flex-wrap gap-2">
               {badges.map((b, i) => (
                 <Tag key={`${title}-${b}-${i}`} label={b} />
               ))}
             </div>
-          ) : secondLine ? (
-            <div className="text-[12px] text-slate-600 mt-2">{secondLine}</div>
-          ) : null}
+          )}
+
+          {showPreview && <div className="text-[13px] text-slate-700 mt-1">{meta}</div>}
+
+          {showMeta && !showTags && !showPreview && meta && (
+            <div className="text-[12px] text-slate-500 mt-1">{meta}</div>
+          )}
         </div>
       </div>
     </div>
@@ -1478,7 +1446,7 @@ function FeedCard({ index, icon, title, secondLine, badges, selected, highlight 
 
 function SideChatItem({ icon, title, active = false }) {
   return (
-    <div className={`rounded-xl p-4 ring-1 ${active ? "bg-emerald-50 ring-emerald-400" : "bg-white ring-slate-200"}`}>
+    <div className={`rounded-xl p-4 ring-1 ${active ? "bg-emerald-50" : "bg-white"}`} style={{ borderColor: TOKENS.border }}>
       <div className="flex items-start gap-3">
         <span className="text-xl leading-none">{icon}</span>
         <div className="flex-1">
@@ -1487,16 +1455,4 @@ function SideChatItem({ icon, title, active = false }) {
       </div>
     </div>
   );
-}
-
-/* Minimal keyframes (local) */
-const styleEl = typeof document !== "undefined" ? document.createElement("style") : null;
-if (styleEl && !document.getElementById("seeking-keyframes")) {
-  styleEl.id = "seeking-keyframes";
-  styleEl.innerHTML = `
-  @keyframes fadeSlideUp {
-    from { opacity: 0; transform: translateY(10px); }
-    to   { opacity: 1; transform: translateY(0); }
-  }`;
-  document.head.appendChild(styleEl);
 }
