@@ -1143,7 +1143,7 @@ export default function Dashboard() {
                 )}
 
                 {/* Images: freeboard 전용 */}
-                {active === "general" && (
+                {/* {active === "general" && (
                   <div className="space-y-2">
                     <label className="block text-sm font-medium text-slate-700">
                       Images
@@ -1174,7 +1174,7 @@ export default function Dashboard() {
                       </div>
                     )}
                   </div>
-                )}
+                )} */}
 
                 <div className="flex items-center justify-between pt-2">
                   <p className="text-[12px] text-slate-500">
