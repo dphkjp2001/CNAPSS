@@ -1,3 +1,5 @@
+//frontend/src/pages/freeboard/PostForm.jsx
+
 import React, { useState, useContext, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { createPost } from "../../api/posts";

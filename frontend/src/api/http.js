@@ -81,15 +81,50 @@ export function getJson(url) {
   const full = url.toString().startsWith("http") ? url : `${API_URL}${url}`;
   return request(full, { method: "GET" });
 }
+// export function postJson(url, body) {
+//   console.log('postJson called with:', { url, body });
+//   const full = url.toString().startsWith("http") ? url : `${API_URL}${url}`;
+//   const opts = { method: "POST" };
+//   console.log('postJson opts before body assignment:', opts);
+//   if (body instanceof FormData) opts.body = body;
+//   else opts.body = JSON.stringify(body || {});
+//   return request(full, opts);
+// }
+
+// frontend/src/api/http.js
+
 export function postJson(url, body) {
-  console.log('postJson called with:', { url, body });
   const full = url.toString().startsWith("http") ? url : `${API_URL}${url}`;
-  const opts = { method: "POST" };
-  console.log('postJson opts before body assignment:', opts);
-  if (body instanceof FormData) opts.body = body;
-  else opts.body = JSON.stringify(body || {});
+
+  // Get token from localStorage (or update this if stored elsewhere)
+  const token = localStorage.getItem("token");
+
+  const opts = {
+    method: "POST",
+    headers: {},
+    credentials: "include", // keep this if you ever use cookies
+  };
+
+  // Only attach JSON headers if it's not FormData
+  if (!(body instanceof FormData)) {
+    opts.headers["Content-Type"] = "application/json";
+    opts.body = JSON.stringify(body || {});
+  } else {
+    opts.body = body;
+  }
+
+  // Attach token if present
+  if (token) {
+    opts.headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  // if (import.meta.env.DEV) {
+  //   console.log("🔹 postJson request", { full, opts });
+  // }
+
   return request(full, opts);
 }
+
 export function putJson(url, body) {
   const full = url.toString().startsWith("http") ? url : `${API_URL}${url}`;
   const opts = { method: "PUT" };

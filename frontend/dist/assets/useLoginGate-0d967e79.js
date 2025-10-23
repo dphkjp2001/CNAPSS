@@ -1,0 +1,1 @@
+import{c as t,a,o as c}from"./index-93a91b51.js";function p(){const{user:e}=t(),{pathname:r,search:n}=a(),o=`${r}${n||""}`;function u(s){if(e)return s==null?void 0:s();c(o)}return{ensureAuth:u,isAuthed:!!e}}export{p as u};
