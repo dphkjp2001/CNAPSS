@@ -156,7 +156,7 @@ router.post("/:school/posts", requireAuth, schoolGuard, async (req, res, next) =
     console.log("req.user:", req.user);
     console.log("req.body:", req.body);
     console.log("req.params:", req.params);
-    
+
     const { school } = req.params;
     const {
       title,
@@ -183,7 +183,7 @@ router.post("/:school/posts", requireAuth, schoolGuard, async (req, res, next) =
       content: content || "",
       images: Array.isArray(images) ? images : [],
       anonymous: !!anonymous,
-      author: req.user._id,
+      author: req.user._id || req.user.id,
       mode: finalMode,
       kind,
       type,
