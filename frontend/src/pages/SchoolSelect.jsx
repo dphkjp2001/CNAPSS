@@ -77,46 +77,43 @@ export default function SchoolSelect() {
   return (
     <div className="min-h-screen" style={{ background: TOKENS.pageBg }}>
       {/* === TOP NAV (Black Glass Overlay) === */}
-{/* === TOP NAV (White header, brand in HERO color, black links) === */}
-<header className="fixed inset-x-0 top-0 z-30 bg-white border-b border-slate-200">
-  <div className="mx-auto max-w-6xl h-16 px-4 md:px-6 flex items-center justify-between">
-    {/* Left: Brand */}
-    <Link
-      to="/"
-      className="font-extrabold tracking-tight text-2xl"
-      style={{ color: "#EE5C5C" }}  // HERO 시작 색상
-    >
-      CNAPSS
-    </Link>
-
-    {/* Middle: Contact us (slightly left-biased) */}
-    <nav className="absolute inset-x-0 flex justify-center pointer-events-none">
+<header className="fixed inset-x-0 top-0 z-30 bg-white border-b border-black/10">
+  <div className="w-full h-16 px-0 flex items-center justify-between">
+    {/* left: CNAPSS + About us + Contacts */}
+    <div className="flex items-center gap-10 md:gap-12 pl-28 md:pl-32 [&>a]:tracking-[.02em]">
+      <Link
+        to="/"
+        className="font-semibold tracking-[.01em] text-2xl md:text-3xl"
+        style={{ color: "#EF4444" }}
+      >
+        CNAPSS
+      </Link>
+      <Link
+        to="/about"
+        className="text-black hover:opacity-70 text-sm font-semibold"
+      >
+        About us
+      </Link>
       <Link
         to="/contact"
-        className="pointer-events-auto text-slate-900 hover:text-black text-sm font-semibold tracking-wide
-                   transform -translate-x-[6%]"  // 중앙에서 왼쪽으로 약간 이동
+        className="text-black hover:opacity-70 text-sm font-semibold"
       >
-        Contact us
+        Contacts
       </Link>
-    </nav>
+    </div>
 
-    {/* Right: Auth (unified black text) */}
-    <div className="flex items-center gap-4">
-      <Link
-        to="/auth/login"
-        className="text-slate-900 hover:text-black text-sm font-semibold"
-      >
-        Sign in
-      </Link>
+    {/* right: Click to enter */}
+    <div className="pr-10 md:pr-12">
       <Link
         to="/auth/register"
-        className="text-slate-900 hover:text-black text-sm font-semibold"
+        className="text-sm font-semibold text-black hover:opacity-70"
       >
-        Sign up
+        Click to enter
       </Link>
     </div>
   </div>
 </header>
+
 
 
 
@@ -1056,150 +1053,326 @@ function QComments({ show, thread, playKey }) {
   );
 }
 
-/* ================== Seeking — desktop frame + DM flow ================== */
+/* ================== Academic Board — Seeking (full, drop-in) ================== */
+/** 
+ * Usage (in SchoolSelect.jsx):
+ *   <section className="...">
+ *     ...
+ *     <div className="h-[560px]">
+ *       <SeekingDesktop play />
+ *     </div>
+ *   </section>
+ */
+
 function SeekingDesktop({ play }) {
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(0); // 0: feed scroll, 2: detail, 3: DM
+  const [activePost, setActivePost] = useState(null);
+  const [composerText, setComposerText] = useState("");
   const [messages, setMessages] = useState([]);
+  const [offerPulse, setOfferPulse] = useState(false);
+  const [clickedFeedId, setClickedFeedId] = useState(null);
+
+  const feedRef = useRef(null);
+  const scrollTimerRef = useRef(null);
+  const chatRef = useRef(null);
+  const hasRunRef = useRef(false);
+
+  // Seed posts
+  const SEED = useMemo(
+    () => [
+      { id: "p1", icon: "📝", title: "Principles of Microeconomics", meta: "", badges: ["Lecture Notes", "Syllabus", "Quiz Prep"], author: "Mina", kind: "Course Materials", time: "" },
+      { id: "p3", icon: "👥", title: "Study Mate for Calc II", meta: "Looking for 2 peers · Weekends", badges: ["Study Group"], author: "Yuna", kind: "Study Mate", time: "" },
+      { id: "p4", icon: "☕", title: "Coffee chat: SWE internships", meta: "Looking for a senior in CS major who can share internship tips…", badges: [], author: "Leo", kind: "Coffee Chat", time: "" },
+      { id: "p5", icon: "📝", title: "Linear Algebra", meta: "", badges: ["Lecture Notes"], author: "Noah", kind: "Course Materials", time: "" },
+      { id: "p6", icon: "👥", title: "Study Mate for DS-UA 201", meta: "Afternoons preferred", badges: ["Study Group"], author: "Irene", kind: "Study Mate", time: "" },
+      { id: "p8", icon: "📝", title: "Principles of Statistics", meta: "", badges: ["Lecture Notes", "Quiz Prep"], author: "Sam", kind: "Course Materials", time: "" },
+    ],
+    []
+  );
+
+  // FEED: build → de-dup by title (keep first occurrence) → trim length
+  const FEED = useMemo(() => {
+    const arr = [];
+    const copies = 3;
+    for (let i = 0; i < copies; i++) {
+      const chunk = [...SEED];
+      if (i % 2 === 0) chunk.reverse();
+      chunk.forEach((p, idx) => arr.push({ ...p, id: `${p.id}-${i}-${idx}` }));
+    }
+    const seen = new Set();
+    const uniq = arr.filter((p) => {
+      if (seen.has(p.title)) return false;
+      seen.add(p.title);
+      return true;
+    });
+    return uniq.slice(0, 9);
+  }, [SEED]);
+
+  // auto scroll chat
+  useEffect(() => {
+    if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
+  }, [messages]);
 
   useEffect(() => {
     let timers = [];
-    if (play) {
+
+    const stopScroll = () => {
+      if (scrollTimerRef.current) {
+        clearInterval(scrollTimerRef.current);
+        scrollTimerRef.current = null;
+      }
+    };
+
+    const resetState = () => {
       setStep(0);
+      setActivePost(null);
+      setComposerText("");
       setMessages([]);
-      timers.push(setTimeout(() => setStep(1), 900));
+      setOfferPulse(false);
+      setClickedFeedId(null);
+      stopScroll();
+      if (feedRef.current) feedRef.current.scrollTop = 0;
+    };
+
+    const run = () => {
+      if (hasRunRef.current) return;
+      hasRunRef.current = true;
+
+      resetState();
+
+      const TARGET_SEED =
+        SEED.find((p) => p.title === "Principles of Microeconomics") ||
+        SEED.find((p) => p.kind === "Course Materials") ||
+        SEED[0];
+
+      // fast scroll
+      const SCROLL_PX_PER_TICK = 16;
       timers.push(
         setTimeout(() => {
-          setStep(2);
-          timers.push(setTimeout(() => setMessages((m) => [...m, { who: "You", text: "Hi! Looking for a study buddy for DS-UA 201?" }]), 500));
-          timers.push(setTimeout(() => setMessages((m) => [...m, { who: "Mina", text: "Yes! I need help with the midterm prep too." }]), 1500));
-          timers.push(setTimeout(() => setMessages((m) => [...m, { who: "You", text: "Perfect! Tomorrow 2pm at Bobst Library?" }]), 2500));
-          timers.push(setTimeout(() => setMessages((m) => [...m, { who: "Mina", text: "Sounds great! Main entrance?" }]), 3500));
-          timers.push(setTimeout(() => setStep(3), 4500));
-        }, 1800)
+          const node = feedRef.current;
+          if (!node) return;
+          node.scrollTop = 0;
+          scrollTimerRef.current = setInterval(() => {
+            node.scrollTop += SCROLL_PX_PER_TICK;
+          }, 16);
+        }, 350)
       );
+
+      // select only the first visible target card (no duplicates now)
+      timers.push(
+        setTimeout(() => {
+          stopScroll();
+          const targetFeed = FEED.find((f) => f.title === TARGET_SEED.title);
+          if (targetFeed) setClickedFeedId(targetFeed.id);
+        }, 2000)
+      );
+
+      // go detail
+      timers.push(
+        setTimeout(() => {
+          setActivePost(TARGET_SEED);
+          setStep(2);
+        }, 2500)
+      );
+
+      // request text (you as seller)
+      const YOU_OPENING =
+        "Hey! I saw your post looking for microeconomics notes. I have a clean set from this semester — thinking around $10. What price did you have in mind?";
+      timers.push(
+        setTimeout(() => {
+          setComposerText(YOU_OPENING);
+          setOfferPulse(true);
+          timers.push(setTimeout(() => setOfferPulse(false), 900));
+        }, 3300)
+      );
+
+      // DM — first msg is yours (black/right)
+      timers.push(
+        setTimeout(() => {
+          setStep(3);
+          setMessages([{ who: "You", text: YOU_OPENING }]);
+          timers.push(
+            setTimeout(
+              () => setMessages((m) => [...m, { who: "Sam", text: "That sounds good to me. $10 works!" }]),
+              900
+            )
+          );
+          timers.push(
+            setTimeout(
+              () => setMessages((m) => [...m, { who: "You", text: "Awesome — want to meet at Bobst Library today around 7:00 PM?" }]),
+              1700
+            )
+          );
+          timers.push(
+            setTimeout(
+              () => setMessages((m) => [...m, { who: "Sam", text: "Perfect. Cash or Venmo—either is fine. See you at the main entrance!" }]),
+              2500
+            )
+          );
+        }, 4100)
+      );
+    };
+
+    if (play) {
+      run();
     } else {
-      setStep(0);
-      setMessages([]);
+      hasRunRef.current = false;
+      resetState();
     }
-    return () => timers.forEach(clearTimeout);
+
+    return () => {
+      timers.forEach(clearTimeout);
+      stopScroll();
+    };
   }, [play]);
 
   return (
     <>
       <Keyframes />
       <div className="h-full w-full rounded-3xl overflow-hidden shadow-2xl bg-white">
-        <div className="h-12 flex items-center justify-between px-5 border-b bg-slate-50" style={{ borderColor: TOKENS.border }}>
+        {/* Mock browser bar */}
+        <div className="h-12 flex items-center justify-between px-6 border-b bg-slate-50" style={{ borderColor: TOKENS.border }}>
           <div className="flex items-center gap-2">
             <span className="h-3 w-3 rounded-full bg-red-400" />
             <span className="h-3 w-3 rounded-full bg-yellow-400" />
             <span className="h-3 w-3 rounded-full bg-green-400" />
           </div>
-          <div className="flex-1 mx-8 px-4 py-1.5 rounded-lg bg-white text-xs text-slate-600 text-center" style={{ border: `1px solid ${TOKENS.border}` }}>
-            cnapss.com/seeking
+          <div className="flex-1 mx-8 px-5 py-1.5 rounded-lg bg-white text-xs text-slate-600 text-center" style={{ border: `1px solid ${TOKENS.border}` }}>
+            cnapss.com/academic
           </div>
           <div className="text-xs text-slate-400">⋯</div>
         </div>
 
+        {/* Canvas */}
         <div className="relative h-[calc(100%-48px)]">
-          <div className="absolute inset-0 grid grid-cols-5" style={{ opacity: step === 0 ? 1 : 0, transition: "opacity 400ms ease", pointerEvents: step === 0 ? "auto" : "none" }}>
-            <div className="col-span-2 border-r p-4 space-y-2" style={{ borderColor: TOKENS.border }}>
-              <PostTile active icon="📚" title="Study buddy for DS-UA 201" meta="2/5 joined • Active" />
-              <PostTile icon="☕" title="Coffee chat: SWE internships" meta="Thu/Fri" />
-              <PostTile icon="📝" title="Notes swap: Calculus II" meta="This weekend" />
-            </div>
-            <div className="col-span-3 p-8 flex items-center justify-center text-slate-400 text-sm">Select a post to view details</div>
-          </div>
-
+          {/* ===== Step 0: Feed ===== */}
           <div
-            className="absolute inset-0 grid grid-cols-5"
-            style={{
-              opacity: step === 1 ? 1 : 0,
-              transform: step === 1 ? "translateX(0)" : "translateX(20px)",
-              transition: "all 500ms cubic-bezier(0.34, 1.56, 0.64, 1)",
-              pointerEvents: step === 1 ? "auto" : "none",
-            }}
+            className="absolute inset-0 grid grid-rows-[auto_1fr] min-h-0"
+            style={{ opacity: step === 0 ? 1 : 0, transition: "opacity 600ms ease", pointerEvents: step === 0 ? "auto" : "none" }}
           >
-            <div className="col-span-2 border-r p-4 space-y-2" style={{ borderColor: TOKENS.border }}>
-              <PostTile active pulse icon="📚" title="Study buddy for DS-UA 201" meta="2/5 joined • Active" />
-              <PostTile icon="☕" title="Coffee chat: SWE internships" meta="Thu/Fri" />
-              <PostTile icon="📝" title="Notes swap: Calculus II" meta="This weekend" />
+            <div className="px-8 py-6 border-b" style={{ borderColor: TOKENS.border }}>
+              <div className="max-w-4xl mx-auto flex items-center gap-3">
+                <input disabled placeholder="Keyword" className="flex-1 rounded-xl border px-4 py-3 text-sm bg-white" style={{ borderColor: TOKENS.border }} />
+                <button disabled className="rounded-xl border px-3 py-2.5 text-sm bg-white flex items-center gap-2" style={{ borderColor: TOKENS.border }}>
+                  <span className="text-slate-500">Type</span>
+                  <strong className="text-slate-900">Seeking</strong>
+                  <span className="text-slate-400">▾</span>
+                </button>
+                <Pill label="School" value="NYU" />
+                <Pill label="Sort" value="Latest" />
+              </div>
             </div>
-            <div className="col-span-3 p-8">
-              <div className="flex items-center gap-3 mb-4">
-                <span className="text-3xl">📚</span>
-                <div>
-                  <h4 className="text-lg font-black text-slate-900">Study buddy for DS-UA 201</h4>
-                  <p className="text-xs text-slate-500">Posted 2h ago • 2 students interested</p>
+
+            <div className="overflow-y-hidden">
+              <div ref={feedRef} className="h-full overflow-y-auto scroll-smooth px-8 py-6">
+                <div className="max-w-4xl mx-auto space-y-4">
+                  {FEED.map((p, idx) => (
+                    <FeedCard
+                      key={p.id}
+                      index={idx}
+                      icon={p.icon}
+                      title={p.title}
+                      meta={p.meta}
+                      badges={p.badges}
+                      selected={clickedFeedId === p.id}
+                      kind={p.kind}
+                    />
+                  ))}
                 </div>
               </div>
-              <div className="space-y-3 text-sm text-slate-700">
-                <p>Looking for someone to review midterm material together.</p>
-                <p><strong>Topics:</strong> Dynamic programming, graph algorithms</p>
-                <p><strong>Schedule:</strong> Flexible, prefer afternoons</p>
-              </div>
-              <button className="mt-6 rounded-xl bg-black px-5 py-2.5 text-sm font-bold text-white hover:bg-black/90 transition">Start Chat</button>
             </div>
           </div>
 
+          {/* ===== Step 2: Detail (request only) ===== */}
           <div
-            className="absolute inset-0 grid grid-cols-5"
-            style={{
-              opacity: step === 2 ? 1 : 0,
-              transform: step === 2 ? "translateX(0)" : "translateX(20px)",
-              transition: "all 500ms cubic-bezier(0.34, 1.56, 0.64, 1)",
-              pointerEvents: step === 2 ? "auto" : "none",
-            }}
+            className="absolute inset-0 min-h-0"
+            style={{ opacity: step === 2 ? 1 : 0, transform: step === 2 ? "translateX(0)" : "translateX(24px)", transition: "all 700ms cubic-bezier(0.34,1.56,0.64,1)", pointerEvents: step === 2 ? "auto" : "none" }}
           >
-            <div className="col-span-2 border-r p-4 space-y-2" style={{ borderColor: TOKENS.border }}>
-              <PostTile active icon="📚" title="Study buddy for DS-UA 201" meta="Chatting with Mina" />
-              <PostTile icon="☕" title="Coffee chat: SWE internships" meta="Thu/Fri" />
-              <PostTile icon="📝" title="Notes swap: Calculus II" meta="This weekend" />
-            </div>
-            <div className="col-span-3 p-6 flex flex-col">
-              <div className="flex items-center gap-3 pb-4 border-b" style={{ borderColor: TOKENS.border }}>
-                <div className="h-8 w-8 rounded-full bg-purple-100 flex items-center justify-center text-sm font-bold">M</div>
+            <div className="p-10 max-w-3xl mx-auto min-h-0 flex flex-col">
+              <div className="flex items-center gap-4 mb-6">
+                <span className="text-4xl">{activePost?.icon || "📝"}</span>
                 <div>
-                  <div className="text-sm font-bold">Mina</div>
-                  <div className="text-xs text-slate-500">Online</div>
+                  <h4 className="text-2xl font-black text-slate-900">{activePost?.title}</h4>
+                  <p className="text-sm text-slate-500 mt-1">Seeking · Course Materials</p>
                 </div>
               </div>
-              <div className="flex-1 py-4 space-y-3 overflow-y-auto">
+
+              <div className="mb-6 flex flex-wrap gap-2">
+                {(activePost?.badges || []).map((b) => (
+                  <Tag key={b} label={b} />
+                ))}
+              </div>
+
+              <div className="rounded-2xl ring-1 p-5 bg-white" style={{ borderColor: TOKENS.border }}>
+                <div className="text-[13px] font-semibold mb-2" style={{ color: TOKENS.text }}>
+                  Send a Request
+                </div>
+                <textarea
+                  disabled
+                  rows={4}
+                  value={composerText}
+                  placeholder="Write a short message (who you are / what you need)…"
+                  className="w-full rounded-xl border px-4 py-3 text-sm bg-slate-50"
+                  style={{ borderColor: TOKENS.border }}
+                />
+                <div className="mt-3 flex items-center justify-between">
+                  <div className="text-[12px] text-slate-500">
+                    Target: <strong>Academic · course_materials</strong>
+                  </div>
+                  <button
+                    disabled
+                    className={`rounded-xl px-5 py-2.5 text-sm font-bold text-white transition ${
+                      offerPulse ? "animate-[softPulse_1200ms_ease_infinite] bg-emerald-600" : "bg-black hover:bg-black/90"
+                    }`}
+                  >
+                    Send offer
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ===== Step 3: Messages ===== */}
+          <div
+            className="absolute inset-0 grid grid-cols-5 min-h-0"
+            style={{ opacity: step === 3 ? 1 : 0, transform: step === 3 ? "translateX(0)" : "translateX(24px)", transition: "all 700ms cubic-bezier(0.34,1.56,0.64,1)", pointerEvents: step === 3 ? "auto" : "none" }}
+          >
+            <div className="col-span-2 border-r p-6 space-y-3 min-h-0" style={{ borderColor: TOKENS.border }}>
+              <div className="px-1 pb-2 text-[12px] font-semibold text-slate-500 uppercase tracking-wide">Messages</div>
+              <SideChatItem active icon={activePost?.icon || "📝"} title={activePost?.title || "Post"} />
+              <SideChatItem icon="👥" title="Study Mate for Calc II" />
+              <SideChatItem icon="☕" title="Coffee chat: SWE internships" />
+            </div>
+
+            <div className="col-span-3 p-8 flex flex-col min-h-0">
+              <div className="flex items-center gap-3 pb-5 border-b" style={{ borderColor: TOKENS.border }}>
+                <div className="h-9 w-9 rounded-full bg-purple-100 flex items-center justify-center text-sm font-bold">S</div>
+                <div><div className="text-sm font-bold">Sam</div></div>
+                <span className="ml-auto text-[12px] rounded-full bg-black/5 px-2.5 py-1 font-semibold text-slate-700">
+                  Seeking · Course Materials
+                </span>
+              </div>
+
+              <div ref={chatRef} className="flex-1 min-h-0 py-5 space-y-4 overflow-y-auto">
                 {messages.map((msg, i) => (
-                  <div key={i} className={`flex ${msg.who === "You" ? "justify-end" : "justify-start"}`} style={{ opacity: 0, animation: "fadeSlideUp 400ms ease forwards", animationDelay: `${i * 50}ms` }}>
-                    <div className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-[14px] ${msg.who === "You" ? "bg-black text-white" : "bg-slate-100 text-slate-900"}`}>
+                  <div
+                    key={i}
+                    className={`flex ${msg.who === "You" ? "justify-end" : "justify-start"}`}
+                    style={{ opacity: 0, animation: "fadeSlideUp 500ms ease forwards", animationDelay: `${i * 110}ms` }}
+                  >
+                    <div className={`max-w-[75%] rounded-2xl px-4 py-3 text-[14px] leading-6 ${msg.who === "You" ? "bg-black text-white" : "bg-slate-100 text-slate-900"}`}>
                       {msg.text}
                     </div>
                   </div>
                 ))}
               </div>
-              <div className="pt-4 border-t flex gap-2" style={{ borderColor: TOKENS.border }}>
-                <input disabled placeholder="Type a message..." className="flex-1 rounded-xl border px-4 py-2.5 text-sm bg-slate-50" style={{ borderColor: TOKENS.border }} />
-                <button disabled className="rounded-xl bg-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-400 cursor-not-allowed">Send</button>
-              </div>
-            </div>
-          </div>
 
-          <div
-            className="absolute inset-0 flex items-center justify-center bg-white"
-            style={{
-              opacity: step === 3 ? 1 : 0,
-              transform: step === 3 ? "scale(1)" : "scale(0.95)",
-              transition: "all 600ms cubic-bezier(0.34, 1.56, 0.64, 1)",
-              pointerEvents: step === 3 ? "auto" : "none",
-            }}
-          >
-            <div className="text-center max-w-md px-8">
-              <div className="relative inline-flex items-center justify-center mb-6">
-                <div className="h-20 w-20 rounded-full bg-emerald-100" style={{ animation: step === 3 ? "popIn 500ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards" : "none" }} />
-                <svg viewBox="0 0 24 24" className="absolute h-12 w-12 text-emerald-600" style={{ opacity: 0, animation: step === 3 ? "fadeIn 400ms ease 300ms forwards" : "none" }}>
-                  <path d="M20 6L9 17l-5-5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
+              <div className="pt-5 border-t flex gap-3" style={{ borderColor: TOKENS.border }}>
+                <input disabled placeholder="Type a message..." className="flex-1 rounded-xl border px-4 py-3 text-sm bg-slate-50" style={{ borderColor: TOKENS.border }} />
+                <button disabled className="rounded-xl bg-slate-200 px-5 py-3 text-sm font-semibold text-slate-400 cursor-not-allowed">Send</button>
               </div>
-              <h4 className="text-2xl font-black mb-3" style={{ color: TOKENS.text }}>Meet-up Confirmed!</h4>
-              <p className="text-[15px] text-slate-600 leading-relaxed">
-                Bobst Library — main entrance, <strong>tomorrow at 2:00 PM</strong>. Bring your notes to swap. See you!
-              </p>
-              <div className="mt-4 flex flex-wrap justify-center gap-2">
+
+              <div className="mt-4 flex flex-wrap gap-2 justify-center">
                 <span className="rounded-full bg-black/5 px-3 py-1 text-[12px] font-semibold text-slate-700">Student verified</span>
                 <span className="rounded-full bg-black/5 px-3 py-1 text-[12px] font-semibold text-slate-700">No in-app payment</span>
               </div>
@@ -1211,17 +1384,75 @@ function SeekingDesktop({ play }) {
   );
 }
 
-function PostTile({ icon, title, meta, active = false, pulse = false }) {
+/* ---------- UI bits ---------- */
+
+function Pill({ label, value }) {
   return (
-    <div className={`rounded-lg p-3 ring-1 ${active ? "bg-emerald-50" : "bg-white"} ${pulse ? "animate-[softPulse_1400ms_ease_infinite]" : ""}`} style={{ borderColor: TOKENS.border }}>
-      <div className="flex items-start gap-2">
-        <span className="text-xl leading-none">{icon}</span>
+    <div className="text-[12px] rounded-full bg-slate-50 px-3 py-1.5 ring-1" style={{ borderColor: TOKENS.border }}>
+      <span className="text-slate-400 mr-1">{label}:</span>
+      <span className="font-semibold text-slate-700">{value}</span>
+    </div>
+  );
+}
+
+function Tag({ label }) {
+  return (
+    <span className="rounded-full bg-slate-100 px-3 py-1.5 text-[12px] font-semibold text-slate-700">
+      {label}
+    </span>
+  );
+}
+
+function FeedCard({ index, icon, title, meta, badges, selected, kind }) {
+  const showTags = kind === "Course Materials";
+  const showPreview = kind === "Coffee Chat";
+  const showMeta = kind === "Study Mate";
+
+  return (
+    <div
+      className={`rounded-2xl p-5 ring-1 transition ${selected ? "bg-emerald-50 ring-emerald-400 scale-[0.995]" : "bg-white"}`}
+      style={{
+        borderColor: selected ? "rgb(52 211 153)" : TOKENS.border,
+        opacity: 0,
+        transform: "translateY(10px)",
+        animation: "fadeSlideUp 600ms ease forwards",
+        animationDelay: `${60 + index * 40}ms`,
+        boxShadow: selected ? "0 0 0 4px rgba(16,185,129,0.15)" : undefined,
+      }}
+    >
+      <div className="flex items-start gap-4">
+        <div className="text-2xl leading-none">{icon}</div>
         <div className="flex-1">
-          <div className="text-[14px] font-semibold">{title}</div>
-          <div className="text-[12px] text-slate-500">{meta}</div>
+          <div className="text-[16px] font-semibold">{title}</div>
+
+          {showTags && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {badges.map((b, i) => (
+                <Tag key={`${title}-${b}-${i}`} label={b} />
+              ))}
+            </div>
+          )}
+
+          {showPreview && <div className="text-[13px] text-slate-700 mt-1">{meta}</div>}
+
+          {showMeta && !showTags && !showPreview && meta && (
+            <div className="text-[12px] text-slate-500 mt-1">{meta}</div>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
+function SideChatItem({ icon, title, active = false }) {
+  return (
+    <div className={`rounded-xl p-4 ring-1 ${active ? "bg-emerald-50" : "bg-white"}`} style={{ borderColor: TOKENS.border }}>
+      <div className="flex items-start gap-3">
+        <span className="text-xl leading-none">{icon}</span>
+        <div className="flex-1">
+          <div className="text-[14px] font-semibold leading-5">{title}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
