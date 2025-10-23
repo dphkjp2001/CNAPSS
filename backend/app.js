@@ -75,7 +75,7 @@ app.use("/api/public/:school/comments", publicCommentsRouter);
 app.use("/api/public/:school/academic-posts", publicAcademicPostsRouter);
 
 /* ----------------------- Protected (school scoped) ----------------------- */
-app.use("/api/:school/posts", postsRoutes);
+app.use("/api", postsRoutes);
 app.use("/api/:school/comments", commentRoutes);
 app.use("/api/:school/market", marketRoutes);
 app.use("/api/:school/chat", chatRoutes);
