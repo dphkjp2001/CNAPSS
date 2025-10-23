@@ -1,16 +1,17 @@
 // backend/scripts/seedDummyData.js
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
-require("dotenv").config({ path: "../.env" });
+require("dotenv").config({ path: "./.env" });
 
 const User = require("../models/User");
 const Post = require("../models/Post");
+const AcademicPost = require("../models/AcademicPost");
 const Comment = require("../models/Comment");
 
 async function connectDB() {
   try {
-    const uri = process.env.MONGO_URI;
-    if (!uri) throw new Error("Missing MONGO_URI in .env");
+    const uri = process.env.MONGODB_URI;
+    if (!uri) throw new Error("Missing MONGODB_URI in .env");
     await mongoose.connect(uri);
     console.log("✅ Connected to MongoDB");
   } catch (err) {
@@ -28,6 +29,7 @@ async function clearExisting() {
 
 async function clearExistingPostsAndComments() {
     await Post.deleteMany({});
+    await AcademicPost.deleteMany({});
     await Comment.deleteMany({});
     console.log("🧹 Cleared existing posts and comments");
 }
@@ -137,7 +139,7 @@ async function seedDummyComments(users, posts) {
 async function main() {
   await connectDB();
   await clearExistingPostsAndComments();
-  const users = await seedDummyUsers();
+//   const users = await seedDummyUsers();
 //   const posts = await seedDummyPosts(users);
 //   await seedDummyComments(users, posts);
   console.log("✅ Deleted all posts and comments; seeded dummy users successfully!");
