@@ -152,6 +152,11 @@ router.get("/:school/posts/:id", requireAuth, schoolGuard, async (req, res, next
 // ---------------------------------------------
 router.post("/:school/posts", requireAuth, schoolGuard, async (req, res, next) => {
   try {
+    console.log("✅ /api/:school/posts hit");
+    console.log("req.user:", req.user);
+    console.log("req.body:", req.body);
+    console.log("req.params:", req.params);
+    
     const { school } = req.params;
     const {
       title,

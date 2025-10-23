@@ -47,6 +47,12 @@ const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:5173",
 ];
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.originalUrl}`);
+  next();
+}); 
+// debugging purposes
+
 
 app.use(
   cors({
@@ -76,6 +82,13 @@ app.use("/api/public/:school/academic-posts", publicAcademicPostsRouter);
 
 /* ----------------------- Protected (school scoped) ----------------------- */
 app.use("/api", postsRoutes);
+
+app.use((err, req, res, next) => {
+  console.error("🔥 Global error handler:", err);
+  res.status(500).json({ message: err.message || "Internal server error" });
+});
+//debugging purposes
+
 app.use("/api/:school/comments", commentRoutes);
 app.use("/api/:school/market", marketRoutes);
 app.use("/api/:school/chat", chatRoutes);
