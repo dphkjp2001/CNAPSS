@@ -8,7 +8,7 @@ const mongoose = require("mongoose");
 const Conversation = require("./models/Conversation");
 const Message = require("./models/Message");
 const Post = require("./models/Post");
-const CareerPost = require("./models/CareerPost"); // ✅ add: allow career posts to join rooms
+// const CareerPost = require("./models/CareerPost"); // ✅ add: allow career posts to join rooms
 const Request = require("./models/Request");
 
 if (process.env.NODE_ENV !== "production") {
