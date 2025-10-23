@@ -166,7 +166,7 @@ const schoolGuard = require("../middleware/schoolGuard");
 
 const Comment = require("../models/Comment");
 const Post = require("../models/Post");
-const CareerPost = require("../models/CareerPost");
+// const CareerPost = require("../models/CareerPost");
 const AcademicPost = require("../models/AcademicPost");
 const User = require("../models/User");
 

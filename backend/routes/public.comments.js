@@ -5,7 +5,7 @@ const mongoose = require("mongoose");
 
 const Comment = require("../models/Comment");
 const Post = require("../models/Post");
-const CareerPost = require("../models/CareerPost");
+// const CareerPost = require("../models/CareerPost");
 
 const ALLOWED_SCHOOLS = new Set(["nyu", "columbia", "boston"]);
 
