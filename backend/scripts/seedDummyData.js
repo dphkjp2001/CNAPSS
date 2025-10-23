@@ -55,7 +55,7 @@ async function seedDummyUsers() {
     {
       email: "cindy@boston.edu",
       password: await bcrypt.hash("password123", 10),
-      nickname: "CindyL",
+      nickname: "",
       school: "boston",
       isVerified: false,
       classOf: 2027,
