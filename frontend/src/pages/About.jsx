@@ -65,7 +65,7 @@ export default function About() {
             Our goal is to connect campuses while preserving each school's identity.
           </p>
           <p className="text-gray-700 mt-4">
-            <strong>Developers:</strong> Choi Minhyoek, Park Dongjae
+            <strong>Developers:</strong> Choi Minhyoek, Park Dongjae, Daniel Lee 
           </p>
         </div>
 
