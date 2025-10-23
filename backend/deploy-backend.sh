@@ -2,7 +2,7 @@
 # deploy-backend.sh
 # Usage: ./deploy-backend.sh "your commit message"
 
-set -e
+set -ex
 
 # cd backend || exit
 
