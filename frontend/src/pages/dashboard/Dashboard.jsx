@@ -1200,7 +1200,8 @@ export default function Dashboard() {
                       <button
                         type="submit"
                         disabled={!canPostAcademic || posting}
-                        className="rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-900 disabled:opacity-60"
+                        className="rounded-xl bg-gradient-to-r from-[#5365fa] via-[#8b5cf6] to-[#ec4899] px-4 py-2 text-sm font-semibold text-white 
+             hover:opacity-90 disabled:opacity-60 transition-all"
                       >
                         {posting ? (
                           "Posting…"
