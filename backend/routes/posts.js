@@ -262,7 +262,8 @@ router.delete("/:school/posts/:id", requireAuth, schoolGuard, async (req, res, n
 
     await Promise.all([
       Post.deleteOne({ _id: id, school }),
-      Comment.deleteMany({ post: id, school }),
+      // ✅ 필드명 교정: postId
+      Comment.deleteMany({ postId: id, school }),
     ]);
 
     res.json({ ok: true });
