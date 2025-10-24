@@ -13,14 +13,8 @@ const User = require("../models/User");
 
 router.use(requireAuth, schoolGuard);
 
-function isValidObjectId(id) {
-  return mongoose.Types.ObjectId.isValid(id);
-}
+const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 
-/**
- * Find target post across multiple boards within the same school.
- * Supports: Freeboard(Post), AcademicPost
- */
 async function findAnyPostById(postId, school) {
   const [free, academic] = await Promise.all([
     Post.findOne({ _id: postId, school }).select("_id").lean(),
@@ -32,9 +26,7 @@ async function findAnyPostById(postId, school) {
 // GET /api/:school/comments/:postId
 router.get("/:postId", async (req, res) => {
   const { postId } = req.params;
-  if (!isValidObjectId(postId)) {
-    return res.status(400).json({ message: "Invalid postId" });
-  }
+  if (!isValidObjectId(postId)) return res.status(400).json({ message: "Invalid postId" });
   try {
     const target = await findAnyPostById(postId, req.user.school);
     if (!target) return res.status(404).json({ message: "Post not found." });
@@ -53,12 +45,10 @@ router.get("/:postId", async (req, res) => {
 // POST /api/:school/comments/:postId
 router.post("/:postId", async (req, res) => {
   const { postId } = req.params;
+  if (!isValidObjectId(postId)) return res.status(400).json({ message: "Invalid postId" });
+
   let { content, parentId = null } = req.body;
   content = String(content || "").trim();
-
-  if (!isValidObjectId(postId)) {
-    return res.status(400).json({ message: "Invalid postId" });
-  }
   if (!content) return res.status(400).json({ message: "Content required" });
 
   try {
@@ -72,9 +62,7 @@ router.post("/:postId", async (req, res) => {
 
     let parent = null;
     if (parentId) {
-      if (!isValidObjectId(parentId)) {
-        return res.status(400).json({ message: "Invalid parentId" });
-      }
+      if (!isValidObjectId(parentId)) return res.status(400).json({ message: "Invalid parentId" });
       parent = await Comment.findOne({ _id: parentId, postId, school: req.user.school });
       if (!parent) return res.status(400).json({ message: "Parent comment not found." });
     }
@@ -82,20 +70,16 @@ router.post("/:postId", async (req, res) => {
     const doc = await Comment.create({
       postId,
       school: req.user.school,
-      authorId: me._id,              // ✅ required in schema
+      authorId: me._id,              // ✅ schema requires this
       email: req.user.email,
       nickname: me.nickname,
       content,
       parentId: parent ? parent._id : null,
     });
 
-    // Realtime broadcast
     try {
       const io = req.app.get("io");
-      if (io) {
-        const out = doc.toObject();
-        io.to(`post:${postId}`).emit("comment:new", out);
-      }
+      if (io) io.to(`post:${postId}`).emit("comment:new", doc.toObject());
     } catch (_) {}
 
     res.status(201).json(doc);
@@ -108,12 +92,10 @@ router.post("/:postId", async (req, res) => {
 // PUT /api/:school/comments/:id
 router.put("/:id", async (req, res) => {
   const { id } = req.params;
+  if (!isValidObjectId(id)) return res.status(400).json({ message: "Invalid comment id" });
+
   let { content } = req.body;
   content = String(content || "").trim();
-
-  if (!isValidObjectId(id)) {
-    return res.status(400).json({ message: "Invalid comment id" });
-  }
   if (!content) return res.status(400).json({ message: "Content required" });
 
   try {
@@ -128,9 +110,7 @@ router.put("/:id", async (req, res) => {
 
     try {
       const io = req.app.get("io");
-      if (io) {
-        io.to(`post:${comment.postId}`).emit("comment:update", comment.toObject());
-      }
+      if (io) io.to(`post:${comment.postId}`).emit("comment:update", comment.toObject());
     } catch (_) {}
 
     res.json(comment);
@@ -143,9 +123,7 @@ router.put("/:id", async (req, res) => {
 // DELETE /api/:school/comments/:id
 router.delete("/:id", async (req, res) => {
   const { id } = req.params;
-  if (!isValidObjectId(id)) {
-    return res.status(400).json({ message: "Invalid comment id" });
-  }
+  if (!isValidObjectId(id)) return res.status(400).json({ message: "Invalid comment id" });
   try {
     const owned = await Comment.findOne({ _id: id, school: req.user.school }).select("email postId");
     if (!owned) return res.status(404).json({ message: "Comment not found." });
@@ -214,4 +192,5 @@ router.post("/:commentId/thumbs", async (req, res) => {
 });
 
 module.exports = router;
+
 

@@ -5,7 +5,7 @@ const mongoose = require("mongoose");
 
 const Comment = require("../models/Comment");
 const Post = require("../models/Post");
-const AcademicPost = require("../models/AcademicPost");
+const AcademicPost = require("../models/AcademicPost"); // ✅ replace CareerPost
 
 const ALLOWED_SCHOOLS = new Set(["nyu", "columbia", "boston"]);
 
@@ -13,7 +13,7 @@ function isValidObjectId(id) {
   return mongoose.Types.ObjectId.isValid(id);
 }
 
-// 대상 글(Post 또는 AcademicPost) 존재 확인
+// Find target post across boards within the same school
 async function findAnyPostById(postId, school) {
   const [free, academic] = await Promise.all([
     Post.findOne({ _id: postId, school }).select("_id").lean(),
@@ -22,7 +22,6 @@ async function findAnyPostById(postId, school) {
   return free || academic;
 }
 
-// ✅ 공개 댓글 목록
 // GET /api/public/:school/comments/:postId
 router.get("/:postId", async (req, res) => {
   try {
@@ -51,3 +50,4 @@ router.get("/:postId", async (req, res) => {
 });
 
 module.exports = router;
+
