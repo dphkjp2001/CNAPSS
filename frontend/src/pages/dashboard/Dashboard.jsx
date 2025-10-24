@@ -1200,8 +1200,9 @@ export default function Dashboard() {
                       <button
                         type="submit"
                         disabled={!canPostAcademic || posting}
-                        className="rounded-xl bg-gradient-to-r from-[#5365fa] via-[#8b5cf6] to-[#ec4899] px-4 py-2 text-sm font-semibold text-white 
-             hover:opacity-90 disabled:opacity-60 transition-all"
+                        className="rounded-xl bg-[#5365fa] px-4 py-2 text-sm font-semibold text-white
+                        hover:bg-[#4754d6] active:scale-[0.98] transition-all
+                        shadow-md hover:shadow-lg disabled:opacity-60"
                       >
                         {posting ? (
                           "Posting…"
@@ -1227,8 +1228,9 @@ export default function Dashboard() {
                         posting ||
                         (active === "general" ? !canPostGeneral : !canPostAcademic)
                       }
-                      className="rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-900 disabled:opacity-60"
-                    >
+                      className="rounded-xl bg-[#5365fa] px-4 py-2 text-sm font-semibold text-white
+                                  hover:bg-[#4754d6] active:scale-[0.98] transition-all
+                                  shadow-md hover:shadow-lg disabled:opacity-60"                    >
                       {posting ? "Posting…" : "Post"}
                     </button>
                   )}
