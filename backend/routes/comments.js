@@ -32,7 +32,7 @@ router.get("/:postId", async (req, res) => {
     if (!target) return res.status(404).json({ message: "Post not found." });
 
     const items = await Comment.find({ postId, school: req.user.school })
-      .sort({ createdAt: 1 })
+      .sort({ createdAt: -1 })
       .lean();
 
     res.json(items);

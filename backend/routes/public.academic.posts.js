@@ -25,7 +25,9 @@ router.get("/", async (req, res) => {
     }
     if (kind) match.kind = kind;
 
-    const sortStage = sortOpt === "old" ? { createdAt: 1, _id: 1 } : { createdAt: -1, _id: -1 };
+    let sortStage = { updatedAt: -1, createdAt: -1, _id: -1 };
+    if (sort === "old") sortStage = { createdAt: 1, _id: 1 };
+    if (sort === "mostliked") sortStage = { likes: -1, updatedAt: -1, createdAt: -1 };
 
     const total = await AcademicPost.countDocuments(match);
     const items = await AcademicPost.aggregate([
