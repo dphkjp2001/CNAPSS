@@ -26,8 +26,8 @@ router.get("/", async (req, res) => {
     if (q) match.title = { $regex: q, $options: "i" };
 
     let sortStage = { updatedAt: -1, createdAt: -1, _id: -1 };
-    if (sort === "old") sortStage = { createdAt: 1, _id: 1 };
-    if (sort === "mostliked") sortStage = { likes: -1, updatedAt: -1, createdAt: -1 };
+    if (sortOpt === "old") sortStage = { createdAt: 1, _id: 1 };
+    if (sortOpt === "mostliked") sortStage = { likes: -1, updatedAt: -1, createdAt: -1 };
     
     const pipeline = [
       { $match: match },
