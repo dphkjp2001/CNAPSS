@@ -59,9 +59,9 @@ router.get("/:school/academic-posts", requireAuth, schoolGuard, async (req, res,
     }
     if (kind) match.kind = kind;
 
-    let sortStage = { createdAt: -1, _id: -1 };
+    let sortStage = { updatedAt: -1, createdAt: -1, _id: -1 };
     if (sortOpt === "old") sortStage = { createdAt: 1, _id: 1 };
-    if (sortOpt === "mostliked") sortStage = { likes: -1, createdAt: -1 };
+    if (sortOpt === "mostliked") sortStage = { likes: -1, updatedAt: -1, createdAt: -1 };
 
     const [items, total] = await Promise.all([
       AcademicPost.find(match).sort(sortStage).skip((page - 1) * limit).limit(limit).lean(),

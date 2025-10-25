@@ -77,6 +77,12 @@ router.post("/:postId", async (req, res) => {
       parentId: parent ? parent._id : null,
     });
 
+    // ✅ Bump post timestamp so it floats to top
+    await Promise.all([
+      Post.updateOne({ _id: postId }, { $set: { updatedAt: new Date() } }),
+      AcademicPost.updateOne({ _id: postId }, { $set: { updatedAt: new Date() } }),
+    ]);
+
     try {
       const io = req.app.get("io");
       if (io) io.to(`post:${postId}`).emit("comment:new", doc.toObject());

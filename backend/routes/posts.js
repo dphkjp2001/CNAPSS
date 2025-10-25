@@ -68,7 +68,7 @@ router.get("/:school/posts", requireAuth, schoolGuard, async (req, res, next) =>
       filter.$or = [{ title: rx }, { content: rx }];
     }
 
-    let sortObj = { createdAt: -1 };
+    let sortObj = { updatedAt: -1 };
     if (sort === "mostLiked") sortObj = { "likes.length": -1, createdAt: -1 };
     if (sort === "score") sortObj = { score: -1, createdAt: -1 }; // when using aggregation
 

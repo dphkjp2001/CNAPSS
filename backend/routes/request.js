@@ -39,7 +39,7 @@ router.post("/", async (req, res) => {
 
     const authorId = post.author?._id;
     const authorEmail = String(post.author?.email || "").toLowerCase();
-    const userId = req.user._id;
+    const userId = req.user._id || req.user.id;
     const userEmail = String(req.user.email || "").toLowerCase();
 
     const postMode = String(post.mode || post.postType || post.type || "").toLowerCase();
