@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useSchool } from "../contexts/SchoolContext";
-import {Link} from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom";
 
 const TOKENS = {
   pageBg: "#F7F8FA",
@@ -21,158 +21,140 @@ const TOKENS = {
 
 const SCHOOLS = [
   { key: "nyu", short: "NYU", name: "New York University", enabled: true, domains: ["nyu.edu"] },
-  { key: "columbia", short: "Columbia", name: "Columbia University", enabled: false, domains: ["columbia.edu"] },
   { key: "boston", short: "Boston", name: "Boston University", enabled: false, domains: ["bu.edu", "boston.edu"] },
+  { key: "columbia", short: "Columbia", name: "Columbia University", enabled: false, domains: ["columbia.edu"] },
 ];
 
-// ✅ Page
 export default function SchoolSelect() {
   const { setSchool } = useSchool();
-  const [selected, setSelected] = useState("nyu");
-  const selectedInfo = useMemo(() => SCHOOLS.find((s) => s.key === selected) || SCHOOLS[0], [selected]);
-  const [email, setEmail] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [msg, setMsg] = useState({ type: "", text: "" });
-  const inputRef = useRef(null);
+  const navigate = useNavigate();
 
-  useEffect(() => { setMsg({ type: "", text: "" }); }, [selected]);
+  // === Header modal state (kept) ===
+  const [showPicker, setShowPicker] = useState(false);
 
-  const emailLooksValidForSchool = (e, school) => {
-    if (!e || !e.includes("@")) return false;
-    const dom = e.split("@").pop().toLowerCase();
-    return (school.domains || []).some((d) => dom === d || dom.endsWith(`.${d}`));
+  // === Bottom Quick Enter state (independent from header) ===
+  const [quickChosen, setQuickChosen] = useState(null);
+  const quickInfo = useMemo(
+    () => (quickChosen ? SCHOOLS.find((s) => s.key === quickChosen) : null),
+    [quickChosen]
+  );
+
+  const openHeaderPicker = () => setShowPicker(true);
+
+  const handlePickFromHeader = (school) => {
+    if (!school.enabled) {
+      setShowPicker(false);
+      return;
+    }
+    setSchool?.(school.key);
+    setShowPicker(false);
+    navigate(`/${school.key}/dashboard`);
   };
 
-  const handleJoin = async (ev) => {
-    ev.preventDefault();
-    setMsg({ type: "", text: "" });
-    if (!email) {
-      setMsg({ type: "error", text: "Please enter your school email." });
-      inputRef.current?.focus();
-      return;
-    }
-    if (!emailLooksValidForSchool(email, selectedInfo)) {
-      setMsg({ type: "error", text: `Use a valid ${selectedInfo.short} school email (e.g., *@${selectedInfo.domains[0]}).` });
-      inputRef.current?.focus();
-      return;
-    }
-    if (!selectedInfo.enabled) {
-      setMsg({ type: "error", text: `${selectedInfo.short} is coming soon.` });
-      return;
-    }
-    setSubmitting(true);
-    try {
-      // TODO: hook up to your backend waitlist endpoint
-      await new Promise((resolve) => setTimeout(resolve, 800));
-      setSchool?.(selectedInfo.key);
-      setMsg({ type: "success", text: `You're on the waitlist for ${selectedInfo.short}. We'll email you soon.` });
-      setEmail("");
-    } catch {
-      setMsg({ type: "error", text: "Something went wrong. Please try again later." });
-    } finally {
-      setSubmitting(false);
-    }
+  const handleQuickEnter = () => {
+    if (!quickInfo || !quickInfo.enabled) return;
+    setSchool?.(quickInfo.key);
+    navigate(`/${quickInfo.key}/dashboard`);
   };
 
   return (
     <div className="min-h-screen" style={{ background: TOKENS.pageBg }}>
-      {/* === TOP NAV (Black Glass Overlay) === */}
-<header className="fixed inset-x-0 top-0 z-30 bg-white border-b border-black/10">
-  <div className="w-full h-16 px-0 flex items-center justify-between">
-    {/* left: CNAPSS + About us + Contacts */}
-    <div className="flex items-center gap-10 md:gap-12 pl-28 md:pl-32 [&>a]:tracking-[.02em]">
-      <Link
-        to="/"
-        className="font-semibold tracking-[.01em] text-2xl md:text-3xl"
-        style={{ color: "#EF4444" }}
+      {/* === TOP NAV (unchanged) === */}
+      <header className="fixed inset-x-0 top-0 z-30 bg-white border-b border-black/10">
+        <div className="w-full h-16 px-0 flex items-center justify-between relative">
+          <div className="flex items-center gap-10 md:gap-12 pl-28 md:pl-32 [&>a]:tracking-[.02em]">
+            <Link
+              to="/"
+              className="font-semibold tracking-[.01em] text-2xl md:text-3xl"
+              style={{ color: "#EF4444" }}
+            >
+              CNAPSS
+            </Link>
+            <Link to="/about" className="text-black hover:opacity-70 text-sm font-semibold">
+              About us
+            </Link>
+            <Link to="/contact" className="text-black hover:opacity-70 text-sm font-semibold">
+              Contacts
+            </Link>
+          </div>
+
+          <div className="pr-10 md:pr-12 relative">
+            <button
+              onClick={openHeaderPicker}
+              className="text-sm font-semibold text-black hover:opacity-70 focus:outline-none"
+            >
+              Click to enter
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* === Centered School Picker Modal (kept) === */}
+      {showPicker && (
+        <EnterModal
+          onClose={() => setShowPicker(false)}
+          onPick={handlePickFromHeader}
+          schools={SCHOOLS}
+        />
+      )}
+
+      {/* === HERO (gap fixed + copy replaced) === */}
+      <section
+        className="relative isolate text-white min-h-screen flex flex-col justify-center overflow-x-hidden"
+        style={{
+          background:
+            "linear-gradient(180deg, #EE5C5C 0%, #F16969 40%, #F78A8A 80%, #F59F9F 100%)",
+        }}
       >
-        CNAPSS
-      </Link>
-      <Link
-        to="/about"
-        className="text-black hover:opacity-70 text-sm font-semibold"
-      >
-        About us
-      </Link>
-      <Link
-        to="/contact"
-        className="text-black hover:opacity-70 text-sm font-semibold"
-      >
-        Contacts
-      </Link>
-    </div>
+        <div className="relative mx-auto max-w-6xl px-4 md:px-6 pt-32 pb-24 text-center">
+          <h1 className="font-black tracking-tight leading-tight text-[40px] sm:text-[56px] md:text-[72px]">
+            AI doesn’t know your campus.<br />
+            Cnapss does.
+          </h1>
 
-    {/* right: Click to enter */}
-    <div className="pr-10 md:pr-12">
-      <Link
-        to="/auth/register"
-        className="text-sm font-semibold text-black hover:opacity-70"
-      >
-        Click to enter
-      </Link>
-    </div>
-  </div>
-</header>
+          <p className="mt-10 text-white/95 text-base sm:text-lg md:text-xl leading-relaxed max-w-4xl mx-auto">
+            <span className="font-semibold">CNAPSS</span> connects verified students —
+            sharing <span className="font-semibold">Real Stories, Opinions, and Experiences.</span>
+          </p>
+        </div>
 
+        {/* scope chips (kept styles, safe for overflow-x-hidden) */}
+        <style>{`
+          .chip {
+            display: inline-block;
+            padding: .1em .5em;
+            border-radius: .7em;
+            line-height: 1;
+            white-space: nowrap;
+          }
+          .chip--ai { background: #fff; color: #E11D48; }
+          .chip--peers {
+            color: #fff; border: 2px solid rgba(255,255,255,.85);
+            border-radius: 1em; padding: .1em .7em;
+          }
+          @keyframes fadeInUp { from { opacity: 0; transform: translateY(8px) scale(.98);} to { opacity: 1; transform: translateY(0) scale(1);} }
+          .animate-fadeInUp { animation: fadeInUp .18s ease-out; }
+          @keyframes fadeBg { from { opacity: 0; } to { opacity: 1; } }
+          .animate-fadeBg { animation: fadeBg .15s ease-out; }
+        `}</style>
+      </section>
 
+      {/* === NEW INTERLUDE SECTION === */}
+      <section className="py-16 sm:py-24 bg-white">
+        <div className="mx-auto max-w-6xl px-4 md:px-6">
+          <h2
+            className="text-center font-black tracking-tight text-[36px] sm:text-[48px] md:text-[60px]"
+            style={{ color: TOKENS.text }}
+          >
+            For students, By students
+          </h2>
+        </div>
+      </section>
 
-
-{/* === HERO (no text shadows, same gradient) === */}
-<section
-  className="relative isolate text-white min-h-screen flex flex-col justify-center"
-  style={{
-    background:
-      "linear-gradient(180deg, #EE5C5C 0%, #F16969 40%, #F78A8A 80%, #F59F9F 100%)",
-  }}
->
-  <div className="relative mx-auto max-w-6xl px-4 md:px-6 pt-32 pb-24 text-center">
-    <h1 className="font-black tracking-tight leading-tight text-[40px] sm:text-[52px] md:text-[68px]">
-      What <span className="chip chip--ai">AI</span> can’t answer,<br />
-      Campus <span className="chip chip--peers">Peers</span> can.
-    </h1>
-
-    <p className="mt-14 text-white/95 text-base sm:text-lg md:text-xl leading-relaxed max-w-4xl mx-auto">
-      <span className="font-semibold">AI</span> knows facts.
-      <span className="px-2 font-extrabold tracking-wide">BUT</span>
-      your <span className="font-semibold">Peers</span> know campus life.
-      <br className="hidden sm:block" />
-      <span className="font-semibold">CNAPSS</span> connects verified students —
-      sharing <span className="font-semibold">Real Stories, Opinions, and Experiences.</span>
-    </p>
-  </div>
-
-  {/* Chips */}
-  <style>{`
-    .chip {
-      display: inline-block;
-      padding: .1em .5em;
-      border-radius: .7em;
-      line-height: 1;
-      white-space: nowrap;
-    }
-    .chip--ai {
-      background: #fff;
-      color: #E11D48; /* rose-600 */
-    }
-    .chip--peers {
-      color: #fff;
-      border: 2px solid rgba(255,255,255,.85);
-      border-radius: 1em;
-      padding: .1em .7em;
-    }
-  `}</style>
-</section>
-
-
-
-
-
-      {/* === ANONYMITY · BUT · VERIFIED (Apple-like full width panel) === */}
+      {/* === ANONYMITY · BUT · VERIFIED (unchanged) === */}
       <section className="relative w-full pt-10 pb-0 md:pt-12 md:pb-2 -mb-10 md:-mb-16">
-        {/* bleed to viewport edges */}
         <div className="-mx-4 md:-mx-6">
           <div className="relative mx-0 rounded-3xl overflow-hidden shadow-[0_24px_80px_rgba(0,0,0,.12)]">
-            {/* background split: left gray ↔ right (current hero) rose, with soft blend in the middle */}
             <div
               className="absolute inset-0"
               style={{
@@ -180,7 +162,6 @@ export default function SchoolSelect() {
                   "linear-gradient(90deg, #E5E9EE 0%, #D8DEE6 46%, #EBDADA 50%, #EE5C5C 54%, #F16969 72%, #F59F9F 100%)",
               }}
             />
-            {/* center glow to smooth the join */}
             <div
               className="absolute inset-0 pointer-events-none"
               style={{
@@ -189,26 +170,19 @@ export default function SchoolSelect() {
               }}
             />
 
-            {/* content */}
             <div className="relative">
-              {/* desktop: 3 columns; mobile: stacked with BUT in middle */}
               <div className="hidden md:grid grid-cols-3 place-items-center h-[320px] lg:h-[360px]">
-                {/* left: Anonymous */}
                 <div className="text-center">
                   <div className="text-[12px] font-extrabold tracking-[.25em] text-slate-600 mb-3">ANONYMITY</div>
                   <div className="text-white drop-shadow-sm">
                     <h3 className="text-[38px] lg:text-[46px] font-black">Anonymous</h3>
                   </div>
                 </div>
-
-                {/* middle: BUT */}
                 <div className="flex items-center justify-center">
                   <span className="rounded-full bg-black/80 text-white px-6 py-2.5 text-[14px] lg:text-[16px] font-black shadow-[0_12px_28px_rgba(0,0,0,.25)]">
                     BUT
                   </span>
                 </div>
-
-                {/* right: Verified */}
                 <div className="text-center">
                   <div className="text-[12px] font-extrabold tracking-[.25em] text-white/80 mb-3">VERIFIED</div>
                   <div className="text-white drop-shadow-sm">
@@ -217,17 +191,14 @@ export default function SchoolSelect() {
                 </div>
               </div>
 
-              {/* mobile layout */}
               <div className="md:hidden flex flex-col items-center text-center py-12 gap-6">
                 <div>
                   <div className="text-[11px] font-extrabold tracking-[.25em] text-slate-700 mb-2">ANONYMITY</div>
                   <h3 className="text-white text-[32px] font-black drop-shadow-sm">Anonymous</h3>
                 </div>
-
                 <span className="rounded-full bg-black/80 text-white px-5 py-2 text-[13px] font-black shadow-md">
                   BUT
                 </span>
-
                 <div>
                   <div className="text-[11px] font-extrabold tracking-[.25em] text-white/85 mb-2">VERIFIED</div>
                   <h3 className="text-white text-[32px] font-black drop-shadow-sm">Verified</h3>
@@ -238,27 +209,24 @@ export default function SchoolSelect() {
         </div>
       </section>
 
-
-
-
-      {/* === FEATURE SHOWCASE === */}
+      {/* === FEATURE SHOWCASE (unchanged) === */}
       <Band bg="white" roomy>
         <div className="mx-auto max-w-6xl px-4 md:px-6">
           <FeatureShowcase />
         </div>
       </Band>
 
-      {/* === JOIN WAITLIST === */}
+      {/* === QUICK ENTER (kept) === */}
       <Band bg="white" roomy>
-        <div className="mx-auto max-w-6xl px-4">
+        <div className="mx-auto max-w-5xl px-4">
           <h2
             className="text-center text-[34px] sm:text-[42px] font-black"
             style={{ color: TOKENS.text }}
           >
-            Join the waitlist
+            Choose your campus to continue
           </h2>
           <p className="mt-4 text-center text-[16px]" style={{ color: TOKENS.sub }}>
-            Choose your school and enter your school email. We'll notify you when it's ready.
+            Pick one here to enter directly. (Top-right button still works as well.)
           </p>
 
           <div
@@ -267,16 +235,14 @@ export default function SchoolSelect() {
           >
             <div className="flex flex-wrap justify-center gap-2">
               {SCHOOLS.map((s) => {
-                const active = selected === s.key;
+                const active = quickChosen === s.key;
                 return (
                   <button
                     key={s.key}
-                    onClick={() => setSelected(s.key)}
-                    className={`rounded-full border px-3 py-1.5 text-sm font-semibold transition ${
-                      active
-                        ? "bg-red-50 border-red-200 text-red-700"
-                        : "bg-white hover:bg-black/5"
-                    } ${!s.enabled ? "opacity-60" : ""}`}
+                    onClick={() => setQuickChosen(s.key)}
+                    className={`rounded-full border px-3.5 py-1.5 text-sm font-semibold transition
+                      ${active ? "bg-red-50 border-red-200 text-red-700" : "bg-white hover:bg-black/5"}
+                      ${!s.enabled ? "opacity-60" : ""}`}
                     style={{ borderColor: TOKENS.border }}
                     title={s.enabled ? s.name : "Coming soon"}
                   >
@@ -286,52 +252,116 @@ export default function SchoolSelect() {
               })}
             </div>
 
-            <form onSubmit={handleJoin} className="mt-6 flex flex-col sm:flex-row gap-4">
-              <div className="relative flex-1">
-                <input
-                  ref={inputRef}
-                  type="email"
-                  inputMode="email"
-                  autoComplete="email"
-                  placeholder={`Enter your ${selectedInfo.short} school email`}
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full rounded-xl border bg-white px-4 py-3.5 text-[15px] outline-none focus:ring-2"
-                  style={{ borderColor: TOKENS.border }}
-                />
-                <span
-                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs"
-                  style={{ color: TOKENS.sub }}
-                >
-                  @{selectedInfo.domains[0]}
-                </span>
+            <div className="mt-6 flex flex-col sm:flex-row gap-4 items-center justify-center">
+              <div className="text-sm">
+                {!quickInfo && (
+                  <span className="text-slate-500">No campus selected.</span>
+                )}
+                {quickInfo && quickInfo.enabled && (
+                  <span className="text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full">
+                    {quickInfo.name} selected
+                  </span>
+                )}
+                {quickInfo && !quickInfo.enabled && (
+                  <span className="text-slate-700 bg-slate-100 px-2.5 py-1 rounded-full">
+                    {quickInfo.name} · Coming soon
+                  </span>
+                )}
               </div>
-              <Primary type="submit" disabled={submitting || !selectedInfo.enabled}>
-                {submitting ? "Joining..." : "Join"}
-              </Primary>
-            </form>
 
-            {msg.text && (
-              <div
-                role="status"
-                aria-live="polite"
-                className={`mt-5 rounded-xl px-3 py-2 text-sm ${
-                  msg.type === "success"
-                    ? "bg-green-50 text-green-700"
-                    : "bg-red-50 text-red-700"
-                }`}
+              <button
+                onClick={handleQuickEnter}
+                disabled={!quickInfo || !quickInfo.enabled}
+                className={`rounded-xl px-6 py-3 text-sm font-semibold transition ring-1
+                  ${!quickInfo || !quickInfo.enabled
+                    ? "bg-white text-slate-400 cursor-not-allowed ring-black/10"
+                    : "bg-black text-white hover:bg-black/90 ring-black/10"}`}
+                title={
+                  !quickInfo
+                    ? "Pick a campus"
+                    : !quickInfo.enabled
+                    ? "Coming soon"
+                    : `Enter ${quickInfo.short} dashboard`
+                }
               >
-                {msg.text}
-              </div>
-            )}
+                Enter
+              </button>
+            </div>
           </div>
+
+          <p className="mt-6 text-center text-[13px] text-slate-500">
+            You can also use the <strong>“Click to enter”</strong> button at the top right.
+          </p>
         </div>
       </Band>
     </div>
   );
 }
 
-/* --- Supporting components (single, non-duplicated) --- */
+/* === Centered Picker Modal (header) === */
+function EnterModal({ onClose, onPick, schools }) {
+  const cardRef = useRef(null);
+
+  const onBackdropClick = (e) => {
+    if (cardRef.current && !cardRef.current.contains(e.target)) onClose();
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center"
+      onMouseDown={onBackdropClick}
+    >
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] animate-fadeBg" />
+      <div
+        ref={cardRef}
+        className="relative w-[min(92vw,28rem)] rounded-2xl bg-white shadow-2xl ring-1 ring-black/10 p-4 sm:p-5 animate-fadeInUp"
+      >
+        <div className="px-1 pb-3">
+          <div className="text-sm font-semibold text-slate-800">Choose your campus</div>
+          <div className="text-xs text-slate-500 mt-1">Pick a school to open its dashboard.</div>
+        </div>
+
+        <div className="mt-1 flex flex-col">
+          {schools.map((s, i) => (
+            <button
+              key={s.key}
+              onClick={() => onPick(s)}
+              disabled={!s.enabled}
+              className={`w-full text-left px-4 py-3 rounded-xl transition
+                ${s.enabled ? "hover:bg-black/5 active:scale-[0.99]" : "opacity-60 cursor-not-allowed bg-slate-50"}
+                ${i !== 0 ? "mt-2" : ""}
+              `}
+            >
+              <div className="flex items-center justify-between">
+                <div className="font-medium text-[15px] text-slate-900">
+                  {s.name}
+                </div>
+                {!s.enabled && (
+                  <span className="text-[11px] font-semibold text-slate-600 bg-slate-100 px-2 py-1 rounded-full">
+                    Coming soon
+                  </span>
+                )}
+              </div>
+              <div className="text-[12px] text-slate-500">{s.short}</div>
+            </button>
+          ))}
+        </div>
+
+        <div className="mt-4 flex justify-end gap-2">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm rounded-lg border bg-white hover:bg-black/5"
+            style={{ borderColor: "rgba(15,23,42,0.16)" }}
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* --- Supporting components (unchanged) --- */
 
 function HeroRed({ children }) {
   return (
@@ -531,19 +561,18 @@ function Panel({ children, visible, delay = 0 }) {
   );
 }
 
-/* ================== Freeboard (distinct) ================== */
+
+
 /* ================== Freeboard (perfectly aligned stack) ================== */
 function FreeboardFloating({ play }) {
-  // 🔧 조절 포인트
-  const CARD_W = 560;        // 카드 폭
-  const CARD_H = 320;        // 카드 높이(모든 카드 동일)
-  const X_STEP = 34;         // 레이어 간 가로 간격
-  const SCALE_1 = 1.00;      // 맨 앞 카드
-  const SCALE_2 = 0.94;      // 둘째 카드
-  const SCALE_3 = 0.88;      // 셋째 카드
+  const CARD_W = 560;
+  const CARD_H = 320;
+  const X_STEP = 34;
+  const SCALE_1 = 1.0;
+  const SCALE_2 = 0.94;
+  const SCALE_3 = 0.88;
   const AUTO_MS = 4200;
 
-  // ✅ 회전 0으로 고정(비스듬함 제거)
   const ROT_ALL = 0;
 
   const posts = React.useMemo(
@@ -580,7 +609,6 @@ function FreeboardFloating({ play }) {
 
   React.useEffect(() => { if (play) start(); return stop; }, [play, start, stop]);
 
-  // 0=앞, 1=둘째, 2=셋째, len-1=막 빠질 카드
   const relPos = (i) => {
     const r = (i - idx) % len;
     return r < 0 ? r + len : r;
@@ -590,7 +618,6 @@ function FreeboardFloating({ play }) {
     <>
       <Keyframes />
       <div className="relative h-full w-full" onMouseEnter={stop} onMouseLeave={start}>
-        {/* subtle light */}
         <div
           className="pointer-events-none absolute inset-0 -z-10"
           style={{
@@ -598,13 +625,11 @@ function FreeboardFloating({ play }) {
               "radial-gradient(900px 360px at 65% 60%, rgba(59,130,246,0.08), rgba(124,58,237,0.05) 40%, transparent 70%)",
           }}
         />
-        {/* ✅ 바닥선 정렬: items-end + transform-origin: bottom center */}
         <div className="absolute inset-0 flex items-end justify-start pl-2 md:pl-6">
           <div className="relative" style={{ width: CARD_W + X_STEP * 2 + 12, height: CARD_H }}>
             {posts.map((p, i) => {
               const r = relPos(i);
 
-              // 기본값(완전 정렬): 회전 0, 바닥선 동일, X만 증가, 스케일만 다르게
               let x = 0, scale = SCALE_1, z = 30, opacity = 1, shadow = "0 28px 56px rgba(15,23,42,0.22)";
 
               if (r === 0) {
@@ -616,7 +641,6 @@ function FreeboardFloating({ play }) {
                 x = X_STEP * 2; scale = SCALE_3; z = 10; opacity = 0.94;
                 shadow = "0 14px 28px rgba(15,23,42,0.12)";
               } else if (r === len - 1) {
-                // 빠지는 카드: 왼쪽으로 슬쩍 빼고 투명도 낮추기
                 x = -110; scale = SCALE_2; z = 5; opacity = 0;
                 shadow = "0 10px 24px rgba(15,23,42,0.10)";
               } else {
@@ -630,8 +654,7 @@ function FreeboardFloating({ play }) {
                   style={{
                     width: CARD_W,
                     height: CARD_H,
-                    transformOrigin: "50% 100%", // bottom center
-                    // ✅ 회전 제거(ROT_ALL=0) + 바닥선 고정
+                    transformOrigin: "50% 100%",
                     transform: `translateX(${x}px) rotate(${ROT_ALL}deg) scale(${scale})`,
                     transition: "transform 640ms cubic-bezier(0.34,1,0.68,1), opacity 420ms ease, box-shadow 420ms ease",
                     opacity,
@@ -639,7 +662,6 @@ function FreeboardFloating({ play }) {
                     boxShadow: shadow,
                   }}
                 >
-                  {/* 높이 고정 버전 사용: 카드가 모두 같은 높이로 보여야 바닥선이 맞음 */}
                   <FBCard width={CARD_W} height={CARD_H} fixedHeight {...p} />
                 </div>
               );
@@ -647,7 +669,6 @@ function FreeboardFloating({ play }) {
           </div>
         </div>
 
-        {/* edge fades */}
         <div className="pointer-events-none absolute inset-y-0 left-0"
              style={{ width: 36, background: "linear-gradient(to right, rgba(255,255,255,1), rgba(255,255,255,0))" }} />
         <div className="pointer-events-none absolute inset-y-0 right-0"
@@ -657,9 +678,6 @@ function FreeboardFloating({ play }) {
   );
 }
 
-
-
-/* FBCard: 높이 고정 옵션 추가 */
 function FBCard({ width, height, fixedHeight = false, tag, color, emoji, title, likes, comments, ago, active, image, imageAlt = "" }) {
   const hasImage = !!image;
   const IMG_H = fixedHeight ? Math.round((height || 320) * 0.48) : undefined;
@@ -675,7 +693,6 @@ function FBCard({ width, height, fixedHeight = false, tag, color, emoji, title, 
         transition: "box-shadow 360ms ease, opacity 360ms ease",
       }}
     >
-      {/* 이미지 영역: 고정 높이 */}
       {hasImage ? (
         <div className="relative" style={{ height: IMG_H }}>
           <img src={image} alt={imageAlt} className="absolute inset-0 h-full w-full object-cover" loading="lazy" />
@@ -688,10 +705,7 @@ function FBCard({ width, height, fixedHeight = false, tag, color, emoji, title, 
           </span>
         </div>
       ) : (
-        fixedHeight && (
-          // 이미지 없는 카드도 동일 높이 맞추기 위한 스페이서
-          <div style={{ height: IMG_H }} />
-        )
+        fixedHeight && <div style={{ height: IMG_H }} />
       )}
 
       <div className={`p-5 md:p-6 ${hasImage ? "pt-4 md:pt-5" : ""}`}>
@@ -721,7 +735,6 @@ function FBCard({ width, height, fixedHeight = false, tag, color, emoji, title, 
   );
 }
 
-
 /* ================== General Q — swipe carousel ================== */
 function GeneralQSwipe({ play }) {
   const CARD_W = 560;
@@ -730,62 +743,42 @@ function GeneralQSwipe({ play }) {
 
   const cards = React.useMemo(
     () => [
-      {
-        tag: "Campus",
-        title: "Where do I book study rooms?",
-        meta: "9 answers · 1h",
-        accent: TOKENS.blue,
+      { tag: "Campus", title: "Where do I book study rooms?", meta: "9 answers · 1h", accent: TOKENS.blue,
         thread: [
           { who: "A", text: "Use the library portal → Bobst → Reserve a Room." },
           { who: "B", text: "Slots open at 7am. Book early for good times." },
           { who: "You", text: "I’ll drop a quick how-to in the comments." },
-        ],
-      },
-      {
-        tag: "Career",
-        title: "Prep for NYC SWE tech screens?",
-        meta: "15 answers · 1d",
-        accent: TOKENS.sky,
+        ]},
+      { tag: "Career", title: "Prep for NYC SWE tech screens?", meta: "15 answers · 1d", accent: TOKENS.sky,
         thread: [
           { who: "A", text: "Arrays/graphs plus systems basics helped a ton." },
           { who: "B", text: "Do timed mock interviews with classmates." },
           { who: "You", text: "I can share my practice set after class." },
-        ],
-      },
-      {
-        tag: "Courses",
-        title: "Is Prof. Lee's midterm curved?",
-        meta: "12 answers · 3h",
-        accent: TOKENS.purple,
+        ]},
+      { tag: "Courses", title: "Is Prof. Lee's midterm curved?", meta: "12 answers · 3h", accent: TOKENS.purple,
         thread: [
           { who: "A", text: "Usually curved ~10% based on past years." },
           { who: "B", text: "Last term’s syllabus allowed one retake." },
           { who: "You", text: "Thanks — I’ll update after the exam." },
-        ],
-      },
-      {
-        tag: "Resources",
-        title: "Bloomberg terminal access?",
-        meta: "6 answers · 2h",
-        accent: TOKENS.amber,
+        ]},
+      { tag: "Resources", title: "Bloomberg terminal access?", meta: "6 answers · 2h", accent: TOKENS.amber,
         thread: [
           { who: "A", text: "Ask at the Tisch library desk for credentials." },
           { who: "B", text: "Complete the short training first." },
           { who: "You", text: "Nice — I’ll book a slot and report back." },
-        ],
-      },
+        ]},
     ],
     []
   );
 
   const list3 = React.useMemo(() => [...cards, ...cards, ...cards], [cards]);
   const BASE = cards.length;
-  const [cur, setCur] = React.useState(0);
+  const [cur, setCur] = useState(0);
   const pos = BASE + cur;
-  const [animate, setAnimate] = React.useState(true);
+  const [animate, setAnimate] = useState(true);
 
-  const [pressing, setPressing] = React.useState(false);
-  const [showAnswers, setShowAnswers] = React.useState(false);
+  const [pressing, setPressing] = useState(false);
+  const [showAnswers, setShowAnswers] = useState(false);
   const playKey = `${cur}-${showAnswers}`;
 
   const timers = React.useRef([]);
@@ -794,7 +787,7 @@ function GeneralQSwipe({ play }) {
     timers.current = [];
   }, []);
 
-  React.useEffect(() => {
+  useEffect(() => {
     clearTimers();
     setPressing(false);
     setShowAnswers(false);
@@ -816,7 +809,7 @@ function GeneralQSwipe({ play }) {
     return clearTimers;
   }, [cur, play, cards, clearTimers]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!play) {
       clearTimers();
       setAnimate(false);
@@ -856,7 +849,6 @@ function GeneralQSwipe({ play }) {
                 />
               ))}
             </div>
-            {/* edge fades */}
             <div
               className="pointer-events-none absolute inset-y-0 left-0"
               style={{
@@ -917,13 +909,13 @@ function QQuestionCard({ width, tag, title, meta, accent, dim, active, pressing 
 }
 
 function QComments({ show, thread, playKey }) {
-  const [shown, setShown] = React.useState([]);
-  const [composerText, setComposerText] = React.useState("");
-  const [blink, setBlink] = React.useState(true);
-  const [pressingPost, setPressingPost] = React.useState(false);
-  const timers = React.useRef([]);
+  const [shown, setShown] = useState([]);
+  const [composerText, setComposerText] = useState("");
+  const [blink, setBlink] = useState(true);
+  const [pressingPost, setPressingPost] = useState(false);
+  const timers = useRef([]);
 
-  const clearTimers = React.useCallback(() => {
+  const clearTimers = useCallback(() => {
     timers.current.forEach((t) => (t.kind === "i" ? clearInterval(t.id) : clearTimeout(t.id)));
     timers.current = [];
   }, []);
@@ -937,12 +929,12 @@ function QComments({ show, thread, playKey }) {
     return { id, color };
   };
 
-  React.useEffect(() => {
+  useEffect(() => {
     const id = setInterval(() => setBlink((b) => !b), 500);
     return () => clearInterval(id);
   }, []);
 
-  React.useEffect(() => {
+  useEffect(() => {
     clearTimers();
     setShown([]);
     setComposerText("");
@@ -976,7 +968,7 @@ function QComments({ show, thread, playKey }) {
       }, 2000),
     });
 
-    return clearTimers;
+  return () => clearTimers();
   }, [show, playKey, thread, clearTimers]);
 
   return (
@@ -1055,17 +1047,11 @@ function QComments({ show, thread, playKey }) {
 
 /* ================== Academic Board — Seeking (full, drop-in) ================== */
 /** 
- * Usage (in SchoolSelect.jsx):
- *   <section className="...">
- *     ...
- *     <div className="h-[560px]">
- *       <SeekingDesktop play />
- *     </div>
- *   </section>
+ * Usage:
+ *   <div className="h-[560px]"><SeekingDesktop play /></div>
  */
-
 function SeekingDesktop({ play }) {
-  const [step, setStep] = useState(0); // 0: feed scroll, 2: detail, 3: DM
+  const [step, setStep] = useState(0);
   const [activePost, setActivePost] = useState(null);
   const [composerText, setComposerText] = useState("");
   const [messages, setMessages] = useState([]);
@@ -1077,7 +1063,6 @@ function SeekingDesktop({ play }) {
   const chatRef = useRef(null);
   const hasRunRef = useRef(false);
 
-  // Seed posts
   const SEED = useMemo(
     () => [
       { id: "p1", icon: "📝", title: "Principles of Microeconomics", meta: "", badges: ["Lecture Notes", "Syllabus", "Quiz Prep"], author: "Mina", kind: "Course Materials", time: "" },
@@ -1090,7 +1075,6 @@ function SeekingDesktop({ play }) {
     []
   );
 
-  // FEED: build → de-dup by title (keep first occurrence) → trim length
   const FEED = useMemo(() => {
     const arr = [];
     const copies = 3;
@@ -1108,7 +1092,6 @@ function SeekingDesktop({ play }) {
     return uniq.slice(0, 9);
   }, [SEED]);
 
-  // auto scroll chat
   useEffect(() => {
     if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
   }, [messages]);
@@ -1145,7 +1128,6 @@ function SeekingDesktop({ play }) {
         SEED.find((p) => p.kind === "Course Materials") ||
         SEED[0];
 
-      // fast scroll
       const SCROLL_PX_PER_TICK = 16;
       timers.push(
         setTimeout(() => {
@@ -1158,7 +1140,6 @@ function SeekingDesktop({ play }) {
         }, 350)
       );
 
-      // select only the first visible target card (no duplicates now)
       timers.push(
         setTimeout(() => {
           stopScroll();
@@ -1167,7 +1148,6 @@ function SeekingDesktop({ play }) {
         }, 2000)
       );
 
-      // go detail
       timers.push(
         setTimeout(() => {
           setActivePost(TARGET_SEED);
@@ -1175,7 +1155,6 @@ function SeekingDesktop({ play }) {
         }, 2500)
       );
 
-      // request text (you as seller)
       const YOU_OPENING =
         "Hey! I saw your post looking for microeconomics notes. I have a clean set from this semester — thinking around $10. What price did you have in mind?";
       timers.push(
@@ -1186,29 +1165,13 @@ function SeekingDesktop({ play }) {
         }, 3300)
       );
 
-      // DM — first msg is yours (black/right)
       timers.push(
         setTimeout(() => {
           setStep(3);
           setMessages([{ who: "You", text: YOU_OPENING }]);
-          timers.push(
-            setTimeout(
-              () => setMessages((m) => [...m, { who: "Sam", text: "That sounds good to me. $10 works!" }]),
-              900
-            )
-          );
-          timers.push(
-            setTimeout(
-              () => setMessages((m) => [...m, { who: "You", text: "Awesome — want to meet at Bobst Library today around 7:00 PM?" }]),
-              1700
-            )
-          );
-          timers.push(
-            setTimeout(
-              () => setMessages((m) => [...m, { who: "Sam", text: "Perfect. Cash or Venmo—either is fine. See you at the main entrance!" }]),
-              2500
-            )
-          );
+          timers.push(setTimeout(() => setMessages((m) => [...m, { who: "Sam", text: "That sounds good to me. $10 works!" }]), 900));
+          timers.push(setTimeout(() => setMessages((m) => [...m, { who: "You", text: "Awesome — want to meet at Bobst Library today around 7:00 PM?" }]), 1700));
+          timers.push(setTimeout(() => setMessages((m) => [...m, { who: "Sam", text: "Perfect. Cash or Venmo—either is fine. See you at the main entrance!" }]), 2500));
         }, 4100)
       );
     };
@@ -1283,7 +1246,7 @@ function SeekingDesktop({ play }) {
             </div>
           </div>
 
-          {/* ===== Step 2: Detail (request only) ===== */}
+          {/* ===== Step 2: Detail ===== */}
           <div
             className="absolute inset-0 min-h-0"
             style={{ opacity: step === 2 ? 1 : 0, transform: step === 2 ? "translateX(0)" : "translateX(24px)", transition: "all 700ms cubic-bezier(0.34,1.56,0.64,1)", pointerEvents: step === 2 ? "auto" : "none" }}
@@ -1456,3 +1419,11 @@ function SideChatItem({ icon, title, active = false }) {
     </div>
   );
 }
+
+
+
+
+
+
+
+
