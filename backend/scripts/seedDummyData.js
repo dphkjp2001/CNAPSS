@@ -200,9 +200,9 @@ async function clearExistingPostsAndComments() {
 }
 
 /* ========================== USERS =========================== */
-async function seedUsers() {
+async function seedDummyUsers() {
   const baseNames = [
-    "Alice", "Brian", "Cindy", "David", "Ella",
+    "Ashley", "Brad", "Carson", "David", "Ella",
     "Frank", "Grace", "Hannah", "Ian", "Jade",
     "Kyle", "Lily", "Mason", "Nora", "Oscar",
     "Penny", "Quinn", "Ryan", "Sophie", "Tyler"
