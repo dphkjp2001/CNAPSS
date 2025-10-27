@@ -1,4 +1,4 @@
-//frontend/src/components/Layout.jsx
+// frontend/src/components/Layout.jsx
 import React, { useEffect, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
@@ -187,12 +187,10 @@ function AcademicSearchBar({ value, onSubmit, onReset, compact }) {
   }, [open]);
 
   const set = (patch) => setLocal((v) => ({ ...v, ...patch }));
-
   const TYPE_ROWS = [
     { key: "question", title: "General question", desc: "Ask about courses, careers, visa, housing…", icon: "❓" },
     { key: "seeking",  title: "Seeking",            desc: "Find materials, study mates, or coffee chats", icon: "📄" },
   ];
-
   const KIND_ROWS = [
     { key: "course_materials", title: "Course Materials", desc: "Syllabus, notes, exams…", emoji: "📝" },
     { key: "study_mate",       title: "Study Mate",       desc: "Find peers to study together", emoji: "👥" },
@@ -204,7 +202,6 @@ function AcademicSearchBar({ value, onSubmit, onReset, compact }) {
     const width = Math.min(maxW, Math.max(minW, rect.width - pad * 2, 0), window.innerWidth - 32);
     const left = Math.round(rect.left + (rect.width - width) / 2);
     const top  = Math.round(rect.bottom + 8);
-
     return (
       <div data-acad-popover className="z-50 fixed" style={{ left, top, width }}>
         <div className="rounded-[24px] bg-white shadow-2xl border border-slate-200 overflow-hidden">
@@ -325,26 +322,19 @@ function AcademicSearchBar({ value, onSubmit, onReset, compact }) {
 }
 
 /* --------- General: 컴팩트 pill --------- */
-// --- replace CollapsedGeneral in Layout.jsx ---
-
 function CollapsedGeneral({ value, onSubmit, onReset, onOpenExpanded, right }) {
   const [local, setLocal] = useState(value);
   useEffect(() => setLocal(value), [value]);
 
-  const submit = (e) => {
-    e.preventDefault();
-    onSubmit(local);
-  };
+  const submit = (e) => { e.preventDefault(); onSubmit(local); };
 
   return (
     <div className="mx-auto max-w-6xl px-4 flex items-center justify-between gap-3">
-      {/* 컴팩트 General 폼: 입력 + Reset/Search (Academic-compact와 동일 사이즈) */}
       <form
         onSubmit={submit}
         className="flex-1 max-w-[720px] rounded-full border border-slate-300 bg-white/95 shadow-[0_4px_16px_rgba(0,0,0,0.06)] overflow-hidden"
       >
         <div className="flex items-center">
-          {/* 왼쪽: 이모지 + 입력 (클릭 시 Expanded 열기) */}
           <div
             className="flex items-center gap-2 pl-4 pr-3 py-2.5 flex-1"
             onClick={onOpenExpanded}
@@ -358,11 +348,7 @@ function CollapsedGeneral({ value, onSubmit, onReset, onOpenExpanded, right }) {
               className="w-full bg-transparent text-[14px] focus:outline-none placeholder:text-slate-400/80"
             />
           </div>
-
-          {/* 구분선 */}
           <div className="h-8 w-px bg-slate-200" />
-
-          {/* 오른쪽: Reset + Search */}
           <div className="flex items-center gap-2 pl-3 pr-3">
             <button
               type="button"
@@ -382,19 +368,15 @@ function CollapsedGeneral({ value, onSubmit, onReset, onOpenExpanded, right }) {
           </div>
         </div>
       </form>
-
-      {/* 우측 🔔 + 프로필 */}
       <div className="shrink-0 flex items-center gap-2">{right}</div>
     </div>
   );
 }
 
-
 function CompactAcademicBar({ value, onSubmit, onReset, onOpenExpanded, right }) {
   const [local, setLocal] = useState(value);
   useEffect(() => setLocal(value), [value]);
 
-  // popover 상태
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState("type");
   const anchorRef = useRef(null);
@@ -435,7 +417,6 @@ function CompactAcademicBar({ value, onSubmit, onReset, onOpenExpanded, right })
 
   const submit = (e) => { e.preventDefault(); onSubmit(local); };
 
-  // 타입/종류 팝오버(간단)
   const Panel = () => {
     const maxW = 420, minW = 280, pad = 16;
     const width = Math.min(maxW, Math.max(minW, rect.width - pad * 2, 0), window.innerWidth - 32);
@@ -506,14 +487,12 @@ function CompactAcademicBar({ value, onSubmit, onReset, onOpenExpanded, right })
 
   return (
     <div className="mx-auto max-w-6xl px-4 flex items-center justify-between gap-3">
-      {/* 컴팩트 3칸: flex + 고정 구분선 */}
       <form
         ref={anchorRef}
         onSubmit={submit}
         className="flex-1 max-w-[720px] rounded-full border border-slate-300 bg-white/95 shadow-[0_4px_16px_rgba(0,0,0,0.06)] overflow-hidden"
       >
         <div className="flex items-center">
-          {/* 왼쪽: 아이콘 + 입력 */}
           <div
             className="flex items-center gap-2 pl-4 pr-3 py-2.5 flex-1"
             onClick={onOpenExpanded}
@@ -527,11 +506,7 @@ function CompactAcademicBar({ value, onSubmit, onReset, onOpenExpanded, right })
               className="w-full bg-transparent text-[14px] focus:outline-none placeholder:text-slate-400/80"
             />
           </div>
-
-          {/* 구분선 */}
           <div className="h-8 w-px bg-slate-200" />
-
-          {/* 중간: 타입 */}
           <button
             type="button"
             onClick={() => { measure(); setOpen(true); setStep("type"); }}
@@ -540,11 +515,7 @@ function CompactAcademicBar({ value, onSubmit, onReset, onOpenExpanded, right })
           >
             {local.type === "seeking" ? "Seeking" : "General Question"}
           </button>
-
-          {/* 구분선 */}
           <div className="h-8 w-px bg-slate-200" />
-
-          {/* 오른쪽: Reset + Search */}
           <div className="flex items-center gap-2 pl-3 pr-3">
             <button
               type="button"
@@ -564,10 +535,8 @@ function CompactAcademicBar({ value, onSubmit, onReset, onOpenExpanded, right })
           </div>
         </div>
       </form>
-
-      {/* 우측 🔔 + 프로필 */}
       <div className="shrink-0 flex items-center gap-2">{right}</div>
-
+      {/* 간단 팝오버 */}
       {open && <Panel />}
     </div>
   );
@@ -599,13 +568,17 @@ export default function Layout() {
     kind: params.get("kind") || "",
   });
 
-  const syncUrl = (next = {}) => {
+  // ✅ 현재 경로가 dashboard인지 판별
+  const isDashboard = /\/dashboard(?:\/)?$/.test(location.pathname);
+
+  // 쿼리스트링 생성 공통 함수
+  const buildSearchParams = (next = {}) => {
     const p = new URLSearchParams(location.search);
     const tab = next.active ?? active;
     p.set("tab", tab === "general" ? "free" : "academic");
     if (tab === "general") {
-      if (next.freeQuery?.q !== undefined) p.set("q", next.freeQuery.q || "");
-      else p.set("q", freeQuery.q || "");
+      const q = next.freeQuery?.q ?? freeQuery.q;
+      if (q) p.set("q", q); else p.delete("q");
       p.delete("type"); p.delete("kind");
     } else {
       const q  = next.acadQuery?.q   ?? acadQuery.q;
@@ -615,12 +588,19 @@ export default function Layout() {
       if (tp) p.set("type", tp); else p.delete("type");
       if (tp === "seeking" && kd) p.set("kind", kd); else p.delete("kind");
     }
-    navigate(`${location.pathname}?${p.toString()}`, { replace: true });
+    return p;
+  };
+
+  // 기존 syncUrl 유지 + 필요시 대시보드로 라우팅
+  const syncUrl = (next = {}, { forceToDashboard = false } = {}) => {
+    const p = buildSearchParams(next);
+    const targetPath = forceToDashboard || !isDashboard ? schoolPath("/dashboard") : location.pathname;
+    navigate(`${targetPath}?${p.toString()}`, { replace: true });
   };
 
   const onTabChange = (v) => { setActive(v); syncUrl({ active: v }); };
 
-  /* ----- 스크롤 시 컴팩트 전환 (두 탭 모두 적용) ----- */
+  /* ----- 스크롤 시 컴팩트 전환 ----- */
   const [scrolled, setScrolled] = useState(false);
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 60);
@@ -628,9 +608,11 @@ export default function Layout() {
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
-  const isCompact = scrolled;
 
-  /* ----- 확장 모달(Compact 상태에서 클릭 시) ----- */
+  // ✅ 대시보드가 아니면 항상 컴팩트 모드 강제
+  const isCompact = !isDashboard || scrolled;
+
+  /* ----- 확장 모달 (컴팩트에서만) ----- */
   const [openSearch, setOpenSearch] = useState(false);
 
   /* ----- 🔔 + 프로필 공통 뷰 ----- */
@@ -712,24 +694,42 @@ export default function Layout() {
         <div className="sticky top-0 z-30 border-b border-slate-200/70 bg-white/85 backdrop-blur transition-all">
           <div className={`${isCompact ? "py-1.5" : "py-3"} transition-all`}>
             {isCompact ? (
+              // ✅ 컴팩트 모드: 대시보드 외 페이지에서도 항상 표시
               active === "general" ? (
                 <CollapsedGeneral
                   value={freeQuery}
-                  onSubmit={(v) => { setFreeQuery(v); syncUrl({ active, freeQuery: v }); }}
-                  onReset={() => { const v = { q: "" }; setFreeQuery(v); syncUrl({ active, freeQuery: v }); }}
-                  onOpenExpanded={() => setOpenSearch(true)}
+                  onSubmit={(v) => {
+                    setFreeQuery(v);
+                    // ✅ 대시보드가 아니면 대시보드로 이동 + 쿼리반영
+                    syncUrl({ active, freeQuery: v }, { forceToDashboard: !isDashboard });
+                  }}
+                  onReset={() => {
+                    const v = { q: "" };
+                    setFreeQuery(v);
+                    syncUrl({ active, freeQuery: v }, { forceToDashboard: !isDashboard });
+                  }}
+                  // ✅ 대시보드 아닐 땐 확장 모달 열지 않음(compact only 정책)
+                  onOpenExpanded={() => { if (isDashboard) setOpenSearch(true); }}
                   right={RightUserArea}
                 />
               ) : (
                 <CompactAcademicBar
                   value={acadQuery}
-                  onSubmit={(v) => { setAcadQuery(v); syncUrl({ active, acadQuery: v }); }}
-                  onReset={() => { const v = { q: "", type: "all", kind: "" }; setAcadQuery(v); syncUrl({ active, acadQuery: v }); }}
-                  onOpenExpanded={() => setOpenSearch(true)}
+                  onSubmit={(v) => {
+                    setAcadQuery(v);
+                    syncUrl({ active, acadQuery: v }, { forceToDashboard: !isDashboard });
+                  }}
+                  onReset={() => {
+                    const v = { q: "", type: "all", kind: "" };
+                    setAcadQuery(v);
+                    syncUrl({ active, acadQuery: v }, { forceToDashboard: !isDashboard });
+                  }}
+                  onOpenExpanded={() => { if (isDashboard) setOpenSearch(true); }}
                   right={RightUserArea}
                 />
               )
             ) : (
+              // (확장형은 오직 Dashboard에서만 보임)
               <div className="mx-auto max-w-6xl px-4 flex flex-col gap-2">
                 <Segmented value={active} onChange={onTabChange} />
                 {active === "general" ? (
@@ -758,8 +758,8 @@ export default function Layout() {
           </div>
         </div>
 
-        {/* 확장 모달 */}
-        {openSearch && (
+        {/* 확장 모달 (Dashboard에서만 사용) */}
+        {openSearch && isDashboard && (
           <div
             className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[1px] flex items-start justify-center pt-10 md:pt-14"
             onClick={() => setOpenSearch(false)}
@@ -855,3 +855,4 @@ function MenuItem({ to, children, onClick }) {
     </Link>
   );
 }
+

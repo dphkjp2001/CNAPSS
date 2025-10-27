@@ -52,6 +52,7 @@ router.get("/", async (req, res) => {
           title: 1,
           content: 1,
           images: 1,
+          commentCount: 1,
           createdAt: 1,
           upCount: 1,
           downCount: 1,
