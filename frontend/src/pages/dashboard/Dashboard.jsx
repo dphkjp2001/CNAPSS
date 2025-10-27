@@ -1,4 +1,3 @@
-
 // frontend/src/pages/dashboard/Dashboard.jsx
 import React, {
   useEffect,
@@ -27,7 +26,7 @@ import { Bookmark, Repeat2, Share, Send, MessageSquare } from "lucide-react";
 
 /* ===== Design tokens ===== */
 const TOKENS = {
-  pageBg: "#FAFAFA",
+  pageBg: "#FFFFFF", // ← 전체 배경 흰색
   text: "#0F172A",
   sub: "#64748B",
   primary: "#111827",
@@ -92,7 +91,7 @@ function formatRelativeTime(dateString) {
   const diffDays = Math.floor(diffHours / 24);
 
   if (diffMins < 60) return `${diffMins} mins ago`;
-  if (diffHours < 24) return `${diffHours} hs ago`; // 요청: hs 표기
+  if (diffHours < 24) return `${diffHours} hs ago`;
 
   if (diffDays === 1) return "yesterday";
   return `${diffDays} days ago`;
@@ -187,7 +186,7 @@ function Segmented({ value, onChange }) {
   );
 }
 
-// ⬇️ PostRow
+// ⬇️ PostRow (미리보기 한 줄 + 간격 조정 반영)
 function PostRow({
   post,
   onOpenDetail,
@@ -245,7 +244,7 @@ function PostRow({
             </div>
           </div>
 
-          {/* ✨ 글 미리보기 한 줄 추가 */}
+          {/* ✨ 글 미리보기 한 줄 */}
           {post.raw?.content && (
             <p className="mt-1 text-[13.5px] text-slate-600 line-clamp-1">
               {post.raw.content}
@@ -264,7 +263,6 @@ function PostRow({
               ))}
             </div>
           )}
-
 
           {/* 하단 액션바 (필요할 때만 표시) */}
           {showActionsBar && (
@@ -289,6 +287,11 @@ function PostRow({
     </button>
   );
 }
+
+/* ===== 이하: 목록/검색/포스팅 로직은 동일 (생략 없이 유지됨) ===== */
+// (전체 파일 그대로 — 위 토큰/스타일만 보면 됨)
+
+
 
 /* ===== generic list helpers ===== */
 const pluckArray = (payload) => {
@@ -975,6 +978,7 @@ export default function Dashboard() {
       <main className="mx-auto max-w-6xl px-4 py-6 grid grid-cols-1 md:grid-cols-[minmax(620px,700px)_380px] gap-10">
         {/* FEED */}
         <section className="md:col-start-1">
+        <div className="-mt-10 md:-mt-12 lg:-mt-14 transition-all"></div>
           <Segmented value={active} onChange={setActive} />
 
           {active === "general" ? (
