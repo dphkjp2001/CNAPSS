@@ -1,154 +1,111 @@
 // backend/scripts/recountComments.js
 /**
  * Recount commentCount for Post & AcademicPost from Comment collection.
- * - Default: process all schools
- * - Options:
+ * Safe: only counts comments whose `school` matches the post's `school`.
+ * Options:
  *   --school=<key>   (e.g., --school=nyu)
- *   --dry-run        (do not write; just log)
- *
- * Usage:
- *   node scripts/recountComments.js
- *   node scripts/recountComments.js --school=nyu
- *   node scripts/recountComments.js --school=nyu --dry-run
+ *   --dry-run        (log only)
  */
 
 const path = require("path");
 const mongoose = require("mongoose");
-
-// Try to load local .env when running outside Render
-try {
-  require("dotenv").config({ path: path.resolve(__dirname, "..", ".env") });
-} catch (_) {}
+try { require("dotenv").config({ path: path.resolve(__dirname, "..", ".env") }); } catch (_) {}
 
 const Comment = require("../models/Comment");
 const Post = require("../models/Post");
 const AcademicPost = require("../models/AcademicPost");
 
-function parseArgs() {
-  const args = process.argv.slice(2);
-  const out = { school: null, dryRun: false };
-  for (const a of args) {
-    if (a.startsWith("--school=")) out.school = String(a.split("=")[1]).toLowerCase();
-    if (a === "--dry-run") out.dryRun = true;
+function args() {
+  const o = { school: null, dryRun: false };
+  for (const a of process.argv.slice(2)) {
+    if (a.startsWith("--school=")) o.school = String(a.split("=")[1]).toLowerCase();
+    if (a === "--dry-run") o.dryRun = true;
   }
-  return out;
+  return o;
 }
 
-async function chunkedBulkWrite(Model, ops, size = 1000) {
-  let applied = 0;
+async function bulk(Model, ops, size = 1000) {
+  let n = 0;
   for (let i = 0; i < ops.length; i += size) {
     const slice = ops.slice(i, i + size);
     if (slice.length) {
       await Model.bulkWrite(slice, { ordered: false });
-      applied += slice.length;
+      n += slice.length;
     }
   }
-  return applied;
+  return n;
 }
 
 async function main() {
-  const { school, dryRun } = parseArgs();
-
+  const { school, dryRun } = args();
   if (!process.env.MONGODB_URI) {
-    console.error("❌ Missing MONGODB_URI env.");
+    console.error("❌ Missing MONGODB_URI");
     process.exit(1);
   }
-
   await mongoose.connect(process.env.MONGODB_URI);
-  console.log("✅ Connected to MongoDB");
+  console.log("✅ Mongo connected");
 
-  const schoolFilter = school ? { school } : {};
-  console.log(
-    `➡️  Recounting commentCount ${school ? `for school="${school}"` : "(all schools)"}${dryRun ? " [DRY-RUN]" : ""}`
-  );
+  const postFilter = school ? { school } : {};
+  const acadFilter = school ? { school } : {};
 
-  // 0) Load id->school maps so we know which collection a comment's postId lives in
-  console.log("🔎 Loading post id maps...");
-  const [freeMapArr, acadMapArr] = await Promise.all([
-    Post.find(schoolFilter, { _id: 1, school: 1 }).lean(),
-    AcademicPost.find(schoolFilter, { _id: 1, school: 1 }).lean(),
+  // id -> school 맵을 만들어서 comment와 school이 일치하는 것만 집계
+  const [posts, acads] = await Promise.all([
+    Post.find(postFilter, { _id: 1, school: 1 }).lean(),
+    AcademicPost.find(acadFilter, { _id: 1, school: 1 }).lean(),
   ]);
-  const freeSet = new Set(freeMapArr.map((d) => String(d._id)));
-  const acadSet = new Set(acadMapArr.map((d) => String(d._id)));
-  console.log(
-    `   ↳ posts: ${freeSet.size.toLocaleString()}, academicPosts: ${acadSet.size.toLocaleString()}`
-  );
+  const postSchool = new Map(posts.map((p) => [String(p._id), p.school]));
+  const acadSchool = new Map(acads.map((p) => [String(p._id), p.school]));
 
-  // 1) Aggregate real counts from comments (group by postId, school)
-  console.log("🧮 Aggregating counts from comments...");
+  // 댓글을 postId+school로 그룹핑
   const commentMatch = school ? { school } : {};
   const grouped = await Comment.aggregate([
     { $match: commentMatch },
-    {
-      $group: {
-        _id: { postId: "$postId", school: "$school" },
-        n: { $sum: 1 },
-      },
-    },
+    { $group: { _id: { postId: "$postId", school: "$school" }, n: { $sum: 1 } } },
   ]);
 
-  // 2) Prepare operations
-  //    We will reset all commentCount to 0 for the chosen scope, then put actual numbers.
-  console.log("🧹 Preparing reset to 0 (so stale counts disappear)...");
-  const resetFreeFilter = school ? { school } : {};
-  const resetAcadFilter = school ? { school } : {};
+  // reset 계획
+  if (!dryRun) {
+    console.log("✳️ Reset commentCount to 0 …");
+    await Promise.all([
+      Post.updateMany(postFilter, { $set: { commentCount: 0 } }),
+      AcademicPost.updateMany(acadFilter, { $set: { commentCount: 0 } }),
+    ]);
+  }
 
-  // 3) Build $set ops using aggregation result
-  const freeOps = [];
+  // 실제 업데이트 목록 구성 (school 일치 검증)
+  const postOps = [];
   const acadOps = [];
   for (const g of grouped) {
-    const postId = String(g._id.postId);
-    const n = g.n;
-    if (freeSet.has(postId)) {
-      freeOps.push({
-        updateOne: {
-          filter: { _id: g._id.postId },
-          update: { $set: { commentCount: n } },
-        },
-      });
-    } else if (acadSet.has(postId)) {
-      acadOps.push({
-        updateOne: {
-          filter: { _id: g._id.postId },
-          update: { $set: { commentCount: n } },
-        },
-      });
+    const id = String(g._id.postId);
+    const sch = String(g._id.school || "");
+    if (postSchool.get(id) === sch) {
+      postOps.push({ updateOne: { filter: { _id: g._id.postId }, update: { $set: { commentCount: g.n } } } });
+    } else if (acadSchool.get(id) === sch) {
+      acadOps.push({ updateOne: { filter: { _id: g._id.postId }, update: { $set: { commentCount: g.n } } } });
     }
   }
 
-  // 4) Apply
   if (dryRun) {
-    console.log("🧪 DRY-RUN MODE — No writes will be made.");
-    console.log(`   Will reset Post & AcademicPost commentCount to 0 in scope: ${school || "ALL"}`);
-    console.log(`   Will apply ${freeOps.length} Post updates and ${acadOps.length} AcademicPost updates.`);
+    console.log("🧪 DRY-RUN — no writes");
+    console.log(`Would apply Post=${postOps.length}, AcademicPost=${acadOps.length}`);
   } else {
-    console.log("✳️ Resetting commentCount to 0...");
-    await Promise.all([
-      Post.updateMany(resetFreeFilter, { $set: { commentCount: 0 } }),
-      AcademicPost.updateMany(resetAcadFilter, { $set: { commentCount: 0 } }),
-    ]);
-
-    console.log("✳️ Writing recalculated counts (bulk)...");
-    const appliedFree = await chunkedBulkWrite(Post, freeOps);
-    const appliedAcad = await chunkedBulkWrite(AcademicPost, acadOps);
-
-    console.log(`✅ Done. Applied updates — Post: ${appliedFree}, AcademicPost: ${appliedAcad}`);
+    console.log("✳️ Writing recalculated counts …");
+    const a = await bulk(Post, postOps);
+    const b = await bulk(AcademicPost, acadOps);
+    console.log(`✅ Applied — Post: ${a}, AcademicPost: ${b}`);
   }
 
-  // 5) Summary preview
-  const previewLimit = 5;
-  const [sampleFree, sampleAcad] = await Promise.all([
-    Post.find(schoolFilter, { title: 1, commentCount: 1 }).sort({ updatedAt: -1 }).limit(previewLimit).lean(),
-    AcademicPost.find(schoolFilter, { title: 1, commentCount: 1 }).sort({ updatedAt: -1 }).limit(previewLimit).lean(),
+  // 샘플 프린트
+  const [sampleP, sampleA] = await Promise.all([
+    Post.find(postFilter, { title: 1, school: 1, commentCount: 1 }).sort({ updatedAt: -1 }).limit(5).lean(),
+    AcademicPost.find(acadFilter, { title: 1, school: 1, commentCount: 1 }).sort({ updatedAt: -1 }).limit(5).lean(),
   ]);
-  console.log("🔎 Sample (Post):", sampleFree);
-  console.log("🔎 Sample (AcademicPost):", sampleAcad);
+  console.log("🔎 Sample Post:", sampleP);
+  console.log("🔎 Sample AcademicPost:", sampleA);
 
   await mongoose.disconnect();
   process.exit(0);
 }
 
-main().catch((e) => {
-  console.error("❌ Recount failed:", e);
-  process.exit(1);
-});
+main().catch((e) => { console.error(e); process.exit(1); });
+
