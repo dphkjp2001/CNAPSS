@@ -318,7 +318,7 @@ router.post("/:school/posts/:id/vote", requireAuth, schoolGuard, async (req, res
   try {
     const { school, id } = req.params;
     const { dir } = req.body || {};
-    const userId = String(req.user._id);
+    const userId = req.user._id;
 
     if (!["up", "down"].includes(dir)) {
       return res.status(400).json({ message: "Invalid vote direction" });
@@ -326,43 +326,49 @@ router.post("/:school/posts/:id/vote", requireAuth, schoolGuard, async (req, res
 
     const post = await Post.findOne({ _id: id, school });
     if (!post) return res.status(404).json({ message: "Post not found" });
+
+    // 자유게시판만 허용(프로젝트 기존 정책 유지)
     if (post.board !== "free") {
       return res.status(400).json({ message: "Voting is allowed on Freeboard only." });
     }
 
-    // ⛔️ 작성자 금지
-    if (String(post.author) === userId) {
+    // 작성자 투표 금지
+    if (String(post.author) === String(userId)) {
       return res.status(403).json({ message: "Authors cannot vote on their own posts." });
     }
 
-    const hasUp = Array.isArray(post.upvoters) && post.upvoters.some((u) => String(u) === userId);
-    const hasDown = Array.isArray(post.downvoters) && post.downvoters.some((u) => String(u) === userId);
+    // 현재 내 상태 파악
+    const hasUp = Array.isArray(post.upvoters) && post.upvoters.some(u => String(u) === String(userId));
+    const hasDown = Array.isArray(post.downvoters) && post.downvoters.some(u => String(u) === String(userId));
 
-    if (dir === "up") {
-      if (hasUp) {
-        post.upvoters = post.upvoters.filter((u) => String(u) !== userId);
-      } else {
-        post.upvoters = [...(post.upvoters || []), req.user._id];
-        if (hasDown) post.downvoters = post.downvoters.filter((u) => String(u) !== userId);
-      }
+    // dir 기준으로 현재 방향/반대 방향 키 계산
+    const curKey = dir === "up" ? "upvoters" : "downvoters";
+    const oppKey = dir === "up" ? "downvoters" : "upvoters";
+
+    // 원자적 갱신
+    // - 같은 방향을 다시 누르면 '취소' → 해당 배열에서만 pull
+    // - 반대 방향에서 스위치면 opp에서 pull + cur에 addToSet
+    if ((dir === "up" && hasUp) || (dir === "down" && hasDown)) {
+      await Post.updateOne(
+        { _id: id, school },
+        { $pull: { [curKey]: userId } }
+      );
     } else {
-      if (hasDown) {
-        post.downvoters = post.downvoters.filter((u) => String(u) !== userId);
-      } else {
-        post.downvoters = [...(post.downvoters || []), req.user._id];
-        if (hasUp) post.upvoters = post.upvoters.filter((u) => String(u) !== userId);
-      }
+      await Post.updateOne(
+        { _id: id, school },
+        { $pull: { [oppKey]: userId }, $addToSet: { [curKey]: userId } }
+      );
     }
 
-    await post.save();
-
-    const upCount = Array.isArray(post.upvoters) ? post.upvoters.length : 0;
-    const downCount = Array.isArray(post.downvoters) ? post.downvoters.length : 0;
+    // 최신값으로 카운트/내 상태 계산해 응답
+    const fresh = await Post.findOne({ _id: id, school }, { upvoters: 1, downvoters: 1 }).lean();
+    const upCount = (fresh?.upvoters || []).length;
+    const downCount = (fresh?.downvoters || []).length;
     const myVote =
-      post.upvoters?.some((u) => String(u) === userId) ? "up" :
-      post.downvoters?.some((u) => String(u) === userId) ? "down" : null;
+      (fresh?.upvoters || []).some(u => String(u) === String(userId)) ? "up" :
+      (fresh?.downvoters || []).some(u => String(u) === String(userId)) ? "down" : null;
 
-    res.json({ ok: true, upCount, downCount, myVote });
+    return res.json({ ok: true, upCount, downCount, myVote });
   } catch (err) { next(err); }
 });
 
