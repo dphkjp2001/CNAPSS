@@ -1010,75 +1010,72 @@ function AnonymousQSwipe({ play }) {
       <Keyframes />
       {/* Overall section background stays white */}
       <div className="h-full w-full rounded-3xl overflow-hidden bg-white relative">
-        {/* Inner area (the card region) now light gray */}
-        <div className="relative h-full flex flex-col justify-center px-6 py-8 bg-slate-200 rounded-3xl">
-          {/* top: gray cards */}
-          <div className="relative w-full overflow-hidden mb-4">
-            <div
-              className="flex items-stretch"
-              style={{
-                gap: `${GAP}px`,
-                transform: `translateX(${-pos * STEP}px)`,
-                transition: animate
-                  ? "transform 680ms cubic-bezier(0.34,1,0.68,1)"
-                  : "none",
-              }}
-            >
-              {list3.map((c, i) => (
-                <div
-                  key={`${i}-${c.tag}`}
-                  className={`shrink-0 rounded-2xl ring-1 p-6 md:p-7 ${
-                    i === pos ? "scale-[1.0]" : "scale-[0.96]"
-                  }`}
+        {/* top: gray cards */}
+        <div className="relative w-full overflow-hidden mb-4">
+          <div
+            className="flex items-stretch"
+            style={{
+              gap: `${GAP}px`,
+              transform: `translateX(${-pos * STEP}px)`,
+              transition: animate
+                ? "transform 680ms cubic-bezier(0.34,1,0.68,1)"
+                : "none",
+            }}
+          >
+            {list3.map((c, i) => (
+              <div
+                key={`${i}-${c.tag}`}
+                className={`shrink-0 rounded-2xl ring-1 p-6 md:p-7 ${
+                  i === pos ? "scale-[1.0]" : "scale-[0.96]"
+                }`}
+                style={{
+                  width: CARD_W,
+                  backgroundColor: "#1E293B", // slate-800 tone for contrast
+                  color: "white",
+                  borderColor: "rgba(255,255,255,0.1)",
+                  boxShadow:
+                    i === pos
+                      ? "0 20px 40px rgba(0,0,0,0.25)"
+                      : "0 10px 20px rgba(0,0,0,0.15)",
+                  transition: "all 400ms ease",
+                }}
+              >
+                <div className="flex items-center gap-2 mb-3">
+                  <span
+                    className="h-2.5 w-2.5 rounded-full"
+                    style={{ background: c.accent }}
+                  />
+                  <span
+                    className="text-[12px] font-extrabold uppercase tracking-wide"
+                    style={{ color: c.accent }}
+                  >
+                    {c.tag}
+                  </span>
+                </div>
+
+                <p className="text-[24px] leading-[1.3] font-black">
+                  {c.title}
+                </p>
+                <div className="mt-3 text-[14px] opacity-80">{c.meta}</div>
+
+                <button
+                  className="mt-6 rounded-full bg-white text-slate-900 font-bold px-4 py-2 text-[14px] hover:bg-slate-100 transition-transform"
                   style={{
-                    width: CARD_W,
-                    backgroundColor: "#1E293B", // slate-800 tone for contrast
-                    color: "white",
-                    borderColor: "rgba(255,255,255,0.1)",
-                    boxShadow:
-                      i === pos
-                        ? "0 20px 40px rgba(0,0,0,0.25)"
-                        : "0 10px 20px rgba(0,0,0,0.15)",
-                    transition: "all 400ms ease",
+                    transform: pressing && i === pos ? "scale(0.96)" : "scale(1)",
                   }}
                 >
-                  <div className="flex items-center gap-2 mb-3">
-                    <span
-                      className="h-2.5 w-2.5 rounded-full"
-                      style={{ background: c.accent }}
-                    />
-                    <span
-                      className="text-[12px] font-extrabold uppercase tracking-wide"
-                      style={{ color: c.accent }}
-                    >
-                      {c.tag}
-                    </span>
-                  </div>
-
-                  <p className="text-[24px] leading-[1.3] font-black">
-                    {c.title}
-                  </p>
-                  <div className="mt-3 text-[14px] opacity-80">{c.meta}</div>
-
-                  <button
-                    className="mt-6 rounded-full bg-white text-slate-900 font-bold px-4 py-2 text-[14px] hover:bg-slate-100 transition-transform"
-                    style={{
-                      transform: pressing && i === pos ? "scale(0.96)" : "scale(1)",
-                    }}
-                  >
-                    View answers
-                  </button>
-                </div>
-              ))}
-            </div>
+                  View answers
+                </button>
+              </div>
+            ))}
           </div>
-
-            <AnonymousQComments
-              show={showAnswers}
-              thread={cards[cur].thread}
-              playKey={playKey}
-            />
         </div>
+
+          <AnonymousQComments
+            show={showAnswers}
+            thread={cards[cur].thread}
+            playKey={playKey}
+          />
       </div>
     </>
   );
