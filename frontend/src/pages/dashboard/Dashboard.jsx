@@ -228,7 +228,8 @@ export default function Dashboard() {
   const { user } = useAuth();
   const schoolPath = useSchoolPath();
 
-const schoolKey = (typeof school === "string" && school ? school.toLowerCase() : "nyu");
+  const schoolKey =
+    typeof school === "string" && school ? school.toLowerCase() : "nyu";
 
   /* ---------- 탭/검색 상태: URL 파라미터만 사용 (Layout이 관리) ---------- */
   const getParamsState = () => {
@@ -286,99 +287,91 @@ const schoolKey = (typeof school === "string" && school ? school.toLowerCase() :
     error: "",
   });
 
-  // 수정본
-const fetchAcademicPage = useCallback(
-  async (page = 1, append = false) => {
-    // schoolKey 준비 안 됐으면 호출 보류
-    if (!schoolKey || schoolKey === "undefined") {
-      setAcad((s) => ({ ...s, loading: false, loadingMore: false }));
-      return;
+  // ✅ 일반글 재조회 함수로 분리
+  const fetchGeneralPosts = useCallback(async () => {
+    try {
+      const genRaw = await getPublicPosts({
+        school: schoolKey,
+        limit: 200,
+        sort: "new",
+      });
+      setGeneralRaw({
+        loading: false,
+        items: normalizePosts(genRaw),
+        error: "",
+      });
+    } catch (err) {
+      setGeneralRaw({
+        loading: false,
+        items: [],
+        error: err?.message || "Failed to load posts.",
+      });
     }
+  }, [schoolKey]);
 
-    const params = {
-      school: schoolKey,
-      page,
-      limit: acad.limit,
-      q: acadQuery.q || "",
-      sort: "new",
-    };
+  // Academic 목록 페이지 단위 조회
+  const fetchAcademicPage = useCallback(
+    async (page = 1, append = false) => {
+      if (!schoolKey || schoolKey === "undefined") {
+        setAcad((s) => ({ ...s, loading: false, loadingMore: false }));
+        return;
+      }
 
-    // type이 all이 아닐 때만 보냄
-    if (acadQuery.type && acadQuery.type !== "all") {
-      params.type = acadQuery.type;
-    }
+      const params = {
+        school: schoolKey,
+        page,
+        limit: acad.limit,
+        q: acadQuery.q || "",
+        sort: "new",
+      };
+      if (acadQuery.type && acadQuery.type !== "all") params.type = acadQuery.type;
+      if (acadQuery.type === "seeking" && acadQuery.kind) params.kind = acadQuery.kind;
 
-    // seeking일 때 kind가 있으면 보냄
-    if (acadQuery.type === "seeking" && acadQuery.kind) {
-      params.kind = acadQuery.kind;
-    }
+      const res = await getPublicAcademicPosts(params);
+      const items = normalizePosts(res);
 
-    const res = await getPublicAcademicPosts(params);
-    const items = normalizePosts(res);
+      const total =
+        typeof res?.total === "number"
+          ? res.total
+          : typeof res?.paging?.total === "number"
+          ? res.paging.total
+          : append
+          ? acad.total
+          : items.length;
 
-    const total =
-      typeof res?.total === "number"
-        ? res.total
-        : typeof res?.paging?.total === "number"
-        ? res.paging.total
-        : append
-        ? acad.total
-        : items.length;
+      const limit =
+        typeof res?.limit === "number"
+          ? res.limit
+          : typeof res?.paging?.limit === "number"
+          ? res.paging.limit
+          : acad.limit;
 
-    const limit =
-      typeof res?.limit === "number"
-        ? res.limit
-        : typeof res?.paging?.limit === "number"
-        ? res.paging.limit
-        : acad.limit;
+      const merged = append ? [...acad.items, ...items] : items;
 
-    const merged = append ? [...acad.items, ...items] : items;
-
-    setAcad({
-      items: merged,
-      page,
-      limit,
-      total,
-      loading: false,
-      loadingMore: false,
-      hasMore: merged.length < total && items.length > 0,
-      error: "",
-    });
-  },
-  // 🔧 의존성 최소화: 함수 재생성으로 인한 무한 루프 방지
-  [schoolKey, acadQuery]
-);
-
+      setAcad({
+        items: merged,
+        page,
+        limit,
+        total,
+        loading: false,
+        loadingMore: false,
+        hasMore: merged.length < total && items.length > 0,
+        error: "",
+      });
+    },
+    [schoolKey, acadQuery]
+  );
 
   /* ---------- initial fetches ---------- */
   useEffect(() => {
     let alive = true;
     (async () => {
-      try {
-        const genRaw = await getPublicPosts({
-          school: schoolKey,
-          limit: 200,
-          sort: "new",
-        });
-        if (!alive) return;
-        setGeneralRaw({
-          loading: false,
-          items: normalizePosts(genRaw),
-          error: "",
-        });
-      } catch (err) {
-        if (!alive) return;
-        setGeneralRaw({
-          loading: false,
-          items: [],
-          error: err?.message || "Failed to load posts.",
-        });
-      }
+      await fetchGeneralPosts();
     })();
     return () => {
       alive = false;
     };
-  }, [schoolKey]);
+  }, [schoolKey, fetchGeneralPosts]);
 
   useEffect(() => {
     setAcad((s) => ({ ...s, loading: true, error: "", page: 1 }));
@@ -390,6 +383,24 @@ const fetchAcademicPage = useCallback(
       }))
     );
   }, [schoolKey, acadQuery.q, acadQuery.type, acadQuery.kind, fetchAcademicPage]);
+
+  /* ---------- 🔁 재조회 트리거 (핵심 추가) ---------- */
+  // 1) 라우트 path가 바뀌면(상세 → 대시보드 등) 현재 탭 재조회
+  useEffect(() => {
+    if (active === "general") fetchGeneralPosts();
+    else fetchAcademicPage(1, false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname]); // pathname 변화에만 반응
+
+  // 2) 브라우저 창 포커스가 돌아오면 재조회
+  useEffect(() => {
+    const onFocus = () => {
+      if (active === "general") fetchGeneralPosts();
+      else fetchAcademicPage(1, false);
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [active, fetchGeneralPosts, fetchAcademicPage]);
 
   /* ---------- intersection observers ---------- */
   const freeSentinelRef = useRef(null);
@@ -413,7 +424,12 @@ const fetchAcademicPage = useCallback(
     const io = new IntersectionObserver(
       (entries) => {
         const e = entries[0];
-        if (e.isIntersecting && acad.hasMore && !acad.loading && !acad.loadingMore) {
+        if (
+          e.isIntersecting &&
+          acad.hasMore &&
+          !acad.loading &&
+          !acad.loadingMore
+        ) {
           setAcad((s) => ({ ...s, loadingMore: true }));
           fetchAcademicPage(acad.page + 1, true).catch((err) =>
             setAcad((s) => ({
@@ -529,7 +545,7 @@ const fetchAcademicPage = useCallback(
         } else if (lookingKind === "course_materials") {
           await createAcademicPost({
             ...base,
-            title: title.trim(),      // 코스명으로 사용
+            title: title.trim(), // 코스명으로 사용
             content: "",
             postType: "seeking",
             kind: "course_materials",
