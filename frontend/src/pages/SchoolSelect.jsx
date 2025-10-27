@@ -528,12 +528,18 @@ function FeatureShowcase() {
       <div className="md:col-span-7">
         <div className="sticky top-20">
           <div className="relative h-[640px]">
+            {/* Anonymous (Freeboard) demo with darker bg */}
             <Panel visible={active === 0}>
-              <FreeboardFloating play={active === 0} />
+              <div className="absolute inset-0 bg-slate-900" />
+              <div className="relative z-10">
+                <GeneralQSwipe play={active === 0} />
+              </div>
             </Panel>
+            {/* Academic – General Q */}
             <Panel visible={active === 1} delay={70}>
               <GeneralQSwipe play={active === 1} />
             </Panel>
+            {/* Academic – Seeking */}
             <Panel visible={active === 2} delay={110}>
               <SeekingDesktop play={active === 2} />
             </Panel>
