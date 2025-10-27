@@ -530,10 +530,10 @@ function FeatureShowcase() {
           <div className="relative h-[640px]">
             {/* Anonymous (Freeboard) demo with darker bg */}
             <Panel visible={active === 0}>
-              <div className="absolute inset-0 bg-slate-900" />
-              <div className="relative z-10">
+              {/* <div className="absolute inset-0 bg-slate-900" />
+              <div className="relative z-10"> */}
                 <GeneralQSwipe play={active === 0} />
-              </div>
+              {/* </div> */}
             </Panel>
             {/* Academic – General Q */}
             <Panel visible={active === 1} delay={70}>
