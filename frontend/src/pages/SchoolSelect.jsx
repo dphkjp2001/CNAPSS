@@ -1073,14 +1073,11 @@ function AnonymousQSwipe({ play }) {
             </div>
           </div>
 
-          {/* bottom: light-gray comments box */}
-          <div className="bg-slate-300 rounded-2xl px-5 py-4">
-            <QComments
+            <AnonymousQComments
               show={showAnswers}
               thread={cards[cur].thread}
               playKey={playKey}
             />
-          </div>
         </div>
       </div>
     </>
@@ -1249,6 +1246,166 @@ function QComments({ show, thread, playKey }) {
               disabled={!composerText}
               className="rounded-lg bg-black text-white px-4 py-2 text-[13px] font-bold transition-transform disabled:opacity-40"
               style={{ transform: pressingPost ? "scale(0.95)" : "scale(1)" }}
+            >
+              Post
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AnonymousQComments({ show, thread, playKey }) {
+  const [shown, setShown] = useState([]);
+  const [composerText, setComposerText] = useState("");
+  const [blink, setBlink] = useState(true);
+  const [pressingPost, setPressingPost] = useState(false);
+  const timers = useRef([]);
+
+  const clearTimers = useCallback(() => {
+    timers.current.forEach((t) =>
+      t.kind === "i" ? clearInterval(t.id) : clearTimeout(t.id)
+    );
+    timers.current = [];
+  }, []);
+
+  const palette = ["#60A5FA", "#34D399", "#FBBF24", "#A78BFA", "#F472B6", "#22D3EE"];
+  const hash = (s) => {
+    let h = 0;
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+    return h;
+  };
+  const anonOf = (text, idx = 0) => {
+    const h = hash(text + idx);
+    const id = (h % 97) + 3;
+    const color = palette[h % palette.length];
+    return { id, color };
+  };
+
+  useEffect(() => {
+    const id = setInterval(() => setBlink((b) => !b), 500);
+    return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    clearTimers();
+    setShown([]);
+    setComposerText("");
+    setPressingPost(false);
+    if (!show) return;
+
+    timers.current.push({ kind: "t", id: setTimeout(() => setShown([thread[0]]), 320) });
+    timers.current.push({ kind: "t", id: setTimeout(() => setShown((s) => [...s, thread[1]]), 1200) });
+
+    timers.current.push({
+      kind: "t",
+      id: setTimeout(() => {
+        const full = thread[2].text || "";
+        let i = 1;
+        const inter = setInterval(() => {
+          setComposerText(full.slice(0, i));
+          i += 1;
+          if (i > full.length) {
+            clearInterval(inter);
+            setTimeout(() => {
+              setPressingPost(true);
+              setTimeout(() => {
+                setPressingPost(false);
+                setShown((s) => [...s, thread[2]]);
+                setComposerText("");
+              }, 200);
+            }, 180);
+          }
+        }, 34);
+        timers.current.push({ kind: "i", id: inter });
+      }, 2000),
+    });
+
+    return () => clearTimers();
+  }, [show, playKey, thread, clearTimers]);
+
+  return (
+    <div
+      className="rounded-2xl bg-slate-200/95 backdrop-blur px-5 py-4 shadow-inner"
+      style={{
+        opacity: show ? 1 : 0,
+        transform: show ? "translateY(0)" : "translateY(10px)",
+        transition: "all 480ms cubic-bezier(0.34,1.56,0.64,1)",
+        minHeight: 160,
+      }}
+    >
+      <div className="space-y-3">
+        {shown.map((m, i) => {
+          const isYou = m.who === "You";
+          const { id, color } = isYou
+            ? { id: "you", color: "#111827" }
+            : anonOf(m.text, i);
+          return (
+            <div
+              key={`${i}-${m.who}`}
+              className="flex items-start gap-3"
+              style={{
+                opacity: 0,
+                animation: "fadeSlideUp 380ms ease forwards",
+                animationDelay: `${i * 40}ms`,
+              }}
+            >
+              <div
+                className="h-8 w-8 rounded-full flex items-center justify-center text-[11px] font-bold text-white shrink-0"
+                style={{ background: color }}
+                title={
+                  isYou ? "Anonymous (you)" : `Anonymous #${id}`
+                }
+              >
+                {isYou ? "You" : "A"}
+              </div>
+              <div className="flex-1">
+                <div className="text-[12px] text-slate-600">
+                  {isYou ? "Anonymous (you)" : `Anonymous #${id}`} ·{" "}
+                  {i === 0 ? "1h" : i === 1 ? "45m" : "just now"}
+                </div>
+                <div
+                  className={`mt-1 rounded-xl px-3 py-2 text-[14px] ring-1 ${
+                    isYou
+                      ? "bg-slate-100 ring-slate-300 text-slate-900"
+                      : "bg-slate-50 ring-black/5 text-slate-900"
+                  }`}
+                >
+                  {m.text}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+
+        <div className="flex items-center gap-3 pt-1">
+          <div
+            className="h-8 w-8 rounded-full flex items-center justify-center text-[11px] font-bold text-white shrink-0"
+            style={{ background: "#111827" }}
+            title="Anonymous (you)"
+          >
+            You
+          </div>
+          <div className="flex-1 flex items-center gap-2">
+            <div
+              className="flex-1 rounded-xl border px-3 py-2 text-[14px] text-slate-900 bg-slate-50"
+              style={{ borderColor: "rgba(0,0,0,0.08)" }}
+              aria-readonly
+            >
+              {composerText || (
+                <span className="text-slate-400">Write a comment…</span>
+              )}
+              {composerText && (
+                <span style={{ opacity: blink ? 1 : 0 }}>▍</span>
+              )}
+            </div>
+            <button
+              disabled={!composerText}
+              className="rounded-lg bg-black text-white px-4 py-2 text-[13px] font-bold transition-transform disabled:opacity-40"
+              style={{
+                transform: pressingPost ? "scale(0.95)" : "scale(1)",
+              }}
             >
               Post
             </button>
