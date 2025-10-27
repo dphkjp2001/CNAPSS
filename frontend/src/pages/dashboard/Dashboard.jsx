@@ -158,7 +158,7 @@ function Segmented({ value, onChange }) {
             ref={leftRef}
             type="button"
             onClick={() => onChange("general")}
-            className={`text-[22px] font flex items-center gap-2 transition-all ${
+            className={`text-[22px] font-bold flex items-center gap-2 transition-all ${
               isGeneral ? "text-slate-900" : "text-slate-400 hover:text-slate-600"
             } ${isGeneral ? "animate-[wiggleScale_360ms_ease-in-out]" : ""}`}
             aria-pressed={isGeneral}
@@ -170,7 +170,7 @@ function Segmented({ value, onChange }) {
             ref={rightRef}
             type="button"
             onClick={() => onChange("academic")}
-            className={`text-[22px] font flex items-center gap-2 transition-all ${
+            className={`text-[22px] font-bold flex items-center gap-2 transition-all ${
               !isGeneral
                 ? "text-slate-900 animate-[wiggleScale_360ms_ease-in-out]"
                 : "text-slate-400 hover:text-slate-600"
