@@ -9,7 +9,7 @@ function Initials({ name = "GU", bg = "#f1ecff" }) {
   const text = String(name || "GU").slice(0, 2).toUpperCase();
   return (
     <div
-      className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold text-gray-900"
+      className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold text-gray-900"
       style={{ background: bg }}
     >
       {text}
@@ -66,31 +66,32 @@ export default function Layout() {
   const nickname = user?.nickname || (user?.email ? user.email.split("@")[0] : "GU");
 
   return (
-    <div className="min-h-screen flex bg-gray-50">
-      {/* === Left Sidebar === */}
+    <div className="min-h-screen flex bg-white">
+      {/* Left Sidebar */}
       <aside className="hidden md:flex md:w-60 flex-col border-r bg-white">
-        <div className="p-4 border-b">
-          <Link to={school ? schoolPath("/dashboard") : "/"} className="inline-flex items-center gap-2">
-            <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-red-600 text-white font-black">C</span>
-            <span className="text-lg font-extrabold tracking-tight">CNAPSS</span>
-          </Link>
-          {school && <div className="mt-1 text-xs text-gray-500 truncate">{String(school)}</div>}
+        <div className="p-6 border-b flex flex-col items-start">
+        <Link
+          to={school ? schoolPath("/dashboard") : "/"}
+          className="font-extrabold text-[30px] tracking-wide text-[#E54848] hover:opacity-90 transition-opacity"
+        >
+          CNAPSS
+        </Link>
+        {school && (
+          <div className="mt-1 text-xs text-gray-500 truncate">{String(school)}</div>
+        )} 
         </div>
-
-        {/* 👉 Sidebar: Dashboard, Messages만 노출 */}
         <nav className="p-3 space-y-1">
           <NavItem to={schoolPath("/dashboard")}>Dashboard</NavItem>
           <NavItem to={schoolPath("/messages")}>Messages</NavItem>
         </nav>
-
         <div className="mt-auto p-3 text-[11px] text-gray-400">Stay anonymous. Be kind.</div>
       </aside>
 
-      {/* === Main column === */}
+      {/* Main column */}
       <div className="flex-1 min-w-0 flex flex-col">
-        {/* Top bar */}
-        <header className="w-full border-b bg-white">
-          <div className="mx-auto max-w-6xl px-4 h-14 flex items-center justify-end gap-2">
+        {/* ▼▼▼ 헤더를 화면 아래로 확 내림 ▼▼▼ */}
+        <header className="w-full bg-white border-none shadow-none mt-4 md:mt-6 lg:mt-8">
+          <div className="mx-auto max-w-6xl px-4 h-16 flex items-center justify-end gap-3">
             {/* Notifications */}
             <button
               type="button"
@@ -99,15 +100,14 @@ export default function Layout() {
                 setShowProfile(false);
                 if (!showNoti && count > 0) markAllAsRead();
               }}
-              className="relative ml-1 px-3 py-2 text-sm rounded-md hover:bg-violet-50"
+              className="relative ml-1 px-3 py-2.5 text-base rounded-md hover:bg-violet-50"
               aria-label="Notifications"
               title="Notifications"
             >
-              <span>🔔</span>
+              <span className="text-xl leading-none">🔔</span>
               {count > 0 && (
                 <span
-                  className={`absolute -top-1.5 -right-1.5 inline-flex items-center justify-center
-                    min-w-[18px] h-[18px] px-1 rounded-full text-[11px] text-white`}
+                  className={`absolute -top-1.5 -right-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[11px] text-white`}
                   style={{ backgroundColor: "#7c3aed" }}
                 >
                   {count}
@@ -115,7 +115,7 @@ export default function Layout() {
               )}
             </button>
 
-            {/* Auth / Profile */}
+            {/* Profile */}
             {user?.email ? (
               <ProfileMenu
                 nickname={nickname}
@@ -172,8 +172,8 @@ export default function Layout() {
           </div>
         )}
 
-        {/* Routed pages */}
-        <main className="flex-1">
+        {/* Pages */}
+        <main className="flex-1 pt-0">
           <Outlet />
         </main>
       </div>
@@ -191,7 +191,7 @@ function ProfileMenu({ nickname, email, onLogout, schoolPath, showProfile, setSh
         className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-violet-50"
       >
         <Initials name={nickname} />
-        <span className="hidden sm:inline text-sm font-medium text-gray-700">{nickname}</span>
+        <span className="hidden sm:inline text-[15px] font-medium text-gray-700">{nickname}</span>
         <svg className={`h-4 w-4 text-gray-500 transition ${showProfile ? "rotate-180" : ""}`} viewBox="0 0 20 20" fill="currentColor">
           <path d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.25a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" />
         </svg>
@@ -206,33 +206,19 @@ function ProfileMenu({ nickname, email, onLogout, schoolPath, showProfile, setSh
               <div className="text-xs text-gray-500 truncate">{email}</div>
             </div>
             <div className="p-1 text-sm">
-              <MenuItem to={schoolPath("/dashboard")} onClick={() => setShowProfile(false)}>
-                Dashboard
-              </MenuItem>
-              <MenuItem to={schoolPath("/myposts")} onClick={() => setShowProfile(false)}>
-                My Posts
-              </MenuItem>
-              <MenuItem to={schoolPath("/liked")} onClick={() => setShowProfile(false)}>
-                Liked
-              </MenuItem>
-              <MenuItem to={schoolPath("/commented")} onClick={() => setShowProfile(false)}>
-                Commented
-              </MenuItem>
-              <MenuItem to={schoolPath("/messages")} onClick={() => setShowProfile(false)}>
-                Messages
-              </MenuItem>
-              <MenuItem to={schoolPath("/market")} onClick={() => setShowProfile(false)}>
-                Marketplace
-              </MenuItem>
+              <MenuItem to={schoolPath("/dashboard")} onClick={() => setShowProfile(false)}>Dashboard</MenuItem>
+              <MenuItem to={schoolPath("/myposts")} onClick={() => setShowProfile(false)}>My Posts</MenuItem>
+              <MenuItem to={schoolPath("/liked")} onClick={() => setShowProfile(false)}>Liked</MenuItem>
+              <MenuItem to={schoolPath("/commented")} onClick={() => setShowProfile(false)}>Commented</MenuItem>
+              <MenuItem to={schoolPath("/messages")} onClick={() => setShowProfile(false)}>Messages</MenuItem>
+              <MenuItem to={schoolPath("/market")} onClick={() => setShowProfile(false)}>Marketplace</MenuItem>
             </div>
+
             <div className="border-t p-3 text-sm text-gray-700 relative flex items-center justify-between">
-              {/* Label and points */}
               <div className="flex items-center gap-2">
                 <span className="font-medium text-gray-700">Cnapss Points:</span>
                 <span className="text-base font-semibold text-gray-900">15</span>
               </div>
-
-              {/* Question mark button (on the right) */}
               <button
                 onClick={() => setShowPointInfo((v) => !v)}
                 className="flex items-center justify-center w-5 h-5 text-red-400 border border-red-200 rounded-full hover:text-red-500 hover:border-red-400 transition"
@@ -240,8 +226,6 @@ function ProfileMenu({ nickname, email, onLogout, schoolPath, showProfile, setSh
               >
                 ?
               </button>
-
-              {/* Tooltip */}
               {showPointInfo && (
                 <div className="absolute bottom-10 right-3 z-50 w-64 text-xs bg-white border border-gray-300 rounded-lg shadow-md p-3 text-gray-600">
                   During the beta version, Cnapss Point system is not active.
@@ -252,15 +236,12 @@ function ProfileMenu({ nickname, email, onLogout, schoolPath, showProfile, setSh
                 </div>
               )}
             </div>
+
             <div className="border-t p-1">
-              <button
-                onClick={onLogout}
-                className="w-full rounded-lg px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
-              >
+              <button onClick={onLogout} className="w-full rounded-lg px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50">
                 Log out
               </button>
             </div>
-
           </div>
         </>
       )}
@@ -275,6 +256,7 @@ function MenuItem({ to, children, onClick }) {
     </Link>
   );
 }
+
 
 
 
