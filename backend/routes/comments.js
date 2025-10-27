@@ -17,13 +17,15 @@ const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 
 async function findAnyPostById(postId, school) {
   const [free, academic] = await Promise.all([
-    Post.findOne({ _id: postId, school }).select("_id").lean(),
+    Post.findOne({ _id: postId, school }).select("_id board").lean(),
     AcademicPost.findOne({ _id: postId, school }).select("_id").lean(),
   ]);
-  return free || academic;
+  if (free) return { type: "free", doc: free };
+  if (academic) return { type: "academic", doc: academic };
+  return null;
 }
 
-// GET /api/:school/comments/:postId
+// GET comments
 router.get("/:postId", async (req, res) => {
   const { postId } = req.params;
   if (!isValidObjectId(postId)) return res.status(400).json({ message: "Invalid postId" });
@@ -42,7 +44,7 @@ router.get("/:postId", async (req, res) => {
   }
 });
 
-// POST /api/:school/comments/:postId
+// POST comment
 router.post("/:postId", async (req, res) => {
   const { postId } = req.params;
   if (!isValidObjectId(postId)) return res.status(400).json({ message: "Invalid postId" });
@@ -70,12 +72,19 @@ router.post("/:postId", async (req, res) => {
     const doc = await Comment.create({
       postId,
       school: req.user.school,
-      authorId: me._id,              // ✅ schema requires this
+      authorId: me._id,
       email: req.user.email,
       nickname: me.nickname,
       content,
       parentId: parent ? parent._id : null,
     });
+
+    // ✅ commentCount +1
+    if (target.type === "free") {
+      await Post.updateOne({ _id: postId }, { $inc: { commentCount: 1 } });
+    } else if (target.type === "academic") {
+      await AcademicPost.updateOne({ _id: postId }, { $inc: { commentCount: 1 } });
+    }
 
     try {
       const io = req.app.get("io");
@@ -89,7 +98,7 @@ router.post("/:postId", async (req, res) => {
   }
 });
 
-// PUT /api/:school/comments/:id
+// PUT comment
 router.put("/:id", async (req, res) => {
   const { id } = req.params;
   if (!isValidObjectId(id)) return res.status(400).json({ message: "Invalid comment id" });
@@ -120,7 +129,7 @@ router.put("/:id", async (req, res) => {
   }
 });
 
-// DELETE /api/:school/comments/:id
+// DELETE comment
 router.delete("/:id", async (req, res) => {
   const { id } = req.params;
   if (!isValidObjectId(id)) return res.status(400).json({ message: "Invalid comment id" });
@@ -131,7 +140,16 @@ router.delete("/:id", async (req, res) => {
       return res.status(403).json({ message: "You can only delete your own comments." });
     }
 
+    const target = await findAnyPostById(owned.postId, req.user.school);
+
     await Comment.deleteOne({ _id: id, school: req.user.school });
+
+    // ✅ commentCount -1
+    if (target?.type === "free") {
+      await Post.updateOne({ _id: owned.postId }, { $inc: { commentCount: -1 } });
+    } else if (target?.type === "academic") {
+      await AcademicPost.updateOne({ _id: owned.postId }, { $inc: { commentCount: -1 } });
+    }
 
     try {
       const io = req.app.get("io");
@@ -145,7 +163,7 @@ router.delete("/:id", async (req, res) => {
   }
 });
 
-// POST /api/:school/comments/:commentId/thumbs
+// thumbs 그대로 유지
 router.post("/:commentId/thumbs", async (req, res) => {
   try {
     const { commentId } = req.params;
@@ -192,5 +210,6 @@ router.post("/:commentId/thumbs", async (req, res) => {
 });
 
 module.exports = router;
+
 
 
