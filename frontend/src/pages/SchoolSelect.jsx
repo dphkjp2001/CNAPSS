@@ -530,10 +530,7 @@ function FeatureShowcase() {
           <div className="relative h-[640px]">
             {/* Anonymous (Freeboard) demo with darker bg */}
             <Panel visible={active === 0}>
-              {/* <div className="absolute inset-0 bg-slate-900" />
-              <div className="relative z-10"> */}
-                <GeneralQSwipe play={active === 0} />
-              {/* </div> */}
+              <AnonymousQSwipe play={active === 0} />
             </Panel>
             {/* Academic – General Q */}
             <Panel visible={active === 1} delay={70}>
@@ -874,6 +871,167 @@ function GeneralQSwipe({ play }) {
           {/* bottom: comments panel */}
           <QComments show={showAnswers} thread={cards[cur].thread} playKey={playKey} />
         </div>
+      </div>
+    </>
+  );
+}
+
+/* ================== Anonymous Q — swipe carousel (copied from general q function)================== */
+function AnonymousQSwipe({ play }) {
+  const CARD_W = 560;
+  const GAP = 28;
+  const STEP = CARD_W + GAP;
+
+  const cards = React.useMemo(
+    () => [
+      {
+        tag: "Confession",
+        title: "I microwaved fish in the dorm 😳",
+        meta: "132 upvotes · 44 comments",
+        accent: "#F59E0B",
+        thread: [
+          { who: "Anon1", text: "Dude, the smell reached the whole floor 😭" },
+          { who: "Anon2", text: "Bold move. Respect." },
+          { who: "You", text: "I swear it was the only thing left in the fridge." },
+        ],
+      },
+      {
+        tag: "Rumor",
+        title: "Secret printer that never has a line?",
+        meta: "87 upvotes · 19 comments",
+        accent: "#0EA5E9",
+        thread: [
+          { who: "Anon1", text: "Third floor, behind the vending machines 👀" },
+          { who: "Anon2", text: "Don’t tell everyone!" },
+          { who: "You", text: "Tested — it works. Thank me later." },
+        ],
+      },
+      {
+        tag: "Hot Take",
+        title: "9 AM lectures should be illegal.",
+        meta: "211 upvotes · 63 comments",
+        accent: "#EF4444",
+        thread: [
+          { who: "Anon1", text: "Facts. My brain boots up at 11 AM." },
+          { who: "Anon2", text: "Professors who pick 9 AMs are villains." },
+          { who: "You", text: "Petition incoming." },
+        ],
+      },
+      {
+        tag: "Meme",
+        title: "Dining-hall ‘orange juice’ speed-run (0.4 sec).",
+        meta: "98 upvotes · 27 comments",
+        accent: "#8B5CF6",
+        thread: [
+          { who: "Anon1", text: "Vitamin C overdose challenge accepted." },
+          { who: "Anon2", text: "Tastes like regret." },
+          { who: "You", text: "It’s pulp or nothing." },
+        ],
+      },
+    ],
+    []
+  );
+
+
+  const list3 = React.useMemo(() => [...cards, ...cards, ...cards], [cards]);
+  const BASE = cards.length;
+  const [cur, setCur] = useState(0);
+  const pos = BASE + cur;
+  const [animate, setAnimate] = useState(true);
+
+  const [pressing, setPressing] = useState(false);
+  const [showAnswers, setShowAnswers] = useState(false);
+  const playKey = `${cur}-${showAnswers}`;
+
+  const timers = React.useRef([]);
+  const clearTimers = React.useCallback(() => {
+    timers.current.forEach((t) => (t.kind === "i" ? clearInterval(t.id) : clearTimeout(t.id)));
+    timers.current = [];
+  }, []);
+
+  useEffect(() => {
+    clearTimers();
+    setPressing(false);
+    setShowAnswers(false);
+    if (!play) return;
+
+    const typingLen = (cards[cur].thread?.[2]?.text || "").length;
+    const DELAY_BEFORE_PRESS = 900;
+    const PRESS_TIME = 220;
+    const AFTER_PRESS_TO_PANEL = 200;
+    const COMMENT_FLOW_MS = 320 + 900 + 420 + typingLen * 34 + 220 + 360;
+    const EXTRA_DWELL = 700;
+    const AUTO_NEXT_MS = DELAY_BEFORE_PRESS + PRESS_TIME + AFTER_PRESS_TO_PANEL + COMMENT_FLOW_MS + EXTRA_DWELL;
+
+    timers.current.push({ kind: "t", id: setTimeout(() => setPressing(true), DELAY_BEFORE_PRESS) });
+    timers.current.push({ kind: "t", id: setTimeout(() => setPressing(false), DELAY_BEFORE_PRESS + PRESS_TIME) });
+    timers.current.push({ kind: "t", id: setTimeout(() => setShowAnswers(true), DELAY_BEFORE_PRESS + PRESS_TIME + AFTER_PRESS_TO_PANEL) });
+    timers.current.push({ kind: "t", id: setTimeout(() => setCur((c) => (c + 1) % cards.length), AUTO_NEXT_MS) });
+
+    return clearTimers;
+  }, [cur, play, cards, clearTimers]);
+
+  useEffect(() => {
+    if (!play) {
+      clearTimers();
+      setAnimate(false);
+      setCur(0);
+      setPressing(false);
+      setShowAnswers(false);
+      requestAnimationFrame(() => setAnimate(true));
+    }
+  }, [play, clearTimers]);
+
+  return (
+    <>
+      <Keyframes />
+      <div className="h-full w-full rounded-3xl overflow-hidden bg-slate-900 text-white relative">
+        <div className="absolute inset-0 bg-gradient-to-b from-slate-800/60 to-slate-900">
+        <div className="relative h-full flex flex-col justify-center px-6">
+          {/* top: question cards */}
+          <div className="relative w-full overflow-hidden mb-4">
+            <div
+              className="flex items-stretch"
+              style={{
+                gap: `${GAP}px`,
+                transform: `translateX(${-pos * STEP}px)`,
+                transition: animate ? "transform 680ms cubic-bezier(0.34,1,0.68,1)" : "none",
+              }}
+            >
+              {list3.map((c, i) => (
+                <QQuestionCard
+                  key={`${i}-${c.tag}`}
+                  width={CARD_W}
+                  tag={c.tag}
+                  title={c.title}
+                  meta={c.meta}
+                  accent={c.accent}
+                  active={i === pos}
+                  dim={i !== pos}
+                  pressing={pressing && i === pos}
+                />
+              ))}
+            </div>
+            <div
+              className="pointer-events-none absolute inset-y-0 left-0"
+              style={{
+                width: 36,
+                background: "linear-gradient(to right, rgba(255,255,255,0.55), rgba(255,255,255,0))",
+              }}
+            />
+            <div
+              className="pointer-events-none absolute inset-y-0 right-0"
+              style={{
+                width: 36,
+                background: "linear-gradient(to left, rgba(255,255,255,0.55), rgba(255,255,255,0))",
+              }}
+            />
+          </div>
+
+          {/* bottom: comments panel */}
+          <QComments show={showAnswers} thread={cards[cur].thread} playKey={playKey} />
+        </div>
+      </div>
       </div>
     </>
   );
