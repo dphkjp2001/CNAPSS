@@ -1,3 +1,4 @@
+
 // frontend/src/pages/dashboard/Dashboard.jsx
 import React, {
   useEffect,
@@ -20,6 +21,9 @@ import {
   createAcademicPost,
   getPublicAcademicPosts,
 } from "../../api/academicPosts";
+
+// ✅ 아이콘 (outline)
+import { Bookmark, Repeat2, Share, Send, MessageSquare } from "lucide-react";
 
 /* ===== Design tokens ===== */
 const TOKENS = {
@@ -77,6 +81,22 @@ const normalizeKind = (raw = {}) => {
   if (/(coffee\s*chat|coffee\s*time|\bchat\b)/.test(bag)) return "coffee_chat";
   return "";
 };
+
+/* ===== 상대 시간 포맷 ===== */
+function formatRelativeTime(dateString) {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now - date;
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffMins < 60) return `${diffMins} mins ago`;
+  if (diffHours < 24) return `${diffHours} hs ago`; // 요청: hs 표기
+
+  if (diffDays === 1) return "yesterday";
+  return `${diffDays} days ago`;
+}
 
 /* ===== UI bits ===== */
 function PersonIcon() {
@@ -167,8 +187,14 @@ function Segmented({ value, onChange }) {
   );
 }
 
-// ⬇️ PostRow (리스트 아이템 – materials 뱃지/날짜 우측 정렬)
-function PostRow({ post, onOpenDetail, showBadge }) {
+// ⬇️ PostRow
+function PostRow({
+  post,
+  onOpenDetail,
+  showBadge,
+  showActionsBar = false,
+  commentCount = 0,
+}) {
   const raw = post.raw || {};
   const t = normalizeType(raw);
   const k = normalizeKind(raw);
@@ -215,20 +241,47 @@ function PostRow({ post, onOpenDetail, showBadge }) {
           <div className="flex items-start justify-between gap-3">
             <div className="truncate font-semibold text-slate-900">{post.title}</div>
             <div className="text-xs text-slate-500 whitespace-nowrap">
-              {new Date(post.createdAt).toLocaleString()}
+              {formatRelativeTime(post.createdAt)}
             </div>
           </div>
 
+          {/* ✨ 글 미리보기 한 줄 추가 */}
+          {post.raw?.content && (
+            <p className="mt-1 text-[13.5px] text-slate-600 line-clamp-1">
+              {post.raw.content}
+            </p>
+          )}
+
           {materialLabels.length > 0 && (
-            <div className="mt-1 flex flex-wrap gap-1.5">
+            <div className="mt-3 flex flex-wrap gap-2">
               {materialLabels.map((lbl) => (
                 <span
                   key={lbl}
-                  className="inline-flex items-center rounded-full border border-slate-300 bg-slate-50 px-2.5 py-[3px] text-[11px] text-slate-700"
+                  className="inline-flex items-center rounded-full border border-slate-700 bg-slate-50 px-2.5 py-[3px] text-[11px] text-slate-700"
                 >
                   {lbl}
                 </span>
               ))}
+            </div>
+          )}
+
+
+          {/* 하단 액션바 (필요할 때만 표시) */}
+          {showActionsBar && (
+            <div className="flex items-center justify-between mt-2 pr-1 pl-[0px] text-slate-500 text-[13px]">
+              <div className="flex items-center gap-6">
+                <Bookmark size={18} className="hover:text-slate-800 cursor-pointer" />
+                <Repeat2 size={18} className="hover:text-slate-800 cursor-pointer" />
+                <Share size={18} className="hover:text-slate-800 cursor-pointer" />
+                <div className="flex items-center gap-1">
+                  <Send size={17} className="hover:text-slate-800 cursor-pointer" />
+                  <span className="text-xs font-medium">DM</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-1 text-sm">
+                <MessageSquare size={17} className="hover:text-slate-800 cursor-pointer" />
+                <span>{commentCount ?? 0}</span>
+              </div>
             </div>
           )}
         </div>
@@ -257,7 +310,7 @@ const normalizePosts = (res) =>
     raw: p,
   }));
 
-/* ===== Search bars (same as before) ===== */
+/* ===== Search bars ===== */
 function FreeSearchBar({ value, onSubmit, onReset }) {
   const [local, setLocal] = useState(value);
   useEffect(() => setLocal(value), [value]);
@@ -384,24 +437,9 @@ function AcademicSearchBar({ value, onSubmit, onReset }) {
   ];
 
   const KIND_ROWS = [
-    {
-      key: "course_materials",
-      title: "Course Materials",
-      desc: "Syllabus, notes, exams…",
-      emoji: "📝",
-    },
-    {
-      key: "study_mate",
-      title: "Study Mate",
-      desc: "Find peers to study together",
-      emoji: "👥",
-    },
-    {
-      key: "coffee_chat",
-      title: "Coffee Chat",
-      desc: "Casual chat / mentoring",
-      emoji: "☕️",
-    },
+    { key: "course_materials", title: "Course Materials", desc: "Syllabus, notes, exams…", emoji: "📝" },
+    { key: "study_mate", title: "Study Mate", desc: "Find peers to study together", emoji: "👥" },
+    { key: "coffee_chat", title: "Coffee Chat", desc: "Casual chat / mentoring", emoji: "☕️" },
   ];
 
   const Row = ({ leading, title, desc, selected, onClick }) => (
@@ -419,9 +457,7 @@ function AcademicSearchBar({ value, onSubmit, onReset }) {
         {leading}
       </div>
       <div className="min-w-0">
-        <div className="font-medium text-[14.5px] text-slate-900 truncate">
-          {title}
-        </div>
+        <div className="font-medium text-[14.5px] text-slate-900 truncate">{title}</div>
         <div className="text-[12.5px] text-slate-500 truncate">{desc}</div>
       </div>
     </button>
@@ -480,15 +516,9 @@ function AcademicSearchBar({ value, onSubmit, onReset }) {
                     leading={<span className="text-base">{row.emoji}</span>}
                     title={row.title}
                     desc={row.desc}
-                    selected={
-                      local.type === "seeking" && local.kind === row.key
-                    }
+                    selected={local.type === "seeking" && local.kind === row.key}
                     onClick={() => {
-                      const next = {
-                        ...local,
-                        type: "seeking",
-                        kind: row.key,
-                      };
+                      const next = { ...local, type: "seeking", kind: row.key };
                       setLocal(next);
                       onSubmit(next);
                       setOpen(false);
@@ -520,9 +550,7 @@ function AcademicSearchBar({ value, onSubmit, onReset }) {
       >
         <div className="grid grid-cols-[1.2fr_0.9fr_auto] items-stretch">
           <div className="px-5 py-3 border-r">
-            <div className="text-[11px] font-semibold text-slate-500">
-              Keyword
-            </div>
+            <div className="text-[11px] font-semibold text-slate-500">Keyword</div>
             <input
               value={local.q || ""}
               onChange={(e) => set({ q: e.target.value })}
@@ -750,7 +778,6 @@ export default function Dashboard() {
         error: err?.message || "Failed to load posts.",
       }))
     );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [schoolKey, acadQuery.q, acadQuery.type, acadQuery.kind]);
 
   /* ---------- intersection observers ---------- */
@@ -762,9 +789,7 @@ export default function Dashboard() {
     const io = new IntersectionObserver(
       (entries) => {
         const e = entries[0];
-        if (e.isIntersecting) {
-          setFreeVisible((n) => n + 10);
-        }
+        if (e.isIntersecting) setFreeVisible((n) => n + 10);
       },
       { rootMargin: "400px 0px 400px 0px" }
     );
@@ -777,12 +802,7 @@ export default function Dashboard() {
     const io = new IntersectionObserver(
       (entries) => {
         const e = entries[0];
-        if (
-          e.isIntersecting &&
-          acad.hasMore &&
-          !acad.loading &&
-          !acad.loadingMore
-        ) {
+        if (e.isIntersecting && acad.hasMore && !acad.loading && !acad.loadingMore) {
           setAcad((s) => ({ ...s, loadingMore: true }));
           fetchAcademicPage(acad.page + 1, true).catch((err) =>
             setAcad((s) => ({
@@ -826,13 +846,13 @@ export default function Dashboard() {
 
   const canPostGeneral =
     isAuthed && title.trim() && (content.trim() || images.length);
-  const canPostAcademic = isAuthed && (
-    mode === "question"
+  const canPostAcademic =
+    isAuthed &&
+    (mode === "question"
       ? title.trim() && content.trim()
       : lookingKind === "course_materials"
-        ? title.trim() && materials.length > 0   // ✅ 과목명 + 1개 이상 선택
-        : title.trim()
-  );
+      ? title.trim() && materials.length > 0
+      : title.trim());
 
   const uploadFiles = async (files) => {
     const urls = [];
@@ -889,7 +909,6 @@ export default function Dashboard() {
             postType: "question",
           });
         } else if (lookingKind === "course_materials") {
-          // ✅ 전용 페이로드: title=courseName, content=""
           await createAcademicPost({
             ...base,
             title: title.trim(),
@@ -916,7 +935,7 @@ export default function Dashboard() {
         await fetchAcademicPage(1, false);
       }
 
-      // ✅ reset
+      // reset
       setTitle("");
       setContent("");
       setImages([]);
@@ -990,18 +1009,32 @@ export default function Dashboard() {
             </ul>
           ) : currentList.items.length ? (
             <>
-              <ul className="mt-5 mx-auto max-w-[700px] px-2">
-                {currentList.items.map((p) => (
-                  <li key={p._id || Math.random()}>
-                    <div className="mx-6 border-b border-slate-300/80">
-                      <PostRow
-                        post={p}
-                        onOpenDetail={() => goDetail(p, active)}
-                        showBadge={active === "academic"}
-                      />
-                    </div>
-                  </li>
-                ))}
+              <ul className="mt-5 mx-auto max-w-[700px] px-2 space-y-4">
+                {currentList.items.map((p) => {
+                  const actionsForThis =
+                    active === "general" ||
+                    (active === "academic" &&
+                      normalizeType(p.raw || {}) === "question");
+
+                  const comments =
+                    p.raw?.commentCount ??
+                    p.raw?.commentsCount ??
+                    (Array.isArray(p.raw?.comments) ? p.raw.comments.length : 0);
+
+                  return (
+                    <li key={p._id || Math.random()}>
+                      <div className="mx-6 border-b border-slate-300/80 py-3">
+                        <PostRow
+                          post={p}
+                          onOpenDetail={() => goDetail(p, active)}
+                          showBadge={active === "academic"}
+                          showActionsBar={actionsForThis}
+                          commentCount={comments}
+                        />
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
 
               {/* sentinel */}
@@ -1085,10 +1118,11 @@ export default function Dashboard() {
 
                 {/* Body fields */}
                 {active === "academic" && mode === "seeking" && lookingKind === "course_materials" ? (
-                  // ✅ Course Materials 전용 폼: 교수(옵션) + 체크박스(복수)
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-sm font-medium text-slate-700">Professor (optional)</label>
+                      <label className="block text-sm font-medium text-slate-700">
+                        Professor (optional)
+                      </label>
                       <input
                         type="text"
                         value={professor}
@@ -1106,8 +1140,11 @@ export default function Dashboard() {
                         {MATERIAL_OPTIONS.map((opt) => (
                           <label
                             key={opt.key}
-                            className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm cursor-pointer
-                            ${materials.includes(opt.key) ? "border-slate-900 bg-slate-900/5" : "border-slate-300 hover:bg-slate-50"}`}
+                            className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm cursor-pointer ${
+                              materials.includes(opt.key)
+                                ? "border-slate-900 bg-slate-900/5"
+                                : "border-slate-300 hover:bg-slate-50"
+                            }`}
                           >
                             <input
                               type="checkbox"
@@ -1125,7 +1162,6 @@ export default function Dashboard() {
                     </div>
                   </div>
                 ) : (
-                  // ✅ 기존 textarea (general / question / seeking-others)
                   <textarea
                     value={content}
                     onChange={(e) => setContent(e.target.value)}
@@ -1142,39 +1178,8 @@ export default function Dashboard() {
                   />
                 )}
 
-                {/* Images: freeboard 전용 */}
-                {/* {active === "general" && (
-                  <div className="space-y-2">
-                    <label className="block text-sm font-medium text-slate-700">
-                      Images
-                    </label>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      onChange={(e) =>
-                        setImages(Array.from(e.target.files || []))
-                      }
-                      className="block w-full text-sm file:mr-3 file:rounded-lg file:border file:border-slate-300 file:bg-white file:px-3 file:py-2 file:text-sm file:text-slate-700 hover:file:bg-slate-50"
-                    />
-                    {!!images.length && (
-                      <div className="grid grid-cols-3 gap-2">
-                        {images.map((f, idx) => (
-                          <div
-                            key={idx}
-                            className="h-24 rounded-lg overflow-hidden border border-slate-200"
-                          >
-                            <img
-                              src={URL.createObjectURL(f)}
-                              alt={`selected-${idx}`}
-                              className="h-full w-full object-cover"
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )} */}
+                {/* Images: freeboard 전용 (주석 유지) */}
+                {/* ... */}
 
                 <div className="flex items-center justify-between pt-2">
                   <p className="text-[12px] text-slate-500">
@@ -1200,7 +1205,7 @@ export default function Dashboard() {
                       <button
                         type="submit"
                         disabled={!canPostAcademic || posting}
-                        className="rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-900 disabled:opacity-60"
+                        className="rounded-xl bg-[#3044f0] px-4 py-2 text-sm font-semibold text-white hover:bg-[#2433c4] active:scale-[0.98] transition-all shadow-md hover:shadow-lg disabled:opacity-60"
                       >
                         {posting ? (
                           "Posting…"
@@ -1213,8 +1218,6 @@ export default function Dashboard() {
                           </>
                         )}
                       </button>
-
-                      {/* compact helper text */}
                       <span className="text-[10px] text-gray-400 mt-[2px]">
                         0 point during beta season
                       </span>
@@ -1226,13 +1229,12 @@ export default function Dashboard() {
                         posting ||
                         (active === "general" ? !canPostGeneral : !canPostAcademic)
                       }
-                      className="rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-900 disabled:opacity-60"
+                      className="rounded-xl bg-[#3044f0] px-4 py-2 text-sm font-semibold text-white hover:bg-[#2433c4] active:scale-[0.98] transition-all shadow-md hover:shadow-lg disabled:opacity-60"
                     >
                       {posting ? "Posting…" : "Post"}
                     </button>
                   )}
                 </div>
-
 
                 {!!msg.text && (
                   <div
@@ -1253,4 +1255,3 @@ export default function Dashboard() {
     </div>
   );
 }
-
