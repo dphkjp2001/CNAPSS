@@ -528,12 +528,15 @@ function FeatureShowcase() {
       <div className="md:col-span-7">
         <div className="sticky top-20">
           <div className="relative h-[640px]">
+            {/* Anonymous (Freeboard) demo with darker bg */}
             <Panel visible={active === 0}>
-              <FreeboardFloating play={active === 0} />
+              <AnonymousQSwipe play={active === 0} />
             </Panel>
+            {/* Academic – General Q */}
             <Panel visible={active === 1} delay={70}>
               <GeneralQSwipe play={active === 1} />
             </Panel>
+            {/* Academic – Seeking */}
             <Panel visible={active === 2} delay={110}>
               <SeekingDesktop play={active === 2} />
             </Panel>
@@ -873,6 +876,211 @@ function GeneralQSwipe({ play }) {
   );
 }
 
+/* ================== Anonymous Q — swipe carousel (light gray cards) ================== */
+function AnonymousQSwipe({ play }) {
+  const CARD_W = 560;
+  const GAP = 28;
+  const STEP = CARD_W + GAP;
+
+  const cards = React.useMemo(
+    () => [
+      {
+        tag: "Confession",
+        title: "I microwaved fish in the dorm 😳",
+        meta: "132 upvotes · 44 comments",
+        accent: "#F59E0B",
+        thread: [
+          { who: "Anon1", text: "Dude, the smell reached the whole floor 😭" },
+          { who: "Anon2", text: "Bold move. Respect." },
+          { who: "You", text: "I swear it was the only thing left in the fridge." },
+        ],
+      },
+      {
+        tag: "Rumor",
+        title: "Secret printer that never has a line?",
+        meta: "87 upvotes · 19 comments",
+        accent: "#0EA5E9",
+        thread: [
+          { who: "Anon1", text: "Third floor, behind the vending machines 👀" },
+          { who: "Anon2", text: "Don’t tell everyone!" },
+          { who: "You", text: "Tested — it works. Thank me later." },
+        ],
+      },
+      {
+        tag: "Hot Take",
+        title: "9 AM lectures should be illegal.",
+        meta: "211 upvotes · 63 comments",
+        accent: "#EF4444",
+        thread: [
+          { who: "Anon1", text: "Facts. My brain boots up at 11 AM." },
+          { who: "Anon2", text: "Professors who pick 9 AMs are villains." },
+          { who: "You", text: "Petition incoming." },
+        ],
+      },
+      {
+        tag: "Meme",
+        title: "Dining-hall ‘orange juice’ speed-run (0.4 sec).",
+        meta: "98 upvotes · 27 comments",
+        accent: "#8B5CF6",
+        thread: [
+          { who: "Anon1", text: "Vitamin C overdose challenge accepted." },
+          { who: "Anon2", text: "Tastes like regret." },
+          { who: "You", text: "It’s pulp or nothing." },
+        ],
+      },
+    ],
+    []
+  );
+
+  const list3 = React.useMemo(() => [...cards, ...cards, ...cards], [cards]);
+  const BASE = cards.length;
+  const [cur, setCur] = useState(0);
+  const pos = BASE + cur;
+  const [animate, setAnimate] = useState(true);
+  const [pressing, setPressing] = useState(false);
+  const [showAnswers, setShowAnswers] = useState(false);
+  const playKey = `${cur}-${showAnswers}`;
+
+  const timers = React.useRef([]);
+  const clearTimers = React.useCallback(() => {
+    timers.current.forEach((t) =>
+      t.kind === "i" ? clearInterval(t.id) : clearTimeout(t.id)
+    );
+    timers.current = [];
+  }, []);
+
+  useEffect(() => {
+    clearTimers();
+    setPressing(false);
+    setShowAnswers(false);
+    if (!play) return;
+
+    const typingLen = (cards[cur].thread?.[2]?.text || "").length;
+    const DELAY_BEFORE_PRESS = 900;
+    const PRESS_TIME = 220;
+    const AFTER_PRESS_TO_PANEL = 200;
+    const COMMENT_FLOW_MS = 320 + 900 + 420 + typingLen * 34 + 220 + 360;
+    const EXTRA_DWELL = 700;
+    const AUTO_NEXT_MS =
+      DELAY_BEFORE_PRESS +
+      PRESS_TIME +
+      AFTER_PRESS_TO_PANEL +
+      COMMENT_FLOW_MS +
+      EXTRA_DWELL;
+
+    timers.current.push({
+      kind: "t",
+      id: setTimeout(() => setPressing(true), DELAY_BEFORE_PRESS),
+    });
+    timers.current.push({
+      kind: "t",
+      id: setTimeout(() => setPressing(false), DELAY_BEFORE_PRESS + PRESS_TIME),
+    });
+    timers.current.push({
+      kind: "t",
+      id: setTimeout(
+        () => setShowAnswers(true),
+        DELAY_BEFORE_PRESS + PRESS_TIME + AFTER_PRESS_TO_PANEL
+      ),
+    });
+    timers.current.push({
+      kind: "t",
+      id: setTimeout(
+        () => setCur((c) => (c + 1) % cards.length),
+        AUTO_NEXT_MS
+      ),
+    });
+
+    return clearTimers;
+  }, [cur, play, cards, clearTimers]);
+
+  useEffect(() => {
+    if (!play) {
+      clearTimers();
+      setAnimate(false);
+      setCur(0);
+      setPressing(false);
+      setShowAnswers(false);
+      requestAnimationFrame(() => setAnimate(true));
+    }
+  }, [play, clearTimers]);
+
+  return (
+    <>
+      <Keyframes />
+      {/* Overall section background stays white */}
+      <div className="h-full w-full rounded-3xl overflow-hidden bg-white relative">
+        {/* top: gray cards */}
+        <div className="relative w-full overflow-hidden mb-4">
+          <div
+            className="flex items-stretch"
+            style={{
+              gap: `${GAP}px`,
+              transform: `translateX(${-pos * STEP}px)`,
+              transition: animate
+                ? "transform 680ms cubic-bezier(0.34,1,0.68,1)"
+                : "none",
+            }}
+          >
+            {list3.map((c, i) => (
+              <div
+                key={`${i}-${c.tag}`}
+                className={`shrink-0 rounded-2xl ring-1 p-6 md:p-7 ${
+                  i === pos ? "scale-[1.0]" : "scale-[0.96]"
+                }`}
+                style={{
+                  width: CARD_W,
+                  backgroundColor: "#1E293B", // slate-800 tone for contrast
+                  color: "white",
+                  borderColor: "rgba(255,255,255,0.1)",
+                  boxShadow:
+                    i === pos
+                      ? "0 20px 40px rgba(0,0,0,0.25)"
+                      : "0 10px 20px rgba(0,0,0,0.15)",
+                  transition: "all 400ms ease",
+                }}
+              >
+                <div className="flex items-center gap-2 mb-3">
+                  <span
+                    className="h-2.5 w-2.5 rounded-full"
+                    style={{ background: c.accent }}
+                  />
+                  <span
+                    className="text-[12px] font-extrabold uppercase tracking-wide"
+                    style={{ color: c.accent }}
+                  >
+                    {c.tag}
+                  </span>
+                </div>
+
+                <p className="text-[24px] leading-[1.3] font-black">
+                  {c.title}
+                </p>
+                <div className="mt-3 text-[14px] opacity-80">{c.meta}</div>
+
+                <button
+                  className="mt-6 rounded-full bg-white text-slate-900 font-bold px-4 py-2 text-[14px] hover:bg-slate-100 transition-transform"
+                  style={{
+                    transform: pressing && i === pos ? "scale(0.96)" : "scale(1)",
+                  }}
+                >
+                  View answers
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+
+          <AnonymousQComments
+            show={showAnswers}
+            thread={cards[cur].thread}
+            playKey={playKey}
+          />
+      </div>
+    </>
+  );
+}
+
 function QQuestionCard({ width, tag, title, meta, accent, dim, active, pressing }) {
   return (
     <div
@@ -1035,6 +1243,166 @@ function QComments({ show, thread, playKey }) {
               disabled={!composerText}
               className="rounded-lg bg-black text-white px-4 py-2 text-[13px] font-bold transition-transform disabled:opacity-40"
               style={{ transform: pressingPost ? "scale(0.95)" : "scale(1)" }}
+            >
+              Post
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AnonymousQComments({ show, thread, playKey }) {
+  const [shown, setShown] = useState([]);
+  const [composerText, setComposerText] = useState("");
+  const [blink, setBlink] = useState(true);
+  const [pressingPost, setPressingPost] = useState(false);
+  const timers = useRef([]);
+
+  const clearTimers = useCallback(() => {
+    timers.current.forEach((t) =>
+      t.kind === "i" ? clearInterval(t.id) : clearTimeout(t.id)
+    );
+    timers.current = [];
+  }, []);
+
+  const palette = ["#60A5FA", "#34D399", "#FBBF24", "#A78BFA", "#F472B6", "#22D3EE"];
+  const hash = (s) => {
+    let h = 0;
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+    return h;
+  };
+  const anonOf = (text, idx = 0) => {
+    const h = hash(text + idx);
+    const id = (h % 97) + 3;
+    const color = palette[h % palette.length];
+    return { id, color };
+  };
+
+  useEffect(() => {
+    const id = setInterval(() => setBlink((b) => !b), 500);
+    return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    clearTimers();
+    setShown([]);
+    setComposerText("");
+    setPressingPost(false);
+    if (!show) return;
+
+    timers.current.push({ kind: "t", id: setTimeout(() => setShown([thread[0]]), 320) });
+    timers.current.push({ kind: "t", id: setTimeout(() => setShown((s) => [...s, thread[1]]), 1200) });
+
+    timers.current.push({
+      kind: "t",
+      id: setTimeout(() => {
+        const full = thread[2].text || "";
+        let i = 1;
+        const inter = setInterval(() => {
+          setComposerText(full.slice(0, i));
+          i += 1;
+          if (i > full.length) {
+            clearInterval(inter);
+            setTimeout(() => {
+              setPressingPost(true);
+              setTimeout(() => {
+                setPressingPost(false);
+                setShown((s) => [...s, thread[2]]);
+                setComposerText("");
+              }, 200);
+            }, 180);
+          }
+        }, 34);
+        timers.current.push({ kind: "i", id: inter });
+      }, 2000),
+    });
+
+    return () => clearTimers();
+  }, [show, playKey, thread, clearTimers]);
+
+  return (
+    <div
+      className="rounded-2xl bg-slate-200/95 backdrop-blur px-5 py-4 shadow-inner"
+      style={{
+        opacity: show ? 1 : 0,
+        transform: show ? "translateY(0)" : "translateY(10px)",
+        transition: "all 480ms cubic-bezier(0.34,1.56,0.64,1)",
+        minHeight: 160,
+      }}
+    >
+      <div className="space-y-3">
+        {shown.map((m, i) => {
+          const isYou = m.who === "You";
+          const { id, color } = isYou
+            ? { id: "you", color: "#111827" }
+            : anonOf(m.text, i);
+          return (
+            <div
+              key={`${i}-${m.who}`}
+              className="flex items-start gap-3"
+              style={{
+                opacity: 0,
+                animation: "fadeSlideUp 380ms ease forwards",
+                animationDelay: `${i * 40}ms`,
+              }}
+            >
+              <div
+                className="h-8 w-8 rounded-full flex items-center justify-center text-[11px] font-bold text-white shrink-0"
+                style={{ background: color }}
+                title={
+                  isYou ? "Anonymous (you)" : `Anonymous #${id}`
+                }
+              >
+                {isYou ? "You" : "A"}
+              </div>
+              <div className="flex-1">
+                <div className="text-[12px] text-slate-600">
+                  {isYou ? "Anonymous (you)" : `Anonymous #${id}`} ·{" "}
+                  {i === 0 ? "1h" : i === 1 ? "45m" : "just now"}
+                </div>
+                <div
+                  className={`mt-1 rounded-xl px-3 py-2 text-[14px] ring-1 ${
+                    isYou
+                      ? "bg-slate-100 ring-slate-300 text-slate-900"
+                      : "bg-slate-50 ring-black/5 text-slate-900"
+                  }`}
+                >
+                  {m.text}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+
+        <div className="flex items-center gap-3 pt-1">
+          <div
+            className="h-8 w-8 rounded-full flex items-center justify-center text-[11px] font-bold text-white shrink-0"
+            style={{ background: "#111827" }}
+            title="Anonymous (you)"
+          >
+            You
+          </div>
+          <div className="flex-1 flex items-center gap-2">
+            <div
+              className="flex-1 rounded-xl border px-3 py-2 text-[14px] text-slate-900 bg-slate-50"
+              style={{ borderColor: "rgba(0,0,0,0.08)" }}
+              aria-readonly
+            >
+              {composerText || (
+                <span className="text-slate-400">Write a comment…</span>
+              )}
+              {composerText && (
+                <span style={{ opacity: blink ? 1 : 0 }}>▍</span>
+              )}
+            </div>
+            <button
+              disabled={!composerText}
+              className="rounded-lg bg-black text-white px-4 py-2 text-[13px] font-bold transition-transform disabled:opacity-40"
+              style={{
+                transform: pressingPost ? "scale(0.95)" : "scale(1)",
+              }}
             >
               Post
             </button>
@@ -1419,6 +1787,29 @@ function SideChatItem({ icon, title, active = false }) {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

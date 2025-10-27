@@ -113,10 +113,39 @@ export default function FreeBoardDetail() {
     return fromHash || nid || null;
   }, [location.hash, location.search]);
 
-  const isAuthor = useMemo(
-    () => (user?.email || "").toLowerCase() === (post?.email || "").toLowerCase(),
-    [user, post]
-  );
+  // ✅ 작성자 판별: email / id / isMine 모두 대응
+  const isAuthor = useMemo(() => {
+    const p = post;
+    const u = user;
+    if (!p || !u) return false;
+
+    const myEmail = String(u.email || "").toLowerCase();
+    const myIds = [u.id, u._id].filter(Boolean).map(String);
+
+    const authorEmails = [
+      p.email,
+      p.authorEmail,
+      p.userEmail,
+      p.author?.email,
+    ]
+      .filter(Boolean)
+      .map((e) => String(e).toLowerCase());
+
+    const authorIds = [
+      p.userId,
+      p.authorId,
+      p.author?._id,
+      p.author?.id,
+    ]
+      .filter(Boolean)
+      .map(String);
+
+    const emailMatch = myEmail && authorEmails.includes(myEmail);
+    const idMatch = authorIds.some((id) => myIds.includes(id));
+    const flagMatch = Boolean(p.isMine);
+
+    return emailMatch || idMatch || flagMatch;
+  }, [user, post]);
 
   const handleDelete = async () => {
     if (!window.confirm("Delete this post?")) return;
@@ -258,7 +287,7 @@ export default function FreeBoardDetail() {
               </div>
             )}
 
-            {/* ✅ Vote controls — 👍 / 👎 아이콘으로 변경 */}
+            {/* ✅ Vote controls */}
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-2 py-1">
                 <button
@@ -370,6 +399,7 @@ export default function FreeBoardDetail() {
     </div>
   );
 }
+
 
 
 

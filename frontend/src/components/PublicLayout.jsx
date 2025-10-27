@@ -28,7 +28,7 @@ export default function PublicLayout({ fullBleed = false }) {
     }
   }, [location.state]);
 
-  // 전폭 레이아웃
+  // 전폭 레이아웃 (랜딩)
   if (fullBleed) {
     return (
       <div className="min-h-screen flex flex-col bg-white">
@@ -99,6 +99,7 @@ export default function PublicLayout({ fullBleed = false }) {
     </div>
   );
 }
+
 
 
 

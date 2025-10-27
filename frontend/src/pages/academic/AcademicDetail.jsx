@@ -1,13 +1,17 @@
 // frontend/src/pages/academic/AcademicDetail.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { useSchool } from "../../contexts/SchoolContext";
 import { useAuth } from "../../contexts/AuthContext";
-import { getPublicAcademicPost } from "../../api/academicPosts";
+import {
+  getPublicAcademicPost,
+  getAcademicPost,         // ✅ 보호 상세 추가
+  deleteAcademicPost,
+} from "../../api/academicPosts";
 import { createRequest, checkRequestExists } from "../../api/request";
 import CommentSection from "../../components/CommentSection";
-import VoteButtons from '../../components/VoteButtons';
-import UserBadge from '../../components/UserBadge';
+import VoteButtons from "../../components/VoteButtons";
+import UserBadge from "../../components/UserBadge";
 
 const MATERIAL_LABELS = {
   lecture_notes: "Lecture Notes",
@@ -26,6 +30,7 @@ function kindEmoji(kind = "") {
 
 export default function AcademicDetail() {
   const { school: schoolFromPath, id } = useParams();
+  const navigate = useNavigate();
   const { school: ctxSchool } = useSchool();
   const school = schoolFromPath || ctxSchool || "nyu";
   const { user } = useAuth();
@@ -36,6 +41,7 @@ export default function AcademicDetail() {
   const [flash, setFlash] = useState("");
   const [requested, setRequested] = useState(false);
 
+  // 1) 누구나 볼 수 있는 공개 상세 먼저
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -45,12 +51,34 @@ export default function AcademicDetail() {
         setState({ loading: false, error: "", post: p });
       } catch (err) {
         if (!alive) return;
-        setState({ loading: false, error: err?.message || "Failed to load post.", post: null });
+        setState({
+          loading: false,
+          error: err?.message || "Failed to load post.",
+          post: null,
+        });
       }
     })();
     return () => { alive = false; };
   }, [school, id]);
 
+  // 2) 로그인했다면 보호 상세로 보강(작성자 여부 / myVote 등 포함)
+  useEffect(() => {
+    if (!user) return;
+    let alive = true;
+    (async () => {
+      try {
+        const pr = await getAcademicPost({ school, id });
+        if (!alive) return;
+        // 보호 상세가 성공하면 그 데이터로 덮어써서 isMine/author 정보 가시화
+        setState((s) => ({ ...s, post: pr || s.post }));
+      } catch {
+        // 보호 실패는 조용히 무시 (공개 상세는 이미 있음)
+      }
+    })();
+    return () => { alive = false; };
+  }, [user, school, id]);
+
+  // 3) 요청 보낸 적이 있는지 체크(로그인 시)
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -66,27 +94,61 @@ export default function AcademicDetail() {
 
   const meta = useMemo(() => {
     const p = state.post || {};
-    const mode =
-      (p.mode || p.postType || p.type || (p.lookingFor ? "looking_for" : "general") || "general").toString().toLowerCase();
+    const mode = (
+      p.mode ||
+      p.postType ||
+      p.type ||
+      (p.lookingFor ? "looking_for" : "general") ||
+      "general"
+    )
+      .toString()
+      .toLowerCase();
     return { isSeeking: mode === "looking_for" || mode === "seeking", mode, kind: p.kind || "" };
   }, [state.post]);
 
-  const submitRequest = async (e) => {
-    e.preventDefault();
-    if (!user) return setFlash("Please log in to send a request.");
-    if (!reqMsg.trim()) return setFlash("Please write a short message.");
+  // ✅ 작성자 판별: email / id / isMine 모두 대응
+  const isAuthor = useMemo(() => {
+    const p = state.post;
+    const u = user;
+    if (!p || !u) return false;
 
-    setReqSending(true);
-    setFlash("");
+    const myEmail = String(u.email || "").toLowerCase();
+    const myIds = [u.id, u._id].filter(Boolean).map(String);
+
+    const authorEmails = [
+      p.email,
+      p.authorEmail,
+      p.userEmail,
+      p.author?.email,
+    ]
+      .filter(Boolean)
+      .map((e) => String(e).toLowerCase());
+
+    const authorIds = [
+      p.userId,
+      p.authorId,
+      p.author?._id,
+      p.author?.id,
+    ]
+      .filter(Boolean)
+      .map(String);
+
+    const emailMatch = myEmail && authorEmails.includes(myEmail);
+    const idMatch = authorIds.some((id) => myIds.includes(id));
+    const flagMatch = Boolean(p.isMine); // ← 보호 상세에서 주는 플래그
+
+    return emailMatch || idMatch || flagMatch;
+  }, [user, state.post]);
+
+  const handleDelete = async () => {
+    if (!isAuthor) return;
+    if (!window.confirm("Delete this post?")) return;
     try {
-      await createRequest({ school, targetId: id, message: reqMsg.trim() });
-      setReqMsg("");
-      setRequested(true);
-      setFlash("Request sent! Check Messages.");
+      await deleteAcademicPost({ school, id });
+      alert("Post deleted.");
+      navigate(`/${school}/academic`);
     } catch (err) {
-      setFlash(err?.message || "Failed to send request.");
-    } finally {
-      setReqSending(false);
+      alert("Delete failed: " + (err?.message || "Unknown error"));
     }
   };
 
@@ -95,8 +157,8 @@ export default function AcademicDetail() {
   if (!state.post) return <div className="p-6 text-gray-500">Post not found.</div>;
 
   const { title, content, createdAt, kind, professor, materials = [] } = state.post;
-
-  const isCourseMaterials = String(kind || "").toLowerCase().replace(/[\s-]+/g, "_") === "course_materials";
+  const isCourseMaterials =
+    String(kind || "").toLowerCase().replace(/[\s-]+/g, "_") === "course_materials";
   const materialLabels = (Array.isArray(materials) ? materials : [])
     .map((k) => MATERIAL_LABELS[k] || k)
     .filter(Boolean);
@@ -111,16 +173,33 @@ export default function AcademicDetail() {
               <span className="font-medium">
                 {meta.isSeeking ? "Seeking" : "General question"}
               </span>
-              {isCourseMaterials && <span className="text-slate-400">• Course Materials</span>}
+              {isCourseMaterials && (
+                <span className="text-slate-400">• Course Materials</span>
+              )}
             </div>
-            <time dateTime={createdAt}>{new Date(createdAt).toLocaleString()}</time>
+
+            <div className="flex items-center gap-3">
+              <time dateTime={createdAt}>{new Date(createdAt).toLocaleString()}</time>
+
+              {/* ✅ 작성자에게만 삭제 버튼 노출 (보호 상세 불러오면 isAuthor가 true로 계산됨) */}
+              {isAuthor && (
+                <button
+                  onClick={handleDelete}
+                  className="ml-2 rounded-xl bg-red-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-600"
+                  title="Delete this post"
+                >
+                  Delete
+                </button>
+              )}
+            </div>
           </div>
+
           <h1 className="mt-2 text-2xl font-semibold text-slate-900">{title}</h1>
-          
+
           {/* Author & Voting */}
           <div className="mt-3 flex items-center justify-between">
-            <UserBadge 
-              username={state.post.nickname} 
+            <UserBadge
+              username={state.post.nickname}
               tier={state.post.authorTier}
               className="text-sm"
             />
@@ -163,7 +242,23 @@ export default function AcademicDetail() {
             <p className="text-sm text-slate-600 mb-3">
               This post doesn’t have comments. Send a private request to the author instead.
             </p>
-            <form onSubmit={submitRequest} className="space-y-3">
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              if (!user) return setFlash("Please log in to send a request.");
+              if (!reqMsg.trim()) return setFlash("Please write a short message.");
+              setReqSending(true);
+              setFlash("");
+              try {
+                await createRequest({ school, targetId: id, message: reqMsg.trim() });
+                setReqMsg("");
+                setRequested(true);
+                setFlash("Request sent! Check Messages.");
+              } catch (err) {
+                setFlash(err?.message || "Failed to send request.");
+              } finally {
+                setReqSending(false);
+              }
+            }} className="space-y-3">
               <textarea
                 value={reqMsg}
                 onChange={(e) => setReqMsg(e.target.value)}
@@ -187,7 +282,9 @@ export default function AcademicDetail() {
               {!!flash && (
                 <div
                   className={`text-sm px-3 py-2 rounded-lg border ${
-                    flash.includes("sent") ? "border-green-200 bg-green-50 text-green-700" : "border-red-200 bg-red-50 text-red-700"
+                    flash.includes("sent")
+                      ? "border-green-200 bg-green-50 text-green-700"
+                      : "border-red-200 bg-red-50 text-red-700"
                   }`}
                 >
                   {flash}
@@ -197,7 +294,6 @@ export default function AcademicDetail() {
           </div>
         ) : (
           <div className="px-5 py-5 border-t border-slate-200 bg-white">
-            {/* ✅ FIX: pass postId (NOT targetId) */}
             <CommentSection postId={id} />
           </div>
         )}
@@ -205,6 +301,9 @@ export default function AcademicDetail() {
     </div>
   );
 }
+
+
+
 
 
 

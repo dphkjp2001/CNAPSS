@@ -4,10 +4,8 @@ import React, {
   useMemo,
   useRef,
   useState,
-  useLayoutEffect,
   useCallback,
 } from "react";
-import { createPortal } from "react-dom";
 import { useNavigate, useLocation } from "react-router-dom";
 
 import { useSchool } from "../../contexts/SchoolContext";
@@ -21,12 +19,11 @@ import {
   getPublicAcademicPosts,
 } from "../../api/academicPosts";
 
-// ✅ 아이콘 (outline)
 import { Bookmark, Repeat2, Share, Send, MessageSquare } from "lucide-react";
 
 /* ===== Design tokens ===== */
 const TOKENS = {
-  pageBg: "#FFFFFF", // ← 전체 배경 흰색
+  pageBg: "#FFFFFF",
   text: "#0F172A",
   sub: "#64748B",
   primary: "#111827",
@@ -34,18 +31,9 @@ const TOKENS = {
   red: "#FF7A70",
 };
 
-/* ===== Course-materials options (composer 전용) ===== */
-const MATERIAL_OPTIONS = [
-  { key: "lecture_notes", label: "Lecture Notes" },
-  { key: "syllabus", label: "Syllabus" },
-  { key: "past_exams", label: "Past Exams" },
-  { key: "quiz_prep", label: "Quiz Prep" },
-];
-
 /* ===== utils (type/kind normalization) ===== */
 const toSlug = (v = "") =>
   String(v).toLowerCase().trim().replace(/[\s_-]+/g, "_");
-const toFlat = (v = "") => String(v).toLowerCase().replace(/[\s_\-]/g, "");
 const normalizeType = (raw = {}) => {
   const t =
     raw.postType ||
@@ -92,7 +80,6 @@ function formatRelativeTime(dateString) {
 
   if (diffMins < 60) return `${diffMins} mins ago`;
   if (diffHours < 24) return `${diffHours} hs ago`;
-
   if (diffDays === 1) return "yesterday";
   return `${diffDays} days ago`;
 }
@@ -113,80 +100,8 @@ function CardBox({ children }) {
     </div>
   );
 }
-function Segmented({ value, onChange }) {
-  const isGeneral = value === "general";
-  const leftRef = useRef(null);
-  const rightRef = useRef(null);
-  const [underline, setUnderline] = useState({ w: 0, x: 0 });
-  const measure = () => {
-    const l = leftRef.current,
-      r = rightRef.current;
-    if (!l || !r) return;
-    const el = isGeneral ? l : r;
-    setUnderline({ w: el.offsetWidth, x: el.offsetLeft - l.offsetLeft });
-  };
-  useLayoutEffect(() => {
-    measure();
-    const ro = new ResizeObserver(measure);
-    if (leftRef.current?.parentElement)
-      ro.observe(leftRef.current.parentElement);
-    return () => ro.disconnect();
-  }, [isGeneral]);
-  return (
-    <>
-      <style>{`
-        @keyframes wiggleScale {
-          0% { transform: translateY(0) scale(1); }
-          25% { transform: translateY(-2px) scale(1.03); }
-          50% { transform: translateY(0.5px) scale(1.01); }
-          75% { transform: translateY(-1px) scale(1.02); }
-          100% { transform: translateY(0) scale(1); }
-        }
-      `}</style>
-      <div className="w-full flex justify-center">
-        <div className="relative inline-flex items-center gap-8">
-          <span
-            aria-hidden
-            className="absolute -bottom-2 h-[3px] rounded-full transition-transform duration-300 ease-out"
-            style={{
-              width: underline.w || 0,
-              transform: `translateX(${underline.x || 0}px)`,
-              background: `linear-gradient(90deg, ${TOKENS.pink}, ${TOKENS.red})`,
-            }}
-          />
-          <button
-            ref={leftRef}
-            type="button"
-            onClick={() => onChange("general")}
-            className={`text-[22px] font-bold flex items-center gap-2 transition-all ${
-              isGeneral ? "text-slate-900" : "text-slate-400 hover:text-slate-600"
-            } ${isGeneral ? "animate-[wiggleScale_360ms_ease-in-out]" : ""}`}
-            aria-pressed={isGeneral}
-          >
-            <span aria-hidden>💬</span>
-            <span>General</span>
-          </button>
-          <button
-            ref={rightRef}
-            type="button"
-            onClick={() => onChange("academic")}
-            className={`text-[22px] font-bold flex items-center gap-2 transition-all ${
-              !isGeneral
-                ? "text-slate-900 animate-[wiggleScale_360ms_ease-in-out]"
-                : "text-slate-400 hover:text-slate-600"
-            }`}
-            aria-pressed={!isGeneral}
-          >
-            <span aria-hidden>🎓</span>
-            <span>Academic</span>
-          </button>
-        </div>
-      </div>
-    </>
-  );
-}
 
-// ⬇️ PostRow (미리보기 한 줄 + 간격 조정 반영)
+/* ⬇️ PostRow (미리보기 한 줄 + 간격 조정) */
 function PostRow({
   post,
   onOpenDetail,
@@ -244,7 +159,6 @@ function PostRow({
             </div>
           </div>
 
-          {/* ✨ 글 미리보기 한 줄 */}
           {post.raw?.content && (
             <p className="mt-1 text-[13.5px] text-slate-600 line-clamp-1">
               {post.raw.content}
@@ -264,7 +178,6 @@ function PostRow({
             </div>
           )}
 
-          {/* 하단 액션바 (필요할 때만 표시) */}
           {showActionsBar && (
             <div className="flex items-center justify-between mt-2 pr-1 pl-[0px] text-slate-500 text-[13px]">
               <div className="flex items-center gap-6">
@@ -288,19 +201,13 @@ function PostRow({
   );
 }
 
-/* ===== 이하: 목록/검색/포스팅 로직은 동일 (생략 없이 유지됨) ===== */
-// (전체 파일 그대로 — 위 토큰/스타일만 보면 됨)
-
-
-
 /* ===== generic list helpers ===== */
 const pluckArray = (payload) => {
   if (!payload) return [];
   if (Array.isArray(payload)) return payload;
   if (Array.isArray(payload.items)) return payload.items;
   if (Array.isArray(payload.data)) return payload.data;
-  if (payload.data && Array.isArray(payload.data.items))
-    return payload.data.items;
+  if (payload.data && Array.isArray(payload.data.items)) return payload.data.items;
   return [];
 };
 const normalizePosts = (res) =>
@@ -313,328 +220,7 @@ const normalizePosts = (res) =>
     raw: p,
   }));
 
-/* ===== Search bars ===== */
-function FreeSearchBar({ value, onSubmit, onReset }) {
-  const [local, setLocal] = useState(value);
-  useEffect(() => setLocal(value), [value]);
-  const handle = (e) => {
-    e.preventDefault();
-    onSubmit(local);
-  };
-  return (
-    <form
-      onSubmit={handle}
-      className="mx-auto mt-5 w-full max-w-[700px] rounded-full shadow-[0_6px_24px_rgba(0,0,0,0.06)] bg-white border border-slate-200 overflow-hidden"
-    >
-      <div className="grid grid-cols-[1fr_auto] items-stretch">
-        <div className="px-5 py-3">
-          <div className="text-[11px] font-semibold text-slate-500">Keyword</div>
-          <input
-            value={local.q || ""}
-            onChange={(e) => setLocal({ q: e.target.value })}
-            placeholder="Search posts…"
-            className="w-full bg-transparent text-[14px] focus:outline-none"
-          />
-        </div>
-        <div className="flex items-center gap-2 px-3">
-          <button
-            type="button"
-            onClick={() => onReset()}
-            className="px-3 py-2 rounded-full text-sm text-slate-700 hover:bg-slate-100"
-          >
-            Reset
-          </button>
-          <button
-            type="submit"
-            className="px-4 py-2 rounded-full bg-black text-white text-sm font-semibold"
-          >
-            Search
-          </button>
-        </div>
-      </div>
-    </form>
-  );
-}
-
-function AcademicSearchBar({ value, onSubmit, onReset }) {
-  const [local, setLocal] = useState(value);
-  const [open, setOpen] = useState(false);
-  const [step, setStep] = useState("type"); // "type" | "kind"
-  const anchorRef = useRef(null);
-  const [rect, setRect] = useState({ left: 0, top: 0, width: 0, bottom: 0 });
-
-  useEffect(() => setLocal(value), [value]);
-
-  const measure = () => {
-    const el = anchorRef.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    setRect({ left: r.left, top: r.top, width: r.width, bottom: r.bottom });
-  };
-
-  useLayoutEffect(() => {
-    measure();
-    const on = () => measure();
-    window.addEventListener("resize", on);
-    window.addEventListener("scroll", on, true);
-    return () => {
-      window.removeEventListener("resize", on);
-      window.removeEventListener("scroll", on, true);
-    };
-  }, []);
-
-  useEffect(() => {
-    const onDoc = (e) => {
-      if (!open) return;
-      if (anchorRef.current && anchorRef.current.contains(e.target)) return;
-      if (e.target.closest?.("[data-acad-popover]")) return;
-      setOpen(false);
-      setStep("type");
-    };
-    const onEsc = (e) => e.key === "Escape" && setOpen(false);
-    document.addEventListener("click", onDoc);
-    document.addEventListener("keydown", onEsc);
-    return () => {
-      document.removeEventListener("click", onDoc);
-      document.removeEventListener("keydown", onEsc);
-    };
-  }, [open]);
-
-  const set = (patch) => setLocal((v) => ({ ...v, ...patch }));
-
-  const TYPE_ROWS = [
-    {
-      key: "question",
-      title: "General question",
-      desc: "Ask about courses, careers, visa, housing…",
-      icon: (
-        <svg viewBox="0 0 24 24" width="20" height="20" className="text-slate-700">
-          <circle cx="12" cy="12" r="10" fill="currentColor" opacity=".08" />
-          <path
-            d="M9.5 9.5a2.5 2.5 0 1 1 3.9 2l-.8.5a1.6 1.6 0 0 0-.6 1.2v.3"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            fill="none"
-            strokeLinecap="round"
-          />
-          <circle cx="12" cy="16.5" r="1" fill="currentColor" />
-        </svg>
-      ),
-    },
-    {
-      key: "seeking",
-      title: "Seeking",
-      desc: "Find materials, study mates, or coffee chats",
-      icon: (
-        <svg viewBox="0 0 24 24" width="20" height="20" className="text-slate-700">
-          <rect x="4" y="5" width="16" height="12" rx="2" fill="currentColor" opacity=".08" />
-          <path
-            d="M5.5 8h13M7 12h10M9 16h6"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-          />
-        </svg>
-      ),
-    },
-  ];
-
-  const KIND_ROWS = [
-    { key: "course_materials", title: "Course Materials", desc: "Syllabus, notes, exams…", emoji: "📝" },
-    { key: "study_mate", title: "Study Mate", desc: "Find peers to study together", emoji: "👥" },
-    { key: "coffee_chat", title: "Coffee Chat", desc: "Casual chat / mentoring", emoji: "☕️" },
-  ];
-
-  const Row = ({ leading, title, desc, selected, onClick }) => (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`w-full flex items-center gap-3 px-3 py-3 rounded-2xl transition text-left
-        ${
-          selected
-            ? "bg-slate-50 border border-slate-300 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.06)]"
-            : "hover:bg-slate-50 border border-transparent"
-        }`}
-    >
-      <div className="h-9 w-9 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
-        {leading}
-      </div>
-      <div className="min-w-0">
-        <div className="font-medium text-[14.5px] text-slate-900 truncate">{title}</div>
-        <div className="text-[12.5px] text-slate-500 truncate">{desc}</div>
-      </div>
-    </button>
-  );
-
-  const Panel = () => {
-    const maxW = 520;
-    const minW = 300;
-    const pad = 16;
-    const width = Math.min(
-      maxW,
-      Math.max(minW, rect.width - pad * 2, 0),
-      window.innerWidth - 32
-    );
-    const left = Math.round(rect.left + (rect.width - width) / 2);
-    const top = Math.round(rect.bottom + 8);
-
-    return createPortal(
-      <div data-acad-popover className="z-50 fixed" style={{ left, top, width }}>
-        <div className="rounded-[24px] bg-white shadow-2xl border border-slate-200 overflow-hidden">
-          <div className="max-h-[70vh] overflow-auto p-3">
-            <div className="px-1 pb-2 text-[11.5px] font-semibold text-slate-500">
-              {step === "type" ? "Type" : "Seeking · choose kind"}
-            </div>
-
-            {step === "type" && (
-              <div className="space-y-2">
-                {TYPE_ROWS.map((row) => (
-                  <Row
-                    key={row.key}
-                    leading={row.icon}
-                    title={row.title}
-                    desc={row.desc}
-                    selected={(local.type || "question") === row.key}
-                    onClick={() => {
-                      if (row.key === "question") {
-                        const next = { ...local, type: "question", kind: "" };
-                        setLocal(next);
-                        onSubmit(next);
-                        setOpen(false);
-                        setStep("type");
-                        return;
-                      }
-                      setStep("kind");
-                    }}
-                  />
-                ))}
-              </div>
-            )}
-
-            {step === "kind" && (
-              <div className="space-y-2">
-                {KIND_ROWS.map((row) => (
-                  <Row
-                    key={row.key}
-                    leading={<span className="text-base">{row.emoji}</span>}
-                    title={row.title}
-                    desc={row.desc}
-                    selected={local.type === "seeking" && local.kind === row.key}
-                    onClick={() => {
-                      const next = { ...local, type: "seeking", kind: row.key };
-                      setLocal(next);
-                      onSubmit(next);
-                      setOpen(false);
-                      setStep("type");
-                    }}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>,
-      document.body
-    );
-  };
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    onSubmit(local);
-    setOpen(false);
-    setStep("type");
-  };
-
-  return (
-    <div className="mx-auto mt-5 w-full max-w-[860px]" ref={anchorRef}>
-      <form
-        onSubmit={handleSubmit}
-        className="rounded-full shadow-[0_6px_24px_rgba(0,0,0,0.06)] bg-white border border-slate-200 overflow-hidden"
-      >
-        <div className="grid grid-cols-[1.2fr_0.9fr_auto] items-stretch">
-          <div className="px-5 py-3 border-r">
-            <div className="text-[11px] font-semibold text-slate-500">Keyword</div>
-            <input
-              value={local.q || ""}
-              onChange={(e) => set({ q: e.target.value })}
-              placeholder="Search academic posts…"
-              className="w-full bg-transparent text-[14px] focus:outline-none"
-            />
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              measure();
-              setOpen(true);
-              setStep("type");
-            }}
-            className="px-5 text-left py-3 border-r hover:bg-slate-50"
-          >
-            <div className="text-[11px] font-semibold text-slate-500">Type</div>
-            <div className="text-[14px]">
-              {local.type === "seeking" ? "Seeking" : "General Question"}
-            </div>
-          </button>
-          <div className="flex items-center gap-2 px-3">
-            <button
-              type="button"
-              onClick={() => {
-                const next = { q: "", type: "question", kind: "" };
-                setLocal(next);
-                onReset?.();
-              }}
-              className="px-3 py-2 rounded-full text-sm text-slate-700 hover:bg-slate-100"
-            >
-              Reset
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 rounded-full bg-black text-white text-sm font-semibold"
-            >
-              Search
-            </button>
-          </div>
-        </div>
-      </form>
-      {open && <Panel />}
-    </div>
-  );
-}
-
-/* ===== Composer header ===== */
-function ComposerHeader({ title, setTitle, active, mode, lookingKind }) {
-  return (
-    <div className="flex items-center gap-3 p-4 border-b border-slate-200">
-      <div className="shrink-0 h-10 w-10 rounded-full bg-slate-200 flex items-center justify-center">
-        <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden>
-          <circle cx="12" cy="8" r="4" fill="#cbd5e1" />
-          <path d="M4 20c0-4 4-6 8-6s8 2 8 6" fill="#cbd5e1" />
-        </svg>
-      </div>
-      <div className="flex-1">
-        <input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder={
-            active === "general"
-              ? "Write a catchy title for your post…"
-              : mode === "question"
-              ? "Ask an academic/career question…"
-              : lookingKind === "course_materials"
-              ? "Course name (e.g., STAT101)"
-              : "Seeking… (short title)"
-          }
-          className="w-full rounded-xl border border-slate-300 px-3 py-2 text-[15px] font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900"
-        />
-        <p className="mt-1 text-xs text-slate-500">
-          Posting as <span className="font-medium">anonymous</span>
-        </p>
-      </div>
-    </div>
-  );
-}
-
-/* ===== Main ===== */
+/* ===================== Main ===================== */
 export default function Dashboard() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -642,17 +228,22 @@ export default function Dashboard() {
   const { user } = useAuth();
   const schoolPath = useSchoolPath();
 
-  const schoolKey = school || "nyu";
-  const isAuthed = !!user;
+const schoolKey = (typeof school === "string" && school ? school.toLowerCase() : "nyu");
 
-  /* ---------- tabs ---------- */
-  const [active, setActive] = useState("academic");
-  useEffect(() => {
+  /* ---------- 탭/검색 상태: URL 파라미터만 사용 (Layout이 관리) ---------- */
+  const getParamsState = () => {
     const p = new URLSearchParams(location.search);
-    const tab = (p.get("tab") || "").toLowerCase();
-    if (tab === "free") setActive("general");
-    else if (tab === "academic") setActive("academic");
-  }, [location.search]);
+    const active = p.get("tab") === "free" ? "general" : "academic";
+    const freeQuery = { q: p.get("q") || "" };
+    const acadQuery = {
+      q: p.get("q") || "",
+      type: p.get("type") || "all",
+      kind: p.get("kind") || "",
+    };
+    return { active, freeQuery, acadQuery };
+  };
+  const [{ active, freeQuery, acadQuery }, setUiState] = useState(getParamsState());
+  useEffect(() => setUiState(getParamsState()), [location.search]);
 
   /* ---------- FREEBOARD ---------- */
   const [generalRaw, setGeneralRaw] = useState({
@@ -660,7 +251,6 @@ export default function Dashboard() {
     items: [],
     error: "",
   });
-  const [freeQuery, setFreeQuery] = useState({ q: "" });
   const [freeVisible, setFreeVisible] = useState(12);
 
   const filteredGeneral = useMemo(() => {
@@ -685,7 +275,6 @@ export default function Dashboard() {
   };
 
   /* ---------- ACADEMIC ---------- */
-  const [acadQuery, setAcadQuery] = useState({ q: "", type: "all", kind: "" });
   const [acad, setAcad] = useState({
     items: [],
     page: 1,
@@ -697,50 +286,69 @@ export default function Dashboard() {
     error: "",
   });
 
-  const fetchAcademicPage = useCallback(
-    async (page = 1, append = false) => {
-      const q = acadQuery.q || "";
-      const type = acadQuery.type === "all" ? "" : acadQuery.type;
-      const kind = acadQuery.type === "seeking" ? acadQuery.kind : "";
-      const res = await getPublicAcademicPosts({
-        school: schoolKey,
-        page,
-        limit: acad.limit,
-        q,
-        sort: "new",
-        type,
-        kind,
-      });
-      const items = normalizePosts(res);
-      const total =
-        typeof res?.total === "number"
-          ? res.total
-          : typeof res?.paging?.total === "number"
-          ? res.paging.total
-          : append
-          ? acad.total
-          : items.length;
-      const limit =
-        typeof res?.limit === "number"
-          ? res.limit
-          : typeof res?.paging?.limit === "number"
-          ? res.paging.limit
-          : acad.limit;
-      const merged = append ? [...acad.items, ...items] : items;
-      setAcad({
-        items: merged,
-        page,
-        limit,
-        total,
-        loading: false,
-        loadingMore: false,
-        hasMore: merged.length < total && items.length > 0,
-        error: "",
-      });
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [schoolKey, acadQuery, acad.items, acad.limit, acad.total]
-  );
+  // 수정본
+const fetchAcademicPage = useCallback(
+  async (page = 1, append = false) => {
+    // schoolKey 준비 안 됐으면 호출 보류
+    if (!schoolKey || schoolKey === "undefined") {
+      setAcad((s) => ({ ...s, loading: false, loadingMore: false }));
+      return;
+    }
+
+    const params = {
+      school: schoolKey,
+      page,
+      limit: acad.limit,
+      q: acadQuery.q || "",
+      sort: "new",
+    };
+
+    // type이 all이 아닐 때만 보냄
+    if (acadQuery.type && acadQuery.type !== "all") {
+      params.type = acadQuery.type;
+    }
+
+    // seeking일 때 kind가 있으면 보냄
+    if (acadQuery.type === "seeking" && acadQuery.kind) {
+      params.kind = acadQuery.kind;
+    }
+
+    const res = await getPublicAcademicPosts(params);
+    const items = normalizePosts(res);
+
+    const total =
+      typeof res?.total === "number"
+        ? res.total
+        : typeof res?.paging?.total === "number"
+        ? res.paging.total
+        : append
+        ? acad.total
+        : items.length;
+
+    const limit =
+      typeof res?.limit === "number"
+        ? res.limit
+        : typeof res?.paging?.limit === "number"
+        ? res.paging.limit
+        : acad.limit;
+
+    const merged = append ? [...acad.items, ...items] : items;
+
+    setAcad({
+      items: merged,
+      page,
+      limit,
+      total,
+      loading: false,
+      loadingMore: false,
+      hasMore: merged.length < total && items.length > 0,
+      error: "",
+    });
+  },
+  // 🔧 의존성 최소화: 함수 재생성으로 인한 무한 루프 방지
+  [schoolKey, acadQuery]
+);
+
 
   /* ---------- initial fetches ---------- */
   useEffect(() => {
@@ -781,7 +389,7 @@ export default function Dashboard() {
         error: err?.message || "Failed to load posts.",
       }))
     );
-  }, [schoolKey, acadQuery.q, acadQuery.type, acadQuery.kind]);
+  }, [schoolKey, acadQuery.q, acadQuery.type, acadQuery.kind, fetchAcademicPage]);
 
   /* ---------- intersection observers ---------- */
   const freeSentinelRef = useRef(null);
@@ -835,12 +443,19 @@ export default function Dashboard() {
   const [content, setContent] = useState("");
   const [images, setImages] = useState([]);
 
+  // Academic 전용: General question / Seeking 모드
   const [mode, setMode] = useState("question"); // 'question' | 'seeking'
-  const [lookingKind, setLookingKind] = useState("course_materials");
+  const [lookingKind, setLookingKind] = useState("course_materials"); // course_materials | study_mate | coffee_chat
 
-  // ✅ course materials 전용 상태
+  // Seeking: Course Materials 세부 필드
   const [professor, setProfessor] = useState("");
   const [materials, setMaterials] = useState([]); // array of keys
+  const MATERIAL_OPTIONS = [
+    { key: "lecture_notes", label: "Lecture Notes" },
+    { key: "syllabus", label: "Syllabus" },
+    { key: "past_exams", label: "Past Exams" },
+    { key: "quiz_prep", label: "Quiz Prep" },
+  ];
   const toggleMaterial = (k) =>
     setMaterials((arr) => (arr.includes(k) ? arr.filter((x) => x !== k) : [...arr, k]));
 
@@ -848,9 +463,9 @@ export default function Dashboard() {
   const [msg, setMsg] = useState({ type: "", text: "" });
 
   const canPostGeneral =
-    isAuthed && title.trim() && (content.trim() || images.length);
+    !!user && title.trim() && (content.trim() || images.length);
   const canPostAcademic =
-    isAuthed &&
+    !!user &&
     (mode === "question"
       ? title.trim() && content.trim()
       : lookingKind === "course_materials"
@@ -871,7 +486,7 @@ export default function Dashboard() {
   const submitPost = async (e) => {
     e.preventDefault();
     setMsg({ type: "", text: "" });
-    if (!isAuthed) {
+    if (!user) {
       setMsg({ type: "error", text: "Login required to post." });
       return;
     }
@@ -914,7 +529,7 @@ export default function Dashboard() {
         } else if (lookingKind === "course_materials") {
           await createAcademicPost({
             ...base,
-            title: title.trim(),
+            title: title.trim(),      // 코스명으로 사용
             content: "",
             postType: "seeking",
             kind: "course_materials",
@@ -978,30 +593,6 @@ export default function Dashboard() {
       <main className="mx-auto max-w-6xl px-4 py-6 grid grid-cols-1 md:grid-cols-[minmax(620px,700px)_380px] gap-10">
         {/* FEED */}
         <section className="md:col-start-1">
-        <div className="-mt-10 md:-mt-12 lg:-mt-14 transition-all"></div>
-          <Segmented value={active} onChange={setActive} />
-
-          {active === "general" ? (
-            <FreeSearchBar
-              value={freeQuery}
-              onSubmit={(v) => {
-                setFreeQuery(v);
-                setFreeVisible(12);
-              }}
-              onReset={() => {
-                setFreeQuery({ q: "" });
-                setFreeVisible(12);
-              }}
-            />
-          ) : (
-            <AcademicSearchBar
-              value={{ q: acadQuery.q, type: acadQuery.type, kind: acadQuery.kind }}
-              onSubmit={(v) => setAcadQuery(v)}
-              onReset={() => setAcadQuery({ q: "", type: "all", kind: "" })}
-            />
-          )}
-
-          {/* list */}
           {currentList.loading ? (
             <ul className="mt-4 space-y-3">
               {Array.from({ length: 10 }).map((_, i) => (
@@ -1070,15 +661,37 @@ export default function Dashboard() {
         <aside className="md:col-start-2 md:sticky md:top-[24px] self-start">
           <CardBox>
             <form onSubmit={submitPost}>
-              <ComposerHeader
-                title={title}
-                setTitle={setTitle}
-                active={active}
-                mode={mode}
-                lookingKind={lookingKind}
-              />
+              {/* 헤더: placeholder가 탭/모드에 맞춰 변경 */}
+              <div className="flex items-center gap-3 p-4 border-b border-slate-200">
+                <div className="shrink-0 h-10 w-10 rounded-full bg-slate-200 flex items-center justify-center">
+                  <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden>
+                    <circle cx="12" cy="8" r="4" fill="#cbd5e1" />
+                    <path d="M4 20c0-4 4-6 8-6s8 2 8 6" fill="#cbd5e1" />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <input
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder={
+                      active === "general"
+                        ? "Write a catchy title for your post…"
+                        : mode === "question"
+                        ? "Ask an academic/career question…"
+                        : lookingKind === "course_materials"
+                        ? "Course name (e.g., STAT101)"
+                        : "Seeking… (short title)"
+                    }
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-[15px] font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900"
+                  />
+                  <p className="mt-1 text-xs text-slate-500">
+                    Posting as <span className="font-medium">anonymous</span>
+                  </p>
+                </div>
+              </div>
 
               <div className="p-4 space-y-4">
+                {/* Academic일 때 상단 모드 토글 */}
                 {active === "academic" && (
                   <div className="flex items-center gap-2">
                     <button
@@ -1120,8 +733,10 @@ export default function Dashboard() {
                   </div>
                 )}
 
-                {/* Body fields */}
-                {active === "academic" && mode === "seeking" && lookingKind === "course_materials" ? (
+                {/* 본문/세부필드 */}
+                {active === "academic" &&
+                mode === "seeking" &&
+                lookingKind === "course_materials" ? (
                   <div className="space-y-4">
                     <div>
                       <label className="block text-sm font-medium text-slate-700">
@@ -1182,7 +797,7 @@ export default function Dashboard() {
                   />
                 )}
 
-                {/* Images: freeboard 전용 (주석 유지) */}
+                {/* Images: freeboard 전용 업로드 등은 기존 유지할 수 있게 자리만 남김 */}
                 {/* ... */}
 
                 <div className="flex items-center justify-between pt-2">

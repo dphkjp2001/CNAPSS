@@ -1,56 +1,91 @@
 // frontend/src/api/academicPosts.js
 import { getJson, postJson, putJson, deleteJson } from "./http";
 
-const API_URL = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
+/**
+ * 쿼리스트링 유틸
+ * - 빈 값/undefined/null은 제외
+ */
+function buildQuery(params = {}) {
+  const sp = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => {
+    if (v === undefined || v === null) return;
+    if (typeof v === "string" && v.trim() === "") return;
+    sp.set(k, String(v));
+  });
+  const s = sp.toString();
+  return s ? `?${s}` : "";
+}
 
-/* -------------------- Public (no auth) -------------------- */
-// List (public)
+/* -------------------------------------------------------
+ * Public (no auth)
+ * ----------------------------------------------------- */
+
+/**
+ * Public list
+ * - 서버 라우트: GET /public/:school/academic-posts
+ * - type: 'question' | 'seeking' | ''   (FE에서 'all'은 보내지 않음)
+ * - kind: 'course_materials' | 'study_mate' | 'coffee_chat' | ''
+ */
 export async function getPublicAcademicPosts({
   school,
   page = 1,
   limit = 20,
   q = "",
-  sort = "new",          // 'new' | 'old' | 'mostliked' (백엔드 허용값에 맞춤)
-  type = "",            // 'question' | 'seeking' | 'looking_for' | ''
-  kind = "",            // 'course_materials' | 'study_mate' | 'coffee_chat' | ''
+  sort = "new",        // 'new' | 'old'
+  type = "",           // '' | 'question' | 'seeking'
+  kind = "",           // '' | 'course_materials' | 'study_mate' | 'coffee_chat'
 }) {
-  const url = new URL(`${API_URL}/public/${school}/academic-posts`);
-  url.searchParams.set("page", String(page));
-  url.searchParams.set("limit", String(limit));
-  if (q) url.searchParams.set("q", q);
-  if (sort) url.searchParams.set("sort", sort);
-  if (type) url.searchParams.set("type", type);
-  if (kind) url.searchParams.set("kind", kind);
-  return getJson(url.toString());
-}
+  // 'all'은 서버에 보내지 않음
+  const safeType = type === "all" ? "" : type;
 
-// Detail (public)  ✅ AcademicDetail.jsx가 이 함수를 import 합니다.
-export async function getPublicAcademicPost({ school, id }) {
-  const url = `${API_URL}/public/${school}/academic-posts/${id}`;
-  return getJson(url);
-}
+  const qs = buildQuery({
+    page,
+    limit,
+    q,
+    sort,
+    type: safeType || undefined,
+    kind: safeType === "seeking" ? (kind || undefined) : undefined,
+  });
 
-/* -------------------- Auth required -------------------- */
-// Detail (protected) — 필요하면 사용
-export async function getAcademicPost({ school, id }) {
-  const url = `${API_URL}/${school}/academic-posts/${id}`;
-  return getJson(url);
+  // ✅ 상대경로 사용: 프록시/동일 오리진에서 안정적
+  return getJson(`/public/${encodeURIComponent(school)}/academic-posts${qs}`);
 }
 
 /**
- * Create Academic post
+ * Public detail
+ * - 서버 라우트: GET /public/:school/academic-posts/:id
+ */
+export async function getPublicAcademicPost({ school, id }) {
+  return getJson(
+    `/public/${encodeURIComponent(school)}/academic-posts/${encodeURIComponent(id)}`
+  );
+}
+
+/* -------------------------------------------------------
+ * Protected (auth)
+ * ----------------------------------------------------- */
+
+/**
+ * Protected detail
+ * - 서버 라우트: GET /:school/academic-posts/:id
+ */
+export async function getAcademicPost({ school, id }) {
+  return getJson(`/${encodeURIComponent(school)}/academic-posts/${encodeURIComponent(id)}`);
+}
+
+/**
+ * Create (auth)
  * - postType: 'question' | 'seeking'
- * - kind: only for seeking ('course_materials' | 'study_mate' | 'coffee_chat')
- * - extras for course_materials:
- *    - courseName (required; we also mirror to title)
+ * - seeking + course_materials:
+ *    - courseName (없으면 title을 courseName으로 미러링)
  *    - professor? (optional)
- *    - materials[] (['lecture_notes','syllabus','past_exams','quiz_prep'])
+ *    - materials? (['lecture_notes','syllabus','past_exams','quiz_prep'])
  */
 export async function createAcademicPost({
   school,
   title,
   content = "",
-  postType,   // or type/mode; 서버에서 normalize
+  postType, // or type/mode; 서버에서 normalize됨
   type,
   mode,
   kind,
@@ -62,7 +97,6 @@ export async function createAcademicPost({
   professor,
   materials,
 }) {
-  const url = `${API_URL}/${school}/academic-posts`;
   const body = { title, content, postType, type, mode, kind, tags, images };
 
   if (kind === "course_materials") {
@@ -71,9 +105,12 @@ export async function createAcademicPost({
     if (Array.isArray(materials)) body.materials = materials;
   }
 
-  return postJson(url, body);
+  return postJson(`/${encodeURIComponent(school)}/academic-posts`, body);
 }
 
+/**
+ * Update (auth)
+ */
 export async function updateAcademicPost({
   school,
   id,
@@ -91,7 +128,6 @@ export async function updateAcademicPost({
   professor,
   materials,
 }) {
-  const url = `${API_URL}/${school}/academic-posts/${id}`;
   const body = { title, content, postType, type, mode, kind, tags, images };
 
   if (kind === "course_materials") {
@@ -100,13 +136,14 @@ export async function updateAcademicPost({
     if (Array.isArray(materials)) body.materials = materials;
   }
 
-  return putJson(url, body);
+  return putJson(`/${encodeURIComponent(school)}/academic-posts/${encodeURIComponent(id)}`, body);
 }
 
+/**
+ * Delete (auth)
+ */
 export async function deleteAcademicPost({ school, id }) {
-  const url = `${API_URL}/${school}/academic-posts/${id}`;
-  return deleteJson(url);
+  return deleteJson(`/${encodeURIComponent(school)}/academic-posts/${encodeURIComponent(id)}`);
 }
-
 
 
