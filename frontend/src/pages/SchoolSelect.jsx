@@ -876,7 +876,7 @@ function GeneralQSwipe({ play }) {
   );
 }
 
-/* ================== Anonymous Q — swipe carousel (copied from general q function)================== */
+/* ================== Anonymous Q — swipe carousel (light gray cards) ================== */
 function AnonymousQSwipe({ play }) {
   const CARD_W = 560;
   const GAP = 28;
@@ -932,20 +932,20 @@ function AnonymousQSwipe({ play }) {
     []
   );
 
-
   const list3 = React.useMemo(() => [...cards, ...cards, ...cards], [cards]);
   const BASE = cards.length;
   const [cur, setCur] = useState(0);
   const pos = BASE + cur;
   const [animate, setAnimate] = useState(true);
-
   const [pressing, setPressing] = useState(false);
   const [showAnswers, setShowAnswers] = useState(false);
   const playKey = `${cur}-${showAnswers}`;
 
   const timers = React.useRef([]);
   const clearTimers = React.useCallback(() => {
-    timers.current.forEach((t) => (t.kind === "i" ? clearInterval(t.id) : clearTimeout(t.id)));
+    timers.current.forEach((t) =>
+      t.kind === "i" ? clearInterval(t.id) : clearTimeout(t.id)
+    );
     timers.current = [];
   }, []);
 
@@ -961,12 +961,35 @@ function AnonymousQSwipe({ play }) {
     const AFTER_PRESS_TO_PANEL = 200;
     const COMMENT_FLOW_MS = 320 + 900 + 420 + typingLen * 34 + 220 + 360;
     const EXTRA_DWELL = 700;
-    const AUTO_NEXT_MS = DELAY_BEFORE_PRESS + PRESS_TIME + AFTER_PRESS_TO_PANEL + COMMENT_FLOW_MS + EXTRA_DWELL;
+    const AUTO_NEXT_MS =
+      DELAY_BEFORE_PRESS +
+      PRESS_TIME +
+      AFTER_PRESS_TO_PANEL +
+      COMMENT_FLOW_MS +
+      EXTRA_DWELL;
 
-    timers.current.push({ kind: "t", id: setTimeout(() => setPressing(true), DELAY_BEFORE_PRESS) });
-    timers.current.push({ kind: "t", id: setTimeout(() => setPressing(false), DELAY_BEFORE_PRESS + PRESS_TIME) });
-    timers.current.push({ kind: "t", id: setTimeout(() => setShowAnswers(true), DELAY_BEFORE_PRESS + PRESS_TIME + AFTER_PRESS_TO_PANEL) });
-    timers.current.push({ kind: "t", id: setTimeout(() => setCur((c) => (c + 1) % cards.length), AUTO_NEXT_MS) });
+    timers.current.push({
+      kind: "t",
+      id: setTimeout(() => setPressing(true), DELAY_BEFORE_PRESS),
+    });
+    timers.current.push({
+      kind: "t",
+      id: setTimeout(() => setPressing(false), DELAY_BEFORE_PRESS + PRESS_TIME),
+    });
+    timers.current.push({
+      kind: "t",
+      id: setTimeout(
+        () => setShowAnswers(true),
+        DELAY_BEFORE_PRESS + PRESS_TIME + AFTER_PRESS_TO_PANEL
+      ),
+    });
+    timers.current.push({
+      kind: "t",
+      id: setTimeout(
+        () => setCur((c) => (c + 1) % cards.length),
+        AUTO_NEXT_MS
+      ),
+    });
 
     return clearTimers;
   }, [cur, play, cards, clearTimers]);
@@ -985,53 +1008,80 @@ function AnonymousQSwipe({ play }) {
   return (
     <>
       <Keyframes />
-      <div className="h-full w-full rounded-3xl overflow-hidden bg-slate-900 text-white relative">
-        <div className="absolute inset-0 bg-gradient-to-b from-slate-800/60 to-slate-900">
-        <div className="relative h-full flex flex-col justify-center px-6">
-          {/* top: question cards */}
+      {/* Overall section background stays white */}
+      <div className="h-full w-full rounded-3xl overflow-hidden bg-white relative">
+        {/* Inner area (the card region) now light gray */}
+        <div className="relative h-full flex flex-col justify-center px-6 py-8 bg-slate-200 rounded-3xl">
+          {/* top: gray cards */}
           <div className="relative w-full overflow-hidden mb-4">
             <div
               className="flex items-stretch"
               style={{
                 gap: `${GAP}px`,
                 transform: `translateX(${-pos * STEP}px)`,
-                transition: animate ? "transform 680ms cubic-bezier(0.34,1,0.68,1)" : "none",
+                transition: animate
+                  ? "transform 680ms cubic-bezier(0.34,1,0.68,1)"
+                  : "none",
               }}
             >
               {list3.map((c, i) => (
-                <QQuestionCard
+                <div
                   key={`${i}-${c.tag}`}
-                  width={CARD_W}
-                  tag={c.tag}
-                  title={c.title}
-                  meta={c.meta}
-                  accent={c.accent}
-                  active={i === pos}
-                  dim={i !== pos}
-                  pressing={pressing && i === pos}
-                />
+                  className={`shrink-0 rounded-2xl ring-1 p-6 md:p-7 ${
+                    i === pos ? "scale-[1.0]" : "scale-[0.96]"
+                  }`}
+                  style={{
+                    width: CARD_W,
+                    backgroundColor: "#1E293B", // slate-800 tone for contrast
+                    color: "white",
+                    borderColor: "rgba(255,255,255,0.1)",
+                    boxShadow:
+                      i === pos
+                        ? "0 20px 40px rgba(0,0,0,0.25)"
+                        : "0 10px 20px rgba(0,0,0,0.15)",
+                    transition: "all 400ms ease",
+                  }}
+                >
+                  <div className="flex items-center gap-2 mb-3">
+                    <span
+                      className="h-2.5 w-2.5 rounded-full"
+                      style={{ background: c.accent }}
+                    />
+                    <span
+                      className="text-[12px] font-extrabold uppercase tracking-wide"
+                      style={{ color: c.accent }}
+                    >
+                      {c.tag}
+                    </span>
+                  </div>
+
+                  <p className="text-[24px] leading-[1.3] font-black">
+                    {c.title}
+                  </p>
+                  <div className="mt-3 text-[14px] opacity-80">{c.meta}</div>
+
+                  <button
+                    className="mt-6 rounded-full bg-white text-slate-900 font-bold px-4 py-2 text-[14px] hover:bg-slate-100 transition-transform"
+                    style={{
+                      transform: pressing && i === pos ? "scale(0.96)" : "scale(1)",
+                    }}
+                  >
+                    View answers
+                  </button>
+                </div>
               ))}
             </div>
-            <div
-              className="pointer-events-none absolute inset-y-0 left-0"
-              style={{
-                width: 36,
-                background: "linear-gradient(to right, rgba(255,255,255,0.55), rgba(255,255,255,0))",
-              }}
-            />
-            <div
-              className="pointer-events-none absolute inset-y-0 right-0"
-              style={{
-                width: 36,
-                background: "linear-gradient(to left, rgba(255,255,255,0.55), rgba(255,255,255,0))",
-              }}
-            />
           </div>
 
-          {/* bottom: comments panel */}
-          <QComments show={showAnswers} thread={cards[cur].thread} playKey={playKey} />
+          {/* bottom: light-gray comments box */}
+          <div className="bg-slate-300 rounded-2xl px-5 py-4">
+            <QComments
+              show={showAnswers}
+              thread={cards[cur].thread}
+              playKey={playKey}
+            />
+          </div>
         </div>
-      </div>
       </div>
     </>
   );
