@@ -313,6 +313,7 @@ router.post("/:school/posts/:id/like", requireAuth, schoolGuard, async (req, res
 // - Freeboard( board === "free" ) 에서만 의미 있음
 // - 상호배타 토글, 다시 누르면 취소
 // ---------------------------------------------
+// ✅ Freeboard 투표 핸들러만 아래 블록으로 교체
 router.post("/:school/posts/:id/vote", requireAuth, schoolGuard, async (req, res, next) => {
   try {
     const { school, id } = req.params;
@@ -325,53 +326,46 @@ router.post("/:school/posts/:id/vote", requireAuth, schoolGuard, async (req, res
 
     const post = await Post.findOne({ _id: id, school });
     if (!post) return res.status(404).json({ message: "Post not found" });
-
-    // Only for Freeboard
     if (post.board !== "free") {
       return res.status(400).json({ message: "Voting is allowed on Freeboard only." });
     }
 
+    // ⛔️ 작성자 금지
+    if (String(post.author) === userId) {
+      return res.status(403).json({ message: "Authors cannot vote on their own posts." });
+    }
+
     const hasUp = Array.isArray(post.upvoters) && post.upvoters.some((u) => String(u) === userId);
-    const hasDown =
-      Array.isArray(post.downvoters) && post.downvoters.some((u) => String(u) === userId);
+    const hasDown = Array.isArray(post.downvoters) && post.downvoters.some((u) => String(u) === userId);
 
     if (dir === "up") {
-      // toggle up
       if (hasUp) {
         post.upvoters = post.upvoters.filter((u) => String(u) !== userId);
       } else {
-        post.upvoters.push(req.user._id);
-        if (hasDown) {
-          post.downvoters = post.downvoters.filter((u) => String(u) !== userId);
-        }
+        post.upvoters = [...(post.upvoters || []), req.user._id];
+        if (hasDown) post.downvoters = post.downvoters.filter((u) => String(u) !== userId);
       }
     } else {
-      // dir === "down"
       if (hasDown) {
         post.downvoters = post.downvoters.filter((u) => String(u) !== userId);
       } else {
-        post.downvoters.push(req.user._id);
-        if (hasUp) {
-          post.upvoters = post.upvoters.filter((u) => String(u) !== userId);
-        }
+        post.downvoters = [...(post.downvoters || []), req.user._id];
+        if (hasUp) post.upvoters = post.upvoters.filter((u) => String(u) !== userId);
       }
     }
 
     await post.save();
-    const serialized = serializePost(post.toObject());
 
-    // add myVote to response
-    const upNow = serialized.upCount && post.upvoters.some((u) => String(u) === userId);
-    const downNow = serialized.downCount && post.downvoters.some((u) => String(u) === userId);
+    const upCount = Array.isArray(post.upvoters) ? post.upvoters.length : 0;
+    const downCount = Array.isArray(post.downvoters) ? post.downvoters.length : 0;
+    const myVote =
+      post.upvoters?.some((u) => String(u) === userId) ? "up" :
+      post.downvoters?.some((u) => String(u) === userId) ? "down" : null;
 
-    res.json({
-      ...serialized,
-      myVote: upNow ? "up" : downNow ? "down" : null,
-    });
-  } catch (err) {
-    next(err);
-  }
+    res.json({ ok: true, upCount, downCount, myVote });
+  } catch (err) { next(err); }
 });
+
 
 module.exports = router;
 

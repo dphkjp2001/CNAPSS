@@ -147,3 +147,8 @@ export async function deleteAcademicPost({ school, id }) {
 }
 
 
+// 맨 아래에 이 함수만 추가해 붙여줘 (기존 export 유지)
+export function voteAcademicPost({ school, id, dir }) {
+  // dir: "up" | "down"
+  return postJson(`/${encodeURIComponent(school)}/academic-posts/${encodeURIComponent(id)}/vote`, { dir });
+}

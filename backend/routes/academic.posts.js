@@ -23,19 +23,11 @@ function serialize(doc) {
     postType: o.postType || m,
     lookingFor: typeof o.lookingFor === "boolean" ? o.lookingFor : m === "looking_for",
     likesCount: Array.isArray(o.likes) ? o.likes.length : 0,
+    // upCount / downCount 는 모델 toJSON에서 이미 주입됨
   };
 }
 
 /** ---------------- list ---------------- **/
-/**
- * GET /:school/academic-posts
- * Query:
- *  - page, limit
- *  - q: keyword
- *  - sort: new | old | mostLiked
- *  - type: question | seeking | looking_for
- *  - kind: course_materials | study_mate | coffee_chat ...
- */
 router.get("/:school/academic-posts", requireAuth, schoolGuard, async (req, res, next) => {
   try {
     const { school } = req.params;
@@ -48,10 +40,7 @@ router.get("/:school/academic-posts", requireAuth, schoolGuard, async (req, res,
 
     const match = { school };
     if (q) {
-      match.$or = [
-        { title: { $regex: q, $options: "i" } },
-        { content: { $regex: q, $options: "i" } },
-      ];
+      match.$or = [{ title: { $regex: q, $options: "i" } }, { content: { $regex: q, $options: "i" } }];
     }
     if (type) {
       const m = type === "question" ? "general" : type === "seeking" ? "looking_for" : type;
@@ -61,7 +50,6 @@ router.get("/:school/academic-posts", requireAuth, schoolGuard, async (req, res,
 
     let sortStage = { createdAt: -1, _id: -1 };
     if (sortOpt === "old") sortStage = { createdAt: 1, _id: 1 };
-    if (sortOpt === "mostliked") sortStage = { likes: -1, createdAt: -1 };
 
     const [items, total] = await Promise.all([
       AcademicPost.find(match).sort(sortStage).skip((page - 1) * limit).limit(limit).lean(),
@@ -72,51 +60,51 @@ router.get("/:school/academic-posts", requireAuth, schoolGuard, async (req, res,
       data: items.map(serialize),
       paging: { page, limit, total, hasMore: page * limit < total },
     });
-  } catch (err) {
-    next(err);
-  }
+  } catch (err) { next(err); }
 });
 
-/** ---------------- detail ---------------- **/
+/** ---------------- protected detail ---------------- **/
 router.get("/:school/academic-posts/:id", requireAuth, schoolGuard, async (req, res, next) => {
   try {
     const { school, id } = req.params;
     const doc = await AcademicPost.findOne({ _id: id, school }).lean();
     if (!doc) return res.status(404).json({ message: "Post not found" });
-    res.json(serialize(doc));
-  } catch (err) {
-    next(err);
-  }
+
+    const out = serialize(doc);
+
+    // myVote(보호 상세 전용)
+    const me = String(req.user._id || req.user.id);
+    const up = Array.isArray(doc.upvoters) && doc.upvoters.some(u => String(u) === me);
+    const down = Array.isArray(doc.downvoters) && doc.downvoters.some(u => String(u) === me);
+    out.myVote = up ? "up" : down ? "down" : null;
+
+    res.json(out);
+  } catch (err) { next(err); }
 });
 
-// ---------------- create ----------------
+/** ---------------- create ---------------- **/
 router.post("/:school/academic-posts", requireAuth, schoolGuard, async (req, res, next) => {
   try {
     const { school } = req.params;
     const {
       title,
       content = "",
-      mode,
-      type,
-      postType,
+      mode, type, postType,
       kind = "",
       images = [],
-      anonymous = false, //!!anonymous
+      anonymous = false,
       // extras for course_materials
-      courseName,
-      professor = "",
-      materials = [],
+      courseName, professor = "", materials = [],
     } = req.body;
 
     const normalizedMode = resolveMode({ mode, type, postType });
     const normalizedKind = String(kind || "").toLowerCase().replace(/[\s-]+/g, "_");
 
-    // 공통 title 필수
     if (!title || typeof title !== "string") {
       return res.status(400).json({ message: "title is required" });
     }
 
-    // ✅ seeking:course_materials 강제 규칙
+    // seeking:course_materials 전용 유효성
     if (normalizedMode === "looking_for" && normalizedKind === "course_materials") {
       const course = String(courseName || title || "").trim();
       const allowed = new Set(["lecture_notes", "syllabus", "past_exams", "quiz_prep"]);
@@ -126,30 +114,24 @@ router.post("/:school/academic-posts", requireAuth, schoolGuard, async (req, res
 
       const doc = await AcademicPost.create({
         school,
-        title: course,                 // title = courseName
-        content: "",                   // 내용 비활성
+        title: course,
+        content: "",
         mode: normalizedMode,
         kind: "course_materials",
-        images: [],                    // 이미지 비활성
+        images: [],
         anonymous: false, //!!anonymous
         author: req.user.id || req.user._id,
-        // extras
         courseName: course,
         professor: String(professor || ""),
         materials: mats,
-        // legacy aliases for safety
-        type,
-        postType,
-        lookingFor: true,
+        type, postType, lookingFor: true,
       });
-
       return res.status(201).json(serialize(doc));
     }
 
-    // ✅ 그 외(일반/질문/다른 seeking)는 기존 로직
+    // 일반/다른 seeking
     const doc = await AcademicPost.create({
-  //t.create({
-     school,
+      school,
       title: title.trim(),
       content: String(content || ""),
       mode: normalizedMode,
@@ -157,10 +139,7 @@ router.post("/:school/academic-posts", requireAuth, schoolGuard, async (req, res
       images: Array.isArray(images) ? images.map((u) => (typeof u === "string" ? { url: u } : u)) : [],
       anonymous: false, //!!anonymous
       author: req.user.id || req.user._id,
-      // legacy aliases
-      type,
-      postType,
-      lookingFor: normalizedMode === "looking_for",
+      type, postType, lookingFor: normalizedMode === "looking_for",
     });
     res.status(201).json(serialize(doc));
   } catch (err) {
@@ -168,7 +147,6 @@ router.post("/:school/academic-posts", requireAuth, schoolGuard, async (req, res
     next(err);
   }
 });
-
 
 /** ---------------- update ---------------- **/
 router.patch("/:school/academic-posts/:id", requireAuth, schoolGuard, async (req, res, next) => {
@@ -187,9 +165,7 @@ router.patch("/:school/academic-posts/:id", requireAuth, schoolGuard, async (req
     if (typeof title !== "undefined") doc.title = String(title).trim();
     if (typeof content !== "undefined") doc.content = String(content);
     if (typeof images !== "undefined")
-      doc.images = Array.isArray(images)
-        ? images.map((u) => (typeof u === "string" ? { url: u } : u))
-        : [];
+      doc.images = Array.isArray(images) ? images.map((u) => (typeof u === "string" ? { url: u } : u)) : [];
     if (typeof anonymous !== "undefined") doc.anonymous = false; //!!anonymous
 
     if (typeof kind !== "undefined")
@@ -199,14 +175,12 @@ router.patch("/:school/academic-posts/:id", requireAuth, schoolGuard, async (req
     if (typeof type !== "undefined") doc.type = type;
     if (typeof postType !== "undefined") doc.postType = postType;
 
-    // normalize final mode from aliases
+    // normalize
     doc.mode = resolveMode({ mode: doc.mode, type: doc.type, postType: doc.postType });
 
     await doc.save();
     res.json(serialize(doc));
-  } catch (err) {
-    next(err);
-  }
+  } catch (err) { next(err); }
 });
 
 /** ---------------- delete ---------------- **/
@@ -223,11 +197,76 @@ router.delete("/:school/academic-posts/:id", requireAuth, schoolGuard, async (re
 
     await AcademicPost.deleteOne({ _id: id, school });
     res.json({ ok: true });
-  } catch (err) {
-    next(err);
-  }
+  } catch (err) { next(err); }
+});
+
+/** ---------------- NEW: vote (general question 전용) ----------------
+ * POST /:school/academic-posts/:id/vote
+ * body: { dir: "up" | "down" }
+ * - 작성자 투표 금지
+ * - mode === "general" 에서만 허용
+ * - 상호배타 토글(재클릭 취소 / 반대쪽 전환)
+ ------------------------------------------------------------------ */
+router.post("/:school/academic-posts/:id/vote", requireAuth, schoolGuard, async (req, res, next) => {
+  try {
+    const { school, id } = req.params;
+    const { dir } = req.body || {};
+    const userId = String(req.user._id || req.user.id);
+
+    if (!["up", "down"].includes(dir)) {
+      return res.status(400).json({ message: "Invalid vote direction" });
+    }
+
+    const post = await AcademicPost.findOne({ _id: id, school });
+    if (!post) return res.status(404).json({ message: "Post not found" });
+
+    // Seeking 글은 투표 불가
+    if ((post.mode || "general") !== "general") {
+      return res.status(400).json({ message: "Voting is only allowed on general questions." });
+    }
+
+    // 작성자 금지
+    if (String(post.author) === userId) {
+      return res.status(403).json({ message: "Authors cannot vote on their own posts." });
+    }
+
+    const hasUp = Array.isArray(post.upvoters) && post.upvoters.some(u => String(u) === userId);
+    const hasDown = Array.isArray(post.downvoters) && post.downvoters.some(u => String(u) === userId);
+
+    if (dir === "up") {
+      if (hasUp) {
+        post.upvoters = post.upvoters.filter(u => String(u) !== userId);
+      } else {
+        post.upvoters = [...(post.upvoters || []), req.user._id];
+        if (hasDown) post.downvoters = post.downvoters.filter(u => String(u) !== userId);
+      }
+    } else { // down
+      if (hasDown) {
+        post.downvoters = post.downvoters.filter(u => String(u) !== userId);
+      } else {
+        post.downvoters = [...(post.downvoters || []), req.user._id];
+        if (hasUp) post.upvoters = post.upvoters.filter(u => String(u) !== userId);
+      }
+    }
+
+    // counts 동기화(하위호환)
+    post.counts = {
+      up: Array.isArray(post.upvoters) ? post.upvoters.length : 0,
+      down: Array.isArray(post.downvoters) ? post.downvoters.length : 0,
+    };
+
+    await post.save();
+
+    const upCount = post.upvoters?.length || 0;
+    const downCount = post.downvoters?.length || 0;
+    const myVote = post.upvoters?.some(u => String(u) === userId) ? "up"
+                  : post.downvoters?.some(u => String(u) === userId) ? "down" : null;
+
+    res.json({ ok: true, upCount, downCount, myVote });
+  } catch (err) { next(err); }
 });
 
 module.exports = router;
+
 
 

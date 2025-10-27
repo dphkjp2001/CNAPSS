@@ -39,11 +39,17 @@ const AcademicPostSchema = new mongoose.Schema(
 
     likes: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
     commentCount: { type: Number, default: 0 },
-    
+
+    // ⬇️ 투표(상호배타) — 프런트 요구사항 충족을 위해 per-user 저장
+    upvoters: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+    downvoters: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+
+    // 기존 counts 필드 유지(하위호환). 라우트에서 길이로 갱신해줌.
     counts: {
       up: { type: Number, default: 0 },
       down: { type: Number, default: 0 }
     },
+
     hotScore: { type: Number, default: 0, index: true },
   },
   {
@@ -57,11 +63,15 @@ const AcademicPostSchema = new mongoose.Schema(
         if (!ret.type) ret.type = m;        // alias
         if (!ret.postType) ret.postType = m; // alias
         if (typeof ret.lookingFor === "undefined") ret.lookingFor = m === "looking_for";
+        // counts 동기화
+        ret.upCount = Array.isArray(ret.upvoters) ? ret.upvoters.length : (ret.counts?.up || 0);
+        ret.downCount = Array.isArray(ret.downvoters) ? ret.downvoters.length : (ret.counts?.down || 0);
         return ret;
       },
     },
   }
 );
+
 
 AcademicPostSchema.pre("validate", function (next) {
   this.mode = normalizeMode(this);
@@ -75,5 +85,3 @@ AcademicPostSchema.pre("validate", function (next) {
 });
 
 module.exports = mongoose.model("AcademicPost", AcademicPostSchema);
-
-
