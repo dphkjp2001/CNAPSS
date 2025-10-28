@@ -18,7 +18,6 @@ import "dayjs/locale/en";
 dayjs.extend(relativeTime);
 dayjs.locale("en");
 
-console.log("🔵 AcademicList.jsx mounted");
 
 
 function kindEmoji(kind = "") {
@@ -30,6 +29,8 @@ function kindEmoji(kind = "") {
 }
 
 export default function AcademicDetail() {
+  console.log("🔵 AcademicList.jsx mounted");
+
   const { school: schoolFromPath, id } = useParams();
   const navigate = useNavigate();
   const { school: ctxSchool } = useSchool();

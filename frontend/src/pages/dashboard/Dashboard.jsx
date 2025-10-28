@@ -21,7 +21,6 @@ import {
 
 import { Bookmark, Repeat2, Share, Send, MessageSquare } from "lucide-react";
 
-console.log("🟠 Dashboard.jsx mounted");
 
 
 /* ===== Design tokens ===== */
@@ -225,6 +224,7 @@ const normalizePosts = (res) =>
 
 /* ===================== Main ===================== */
 export default function Dashboard() {
+  console.log("🟠 Dashboard.jsx mounted");
   const navigate = useNavigate();
   const location = useLocation();
   const { school } = useSchool();

@@ -5,9 +5,10 @@ import { useSchoolPath } from "../../utils/schoolPath";
 import { listMyPosts, deletePost } from "../../api/posts";
 import { Link, useLocation } from "react-router-dom";
 
-console.log("🟢 MyPosts.jsx mounted");
 
 export default function MyPosts() {
+  console.log("🟢 MyPosts.jsx mounted");
+
   console.log("🧭 Loaded MyPosts.jsx component");
   const { user } = useAuth();
   const { school, schoolTheme } = useSchool();
