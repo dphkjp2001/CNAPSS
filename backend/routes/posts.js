@@ -80,10 +80,12 @@ router.get("/:school/posts", requireAuth, schoolGuard, async (req, res, next) =>
           $addFields: {
             upCount: { $size: { $ifNull: ["$upvoters", []] } },
             downCount: { $size: { $ifNull: ["$downvoters", []] } },
-            score: { $subtract: [
-              { $size: { $ifNull: ["$upvoters", []] } },
-              { $size: { $ifNull: ["$downvoters", []] } }
-            ] },
+            score: {
+              $subtract: [
+                { $size: { $ifNull: ["$upvoters", []] } },
+                { $size: { $ifNull: ["$downvoters", []] } },
+              ],
+            },
           },
         },
         { $sort: sortObj },
@@ -135,7 +137,7 @@ router.get("/:school/posts/:id", requireAuth, schoolGuard, async (req, res, next
 
     const serialized = serializePost(post);
 
-    // ✅ include myVote for convenience (protected only)
+    // include myVote
     const me = String(req.user._id);
     const up = Array.isArray(post.upvoters) && post.upvoters.some((u) => String(u) === me);
     const down = Array.isArray(post.downvoters) && post.downvoters.some((u) => String(u) === me);
@@ -152,11 +154,6 @@ router.get("/:school/posts/:id", requireAuth, schoolGuard, async (req, res, next
 // ---------------------------------------------
 router.post("/:school/posts", requireAuth, schoolGuard, async (req, res, next) => {
   try {
-    console.log("✅ /api/:school/posts hit");
-    console.log("req.user:", req.user);
-    console.log("req.body:", req.body);
-    console.log("req.params:", req.params);
-
     const { school } = req.params;
     const {
       title,
@@ -262,7 +259,6 @@ router.delete("/:school/posts/:id", requireAuth, schoolGuard, async (req, res, n
 
     await Promise.all([
       Post.deleteOne({ _id: id, school }),
-      // ✅ 필드명 교정: postId
       Comment.deleteMany({ postId: id, school }),
     ]);
 
@@ -308,17 +304,17 @@ router.post("/:school/posts/:id/like", requireAuth, schoolGuard, async (req, res
 });
 
 // ---------------------------------------------
-// ✅ NEW: POST /:school/posts/:id/vote  (up/downvote for Freeboard)
+// ✅ NEW: POST /:school/posts/:id/vote  (Up/Down vote for Freeboard)
 // body: { dir: "up" | "down" }
-// - Freeboard( board === "free" ) 에서만 의미 있음
-// - 상호배타 토글, 다시 누르면 취소
+// - Freeboard 전용
+// - 상호배타 + 토글
+// - ❗ 반대편 전환 금지(먼저 취소해야 함)
 // ---------------------------------------------
-// ✅ Freeboard 투표 핸들러만 아래 블록으로 교체
 router.post("/:school/posts/:id/vote", requireAuth, schoolGuard, async (req, res, next) => {
   try {
     const { school, id } = req.params;
     const { dir } = req.body || {};
-    const userId = req.user._id;
+    const userId = String(req.user._id || req.user.id);
 
     if (!["up", "down"].includes(dir)) {
       return res.status(400).json({ message: "Invalid vote direction" });
@@ -327,53 +323,53 @@ router.post("/:school/posts/:id/vote", requireAuth, schoolGuard, async (req, res
     const post = await Post.findOne({ _id: id, school });
     if (!post) return res.status(404).json({ message: "Post not found" });
 
-    // 자유게시판만 허용(프로젝트 기존 정책 유지)
+    // 자유게시판만 허용
     if (post.board !== "free") {
       return res.status(400).json({ message: "Voting is allowed on Freeboard only." });
     }
 
-    // 작성자 투표 금지
-    if (String(post.author) === String(userId)) {
+    // 작성자 금지
+    if (String(post.author) === userId) {
       return res.status(403).json({ message: "Authors cannot vote on their own posts." });
     }
 
-    // 현재 내 상태 파악
-    const hasUp = Array.isArray(post.upvoters) && post.upvoters.some(u => String(u) === String(userId));
-    const hasDown = Array.isArray(post.downvoters) && post.downvoters.some(u => String(u) === String(userId));
+    const hasUp = Array.isArray(post.upvoters) && post.upvoters.some(u => String(u) === userId);
+    const hasDown = Array.isArray(post.downvoters) && post.downvoters.some(u => String(u) === userId);
 
-    // dir 기준으로 현재 방향/반대 방향 키 계산
-    const curKey = dir === "up" ? "upvoters" : "downvoters";
-    const oppKey = dir === "up" ? "downvoters" : "upvoters";
-
-    // 원자적 갱신
-    // - 같은 방향을 다시 누르면 '취소' → 해당 배열에서만 pull
-    // - 반대 방향에서 스위치면 opp에서 pull + cur에 addToSet
-    if ((dir === "up" && hasUp) || (dir === "down" && hasDown)) {
-      await Post.updateOne(
-        { _id: id, school },
-        { $pull: { [curKey]: userId } }
-      );
-    } else {
-      await Post.updateOne(
-        { _id: id, school },
-        { $pull: { [oppKey]: userId }, $addToSet: { [curKey]: userId } }
-      );
+    // ❗ 반대편 전환 금지: 먼저 취소해야 함
+    if ((dir === "up" && hasDown) || (dir === "down" && hasUp)) {
+      return res.status(400).json({ message: "Cancel your current vote before switching." });
     }
 
-    // 최신값으로 카운트/내 상태 계산해 응답
+    if (dir === "up") {
+      if (hasUp) {
+        // 동일 버튼 재클릭 → 취소
+        await Post.updateOne({ _id: id, school }, { $pull: { upvoters: req.user._id } });
+      } else {
+        // 최초 투표
+        await Post.updateOne({ _id: id, school }, { $addToSet: { upvoters: req.user._id } });
+      }
+    } else {
+      if (hasDown) {
+        await Post.updateOne({ _id: id, school }, { $pull: { downvoters: req.user._id } });
+      } else {
+        await Post.updateOne({ _id: id, school }, { $addToSet: { downvoters: req.user._id } });
+      }
+    }
+
     const fresh = await Post.findOne({ _id: id, school }, { upvoters: 1, downvoters: 1 }).lean();
     const upCount = (fresh?.upvoters || []).length;
     const downCount = (fresh?.downvoters || []).length;
     const myVote =
-      (fresh?.upvoters || []).some(u => String(u) === String(userId)) ? "up" :
-      (fresh?.downvoters || []).some(u => String(u) === String(userId)) ? "down" : null;
+      (fresh?.upvoters || []).some(u => String(u) === userId) ? "up" :
+      (fresh?.downvoters || []).some(u => String(u) === userId) ? "down" : null;
 
     return res.json({ ok: true, upCount, downCount, myVote });
   } catch (err) { next(err); }
 });
 
-
 module.exports = router;
+
 
 
 

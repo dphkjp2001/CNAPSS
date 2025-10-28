@@ -415,7 +415,7 @@ import {
   getPublicPost,
   deletePost,
   updatePost,
-  votePost, // ✅ Up/Down API
+  votePost,
 } from "../../api/posts";
 import { useAuth } from "../../contexts/AuthContext";
 import { useSchool } from "../../contexts/SchoolContext";
@@ -435,7 +435,7 @@ export default function FreeBoardDetail() {
   const [post, setPost] = useState(null);
   const [error, setError] = useState("");
 
-  // ✏️ 인라인 편집 상태
+  // inline edit
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState("");
   const [editContent, setEditContent] = useState("");
@@ -443,16 +443,16 @@ export default function FreeBoardDetail() {
 
   const isAuthed = !!(user?.email || (token && String(token).length > 0));
 
-  // ✅ 투표 로컬 상태(낙관적 업데이트)
+  // votes
   const [upCount, setUpCount] = useState(0);
   const [downCount, setDownCount] = useState(0);
   const [myVote, setMyVote] = useState(null); // "up" | "down" | null
+  const [isVoting, setIsVoting] = useState(false);
   const score = upCount - downCount;
 
   const loadPost = async () => {
     setError("");
     try {
-      // 1) 공개 상세
       const pub = await getPublicPost({ school, id });
       setPost(pub);
       setEditTitle(pub?.title || "");
@@ -466,7 +466,6 @@ export default function FreeBoardDetail() {
       }
     }
 
-    // 2) 보호 상세
     if (isAuthed) {
       try {
         const prot = await getPost({ school, id });
@@ -475,7 +474,7 @@ export default function FreeBoardDetail() {
         setEditContent(prot?.content || "");
         setUpCount(prot?.upCount || 0);
         setDownCount(prot?.downCount || 0);
-        setMyVote(prot?.myVote || null);
+        setMyVote(prot?.myVote ?? null);
       } catch {}
     }
   };
@@ -486,7 +485,7 @@ export default function FreeBoardDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, school, isAuthed]);
 
-  // 알림 딥링크 읽음 반영
+  // mark notification read (existing)
   useEffect(() => {
     const sp = new URLSearchParams(location.search);
     const nid = sp.get("nid");
@@ -504,7 +503,6 @@ export default function FreeBoardDetail() {
     markRead();
   }, [location.search, user?.email, school]);
 
-  // 하이라이트 대상 comment id
   const highlightId = useMemo(() => {
     const hash = location.hash || "";
     const fromHash = hash.startsWith("#comment-") ? hash.slice("#comment-".length) : null;
@@ -512,7 +510,7 @@ export default function FreeBoardDetail() {
     return fromHash || nid || null;
   }, [location.hash, location.search]);
 
-  // 작성자 판별
+  // is author
   const isAuthor = useMemo(() => {
     const p = post;
     const u = user;
@@ -533,53 +531,32 @@ export default function FreeBoardDetail() {
     }
   };
 
-  // 낙관적 투표
-  const optimisticVote = (dir) => {
-    const prev = { upCount, downCount, myVote };
-    let nextUp = upCount, nextDown = downCount, nextMy = myVote;
-
-    if (dir === "up") {
-      if (myVote === "up") { nextUp -= 1; nextMy = null; }
-      else if (myVote === "down") { nextDown -= 1; nextUp += 1; nextMy = "up"; }
-      else { nextUp += 1; nextMy = "up"; }
-    } else {
-      if (myVote === "down") { nextDown -= 1; nextMy = null; }
-      else if (myVote === "up") { nextUp -= 1; nextDown += 1; nextMy = "down"; }
-      else { nextDown += 1; nextMy = "down"; }
-    }
-    setUpCount(nextUp); setDownCount(nextDown); setMyVote(nextMy);
-    return prev;
-  };
-
+  // strict rule: must cancel before switching (서버와 동기)
   const handleVote = async (dir) => {
     if (!user) { alert("Please log in to vote."); return; }
-    if (isAuthor) { return; } // UI에서 disabled지만 안전장치
-    const snapshot = optimisticVote(dir);
+    if (isAuthor || isVoting) return;
+
+    // 클라이언트에서도 전환 금지
+    if (myVote && myVote !== dir) {
+      alert("Cancel your current vote first.");
+      return;
+    }
+
+    setIsVoting(true);
     try {
-      const result = await votePost({ school, id: post._id, dir });
+      const result = await votePost({ school, id: post._id, dir }); // dir: "up" | "down"
       if (typeof result?.upCount === "number") setUpCount(result.upCount);
       if (typeof result?.downCount === "number") setDownCount(result.downCount);
       if (typeof result?.myVote !== "undefined") setMyVote(result.myVote);
     } catch (err) {
-      setUpCount(snapshot.upCount); setDownCount(snapshot.downCount); setMyVote(snapshot.myVote);
       alert("Vote failed: " + (err?.message || "Unknown error"));
+    } finally {
+      setIsVoting(false);
     }
   };
 
-  const handleSaveEdit = async () => {
-    const title = editTitle.trim();
-    const content = editContent.trim();
-    if (!title || !content) return;
-    setSaving(true);
-    try {
-      const updated = await updatePost({ school, id: post._id, title, content });
-      const next = updated?.post || updated;
-      setPost(next);
-      setIsEditing(false);
-    } catch (err) {
-      alert("Update failed: " + (err?.message || "Unknown error"));
-    } finally { setSaving(false); }
-  };
+  const upBtnActive = myVote === "up";
+  const downBtnActive = myVote === "down";
 
   if (error) {
     return (
@@ -630,29 +607,27 @@ export default function FreeBoardDetail() {
               </div>
             )}
 
-            {/* ✅ Vote controls — ^ / v 아이콘으로 변경, 작성자는 비활성 */}
+            {/* Vote controls */}
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-2 py-1">
                 <button
                   onClick={() => handleVote("up")}
-                  disabled={!user || isAuthor}
-                  className={`flex items-center gap-1 rounded-md px-3 py-1 text-sm font-semibold ${myVote === "up" ? "text-blue-600" : "text-gray-800 hover:bg-gray-100"} disabled:opacity-60`}
+                  disabled={!user || isAuthor || isVoting || downBtnActive}
+                  className={`flex items-center gap-1 rounded-md px-3 py-1 text-sm font-semibold ${upBtnActive ? "bg-gray-100 text-red-600" : "text-gray-800 hover:bg-gray-100"} disabled:opacity-60`}
                   aria-label="Upvote"
-                  title={!user ? "Log in to vote" : isAuthor ? "You can’t vote on your own post." : "Upvote"}
+                  title={!user ? "Log in to vote" : isAuthor ? "You can’t vote on your own post." : downBtnActive ? "Cancel your downvote first" : "Upvote"}
                 >
-                  <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3.293 9.707a1 1 0 010-1.414l6-6a1 1 0 011.414 0l6 6a1 1 0 01-1.414 1.414L11 5.414V17a1 1 0 11-2 0V5.414L4.707 9.707a1 1 0 01-1.414 0z" clipRule="evenodd"/></svg>
-                  <span>{upCount}</span>
+                  👍 <span>{upCount}</span>
                 </button>
 
                 <button
                   onClick={() => handleVote("down")}
-                  disabled={!user || isAuthor}
-                  className={`flex items-center gap-1 rounded-md px-3 py-1 text-sm font-semibold ${myVote === "down" ? "text-red-600" : "text-gray-800 hover:bg-gray-100"} disabled:opacity-60`}
+                  disabled={!user || isAuthor || isVoting || upBtnActive}
+                  className={`flex items-center gap-1 rounded-md px-3 py-1 text-sm font-semibold ${downBtnActive ? "bg-gray-100 text-blue-600" : "text-gray-800 hover:bg-gray-100"} disabled:opacity-60`}
                   aria-label="Downvote"
-                  title={!user ? "Log in to vote" : isAuthor ? "You can’t vote on your own post." : "Downvote"}
+                  title={!user ? "Log in to vote" : isAuthor ? "You can’t vote on your own post." : upBtnActive ? "Cancel your upvote first" : "Downvote"}
                 >
-                  <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 10.293a1 1 0 010 1.414l-6 6a1 1 0 01-1.414 0l-6-6a1 1 0 111.414-1.414L9 14.586V3a1 1 0 012 0v11.586l4.293-4.293a1 1 0 011.414 0z" clipRule="evenodd"/></svg>
-                  <span>{downCount}</span>
+                  👎 <span>{downCount}</span>
                 </button>
 
                 <span className="ml-2 text-sm font-medium text-gray-700">Score: {score}</span>
@@ -671,10 +646,30 @@ export default function FreeBoardDetail() {
 
               {isAuthor && isEditing && (
                 <>
-                  <button onClick={handleSaveEdit} disabled={saving} className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-black disabled:opacity-60">
+                  <button
+                    onClick={async () => {
+                      const title = editTitle.trim();
+                      const content = editContent.trim();
+                      if (!title || !content) return;
+                      setSaving(true);
+                      try {
+                        const updated = await updatePost({ school, id: post._id, title, content });
+                        const next = updated?.post || updated;
+                        setPost(next);
+                        setIsEditing(false);
+                      } catch (err) {
+                        alert("Update failed: " + (err?.message || "Unknown error"));
+                      } finally { setSaving(false); }
+                    }}
+                    disabled={saving}
+                    className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-black disabled:opacity-60"
+                  >
                     {saving ? "Saving…" : "Save"}
                   </button>
-                  <button onClick={() => { setEditTitle(post?.title || ""); setEditContent(post?.content || ""); setIsEditing(false); }} className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-800 shadow-sm hover:bg-gray-50">
+                  <button
+                    onClick={() => { setEditTitle(post?.title || ""); setEditContent(post?.content || ""); setIsEditing(false); }}
+                    className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-800 shadow-sm hover:bg-gray-50"
+                  >
                     Cancel
                   </button>
                 </>
@@ -696,14 +691,3 @@ export default function FreeBoardDetail() {
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-
-

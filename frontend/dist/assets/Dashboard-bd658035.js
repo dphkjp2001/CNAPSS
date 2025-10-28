@@ -1,4 +1,4 @@
-import{u as Ie,a as He,b as De,c as ze,d as Ye,r as p,R as r}from"./index-d226040e.js";import{u as Fe}from"./uploadToCloudinary-dc971086.js";import{g as Ue,a as Be,c as Ke,b as W}from"./academicPosts-08304d57.js";import"./http-a6fe908c.js";var be={exports:{}},c={};/**
+import{u as Ie,a as He,b as De,c as ze,d as Ye,r as p,R as r}from"./index-1bfae1a9.js";import{u as Fe}from"./uploadToCloudinary-dc971086.js";import{g as Ue,a as Be,c as Ke,b as W}from"./academicPosts-3f24bdec.js";import"./http-e19067b4.js";var be={exports:{}},c={};/**
  * @license React
  * react.production.js
  *

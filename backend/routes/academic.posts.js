@@ -23,7 +23,6 @@ function serialize(doc) {
     postType: o.postType || m,
     lookingFor: typeof o.lookingFor === "boolean" ? o.lookingFor : m === "looking_for",
     likesCount: Array.isArray(o.likes) ? o.likes.length : 0,
-    // upCount / downCount 는 모델 toJSON에서 이미 주입됨
   };
 }
 
@@ -72,7 +71,6 @@ router.get("/:school/academic-posts/:id", requireAuth, schoolGuard, async (req, 
 
     const out = serialize(doc);
 
-    // myVote(보호 상세 전용)
     const me = String(req.user._id || req.user.id);
     const up = Array.isArray(doc.upvoters) && doc.upvoters.some(u => String(u) === me);
     const down = Array.isArray(doc.downvoters) && doc.downvoters.some(u => String(u) === me);
@@ -93,7 +91,6 @@ router.post("/:school/academic-posts", requireAuth, schoolGuard, async (req, res
       kind = "",
       images = [],
       anonymous = false,
-      // extras for course_materials
       courseName, professor = "", materials = [],
     } = req.body;
 
@@ -104,7 +101,6 @@ router.post("/:school/academic-posts", requireAuth, schoolGuard, async (req, res
       return res.status(400).json({ message: "title is required" });
     }
 
-    // seeking:course_materials 전용 유효성
     if (normalizedMode === "looking_for" && normalizedKind === "course_materials") {
       const course = String(courseName || title || "").trim();
       const allowed = new Set(["lecture_notes", "syllabus", "past_exams", "quiz_prep"]);
@@ -129,7 +125,6 @@ router.post("/:school/academic-posts", requireAuth, schoolGuard, async (req, res
       return res.status(201).json(serialize(doc));
     }
 
-    // 일반/다른 seeking
     const doc = await AcademicPost.create({
       school,
       title: title.trim(),
@@ -175,7 +170,6 @@ router.patch("/:school/academic-posts/:id", requireAuth, schoolGuard, async (req
     if (typeof type !== "undefined") doc.type = type;
     if (typeof postType !== "undefined") doc.postType = postType;
 
-    // normalize
     doc.mode = resolveMode({ mode: doc.mode, type: doc.type, postType: doc.postType });
 
     await doc.save();
@@ -200,13 +194,14 @@ router.delete("/:school/academic-posts/:id", requireAuth, schoolGuard, async (re
   } catch (err) { next(err); }
 });
 
-/** ---------------- NEW: vote (general question 전용) ----------------
+/** ---------------- NEW: vote ----------------
  * POST /:school/academic-posts/:id/vote
  * body: { dir: "up" | "down" }
  * - 작성자 투표 금지
- * - mode === "general" 에서만 허용
- * - 상호배타 토글(재클릭 취소 / 반대쪽 전환)
- ------------------------------------------------------------------ */
+ * - mode === "general" 만 허용
+ * - 상호배타 + 토글
+ * - ❗ 반대편 전환 금지(먼저 취소해야 함)
+ ------------------------------------------------*/
 router.post("/:school/academic-posts/:id/vote", requireAuth, schoolGuard, async (req, res, next) => {
   try {
     const { school, id } = req.params;
@@ -220,12 +215,10 @@ router.post("/:school/academic-posts/:id/vote", requireAuth, schoolGuard, async 
     const post = await AcademicPost.findOne({ _id: id, school });
     if (!post) return res.status(404).json({ message: "Post not found" });
 
-    // Seeking 글은 투표 불가
     if ((post.mode || "general") !== "general") {
       return res.status(400).json({ message: "Voting is only allowed on general questions." });
     }
 
-    // 작성자 금지
     if (String(post.author) === userId) {
       return res.status(403).json({ message: "Authors cannot vote on their own posts." });
     }
@@ -233,40 +226,38 @@ router.post("/:school/academic-posts/:id/vote", requireAuth, schoolGuard, async 
     const hasUp = Array.isArray(post.upvoters) && post.upvoters.some(u => String(u) === userId);
     const hasDown = Array.isArray(post.downvoters) && post.downvoters.some(u => String(u) === userId);
 
+    // ❗ 반대편 전환 금지
+    if ((dir === "up" && hasDown) || (dir === "down" && hasUp)) {
+      return res.status(400).json({ message: "Cancel your current vote before switching." });
+    }
+
     if (dir === "up") {
       if (hasUp) {
-        post.upvoters = post.upvoters.filter(u => String(u) !== userId);
+        await AcademicPost.updateOne({ _id: id, school }, { $pull: { upvoters: req.user._id } });
       } else {
-        post.upvoters = [...(post.upvoters || []), req.user._id];
-        if (hasDown) post.downvoters = post.downvoters.filter(u => String(u) !== userId);
+        await AcademicPost.updateOne({ _id: id, school }, { $addToSet: { upvoters: req.user._id } });
       }
-    } else { // down
+    } else {
       if (hasDown) {
-        post.downvoters = post.downvoters.filter(u => String(u) !== userId);
+        await AcademicPost.updateOne({ _id: id, school }, { $pull: { downvoters: req.user._id } });
       } else {
-        post.downvoters = [...(post.downvoters || []), req.user._id];
-        if (hasUp) post.upvoters = post.upvoters.filter(u => String(u) !== userId);
+        await AcademicPost.updateOne({ _id: id, school }, { $addToSet: { downvoters: req.user._id } });
       }
     }
 
-    // counts 동기화(하위호환)
-    post.counts = {
-      up: Array.isArray(post.upvoters) ? post.upvoters.length : 0,
-      down: Array.isArray(post.downvoters) ? post.downvoters.length : 0,
-    };
-
-    await post.save();
-
-    const upCount = post.upvoters?.length || 0;
-    const downCount = post.downvoters?.length || 0;
-    const myVote = post.upvoters?.some(u => String(u) === userId) ? "up"
-                  : post.downvoters?.some(u => String(u) === userId) ? "down" : null;
+    const fresh = await AcademicPost.findOne({ _id: id, school }, { upvoters: 1, downvoters: 1 }).lean();
+    const upCount = (fresh?.upvoters || []).length;
+    const downCount = (fresh?.downvoters || []).length;
+    const myVote =
+      (fresh?.upvoters || []).some(u => String(u) === userId) ? "up" :
+      (fresh?.downvoters || []).some(u => String(u) === userId) ? "down" : null;
 
     res.json({ ok: true, upCount, downCount, myVote });
   } catch (err) { next(err); }
 });
 
 module.exports = router;
+
 
 
 

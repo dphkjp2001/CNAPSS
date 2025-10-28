@@ -378,6 +378,7 @@ export default function AcademicDetail() {
   const p = state.post;
   const mode = (p.mode || p.postType || p.type || (p.lookingFor ? "looking_for" : "general")).toString().toLowerCase();
   const isGeneral = mode === "general" || mode === "question";
+
   const isAuthor =
     user &&
     [String(p.author?._id || p.author), String(p.userId), String(p.authorId)]
@@ -424,13 +425,13 @@ export default function AcademicDetail() {
           {/* Author & Voting */}
           <div className="mt-3 flex items-center justify-between">
             <UserBadge username={p.authorNickname || p.nickname || "anonymous"} tier={p.authorTier} className="text-sm" />
-            {/* ⬆️ academic은 general question 에서만, 작성자는 disabled */}
+            {/* ⬆️ general question 에서만, 작성자는 disabled */}
             <VoteButtons
               targetType="academic"
               targetId={id}
               initialCounts={{ up: upCount || 0, down: downCount || 0 }}
               initialVote={myVote ?? null}
-              disabled={!!isAuthor}
+              disabled={!isGeneral || !!isAuthor}
               className="scale-90"
             />
           </div>
@@ -464,9 +465,3 @@ export default function AcademicDetail() {
     </div>
   );
 }
-
-
-
-
-
-
