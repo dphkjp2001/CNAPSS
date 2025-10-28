@@ -156,10 +156,12 @@ router.get("/:school/posts/:id", requireAuth, schoolGuard, async (req, res, next
 
     const serialized = serializePost(post);
 
-    // include myVote
-    const me = String(req.user._id);
-    const up = Array.isArray(post.upvoters) && post.upvoters.some((u) => String(u) === me);
-    const down = Array.isArray(post.downvoters) && post.downvoters.some((u) => String(u) === me);
+    // ✅ include myVote (req.user.id 보장)
+    const me = String(req.user._id || req.user.id || "");
+    const up =
+      Array.isArray(post.upvoters) && post.upvoters.some((u) => String(u) === me);
+    const down =
+      Array.isArray(post.downvoters) && post.downvoters.some((u) => String(u) === me);
     serialized.myVote = up ? "up" : down ? "down" : null;
 
     res.json(serialized);
@@ -233,7 +235,7 @@ router.patch("/:school/posts/:id", requireAuth, schoolGuard, async (req, res, ne
 
     const post = await findPostByAnyId({ id, school });
     if (!post) return res.status(404).json({ message: "Post not found" });
-    if (String(post.author) !== String(req.user._id)) {
+    if (String(post.author) !== String(req.user._id || req.user.id)) {
       return res.status(403).json({ message: "Forbidden" });
     }
 
@@ -272,7 +274,7 @@ router.delete("/:school/posts/:id", requireAuth, schoolGuard, async (req, res, n
 
     const post = await findPostByAnyId({ id, school });
     if (!post) return res.status(404).json({ message: "Post not found" });
-    if (String(post.author) !== String(req.user._id)) {
+    if (String(post.author) !== String(req.user._id || req.user.id)) {
       return res.status(403).json({ message: "Forbidden" });
     }
 
@@ -287,47 +289,16 @@ router.delete("/:school/posts/:id", requireAuth, schoolGuard, async (req, res, n
   }
 });
 
+// ---------------------------------------------
+// ❌ (legacy) thumbs like 라우트 제거됨
+// ---------------------------------------------
 
 // ---------------------------------------------
-// (legacy) POST /:school/posts/:id/like (toggle like)
-// ---------------------------------------------
-router.post("/:school/posts/:id/like", requireAuth, schoolGuard, async (req, res, next) => {
-  try {
-    const { school, id } = req.params;
-    const { action } = req.body || {};
-    const userId = String(req.user._id);
-
-    const post = await Post.findOne({ _id: id, school });
-    if (!post) return res.status(404).json({ message: "Post not found" });
-
-    const hasLiked = post.likes.some((u) => String(u) === userId);
-
-    let doLike = !hasLiked;
-    if (action === "like") doLike = true;
-    if (action === "unlike") doLike = false;
-
-    if (doLike && !hasLiked) {
-      post.likes.push(req.user._id);
-    } else if (!doLike && hasLiked) {
-      post.likes = post.likes.filter((u) => String(u) !== userId);
-    }
-
-    await post.save();
-
-    res.json({
-      ...serializePost(post.toObject()),
-      liked: doLike,
-    });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// ---------------------------------------------
-// ✅ POST /:school/posts/:id/vote  (Freeboard 전용 Up/Down)
+// ✅ POST /:school/posts/:id/vote  (Up/Down)
 // - 상호배타 + 토글
 // - 반대편 전환 금지(먼저 취소)
-// - ✔ 투표 후 socket.io로 같은 게시글 room에 브로드캐스트
+// - free / academic 모두 허용
+// - 투표 후 socket.io로 같은 게시글 room에 브로드캐스트
 // ---------------------------------------------
 router.post("/:school/posts/:id/vote", requireAuth, schoolGuard, async (req, res, next) => {
   try {
@@ -342,10 +313,7 @@ router.post("/:school/posts/:id/vote", requireAuth, schoolGuard, async (req, res
     const post = await Post.findOne({ _id: id, school });
     if (!post) return res.status(404).json({ message: "Post not found" });
 
-    if (post.board !== "free") {
-      return res.status(400).json({ message: "Voting is allowed on Freeboard only." });
-    }
-
+    // ✅ author cannot vote on own post
     if (String(post.author) === userId) {
       return res.status(403).json({ message: "Authors cannot vote on their own posts." });
     }
@@ -360,15 +328,15 @@ router.post("/:school/posts/:id/vote", requireAuth, schoolGuard, async (req, res
 
     if (dir === "up") {
       if (hasUp) {
-        await Post.updateOne({ _id: id, school }, { $pull: { upvoters: req.user._id } });
+        await Post.updateOne({ _id: id, school }, { $pull: { upvoters: req.user._id || req.user.id } });
       } else {
-        await Post.updateOne({ _id: id, school }, { $addToSet: { upvoters: req.user._id } });
+        await Post.updateOne({ _id: id, school }, { $addToSet: { upvoters: req.user._id || req.user.id } });
       }
     } else {
       if (hasDown) {
-        await Post.updateOne({ _id: id, school }, { $pull: { downvoters: req.user._id } });
+        await Post.updateOne({ _id: id, school }, { $pull: { downvoters: req.user._id || req.user.id } });
       } else {
-        await Post.updateOne({ _id: id, school }, { $addToSet: { downvoters: req.user._id } });
+        await Post.updateOne({ _id: id, school }, { $addToSet: { downvoters: req.user._id || req.user.id } });
       }
     }
 
