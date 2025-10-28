@@ -420,6 +420,7 @@ import {
 import { useAuth } from "../../contexts/AuthContext";
 import { useSchool } from "../../contexts/SchoolContext";
 import { apiFetch } from "../../api/http";
+import { useSocket } from "../../contexts/SocketContext"; // ✅ 추가
 
 dayjs.extend(relativeTime);
 dayjs.locale("en");
@@ -431,6 +432,7 @@ export default function FreeBoardDetail() {
   const { user, token } = useAuth();
   const { school, schoolTheme } = useSchool();
   const schoolPath = useSchoolPath();
+  const { emit, on } = useSocket(); // ✅ 소켓 훅
 
   const [post, setPost] = useState(null);
   const [error, setError] = useState("");
@@ -484,6 +486,22 @@ export default function FreeBoardDetail() {
     loadPost();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, school, isAuthed]);
+
+  // ✅ 소켓 room join / leave + 실시간 수신
+  useEffect(() => {
+    if (!id) return;
+    emit("post:join", { postId: id });
+    const off = on("post:voteUpdated", (payload) => {
+      if (!payload || payload.postId !== id) return;
+      setUpCount(payload.upCount ?? 0);
+      setDownCount(payload.downCount ?? 0);
+      // 내 myVote는 서버 응답에서만 세팅(여기선 상대의 변화만 반영)
+    });
+    return () => {
+      off?.();
+      emit("post:leave", { postId: id });
+    };
+  }, [id, emit, on]);
 
   // mark notification read (existing)
   useEffect(() => {

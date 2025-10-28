@@ -673,210 +673,326 @@ export default function Dashboard() {
           )}
         </section>
 
-        {/* COMPOSER */}
+
+{/* ================= COMPOSER (updated UI v2) ================= */}
         <aside className="md:col-start-2 md:sticky md:top-[24px] self-start">
-          <CardBox>
+          <div className="rounded-2xl bg-white shadow-lg overflow-hidden">
             <form onSubmit={submitPost}>
-              {/* 헤더: placeholder가 탭/모드에 맞춰 변경 */}
-              <div className="flex items-center gap-3 p-4 border-b border-slate-200">
-                <div className="shrink-0 h-10 w-10 rounded-full bg-slate-200 flex items-center justify-center">
-                  <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden>
-                    <circle cx="12" cy="8" r="4" fill="#cbd5e1" />
-                    <path d="M4 20c0-4 4-6 8-6s8 2 8 6" fill="#cbd5e1" />
-                  </svg>
-                </div>
-                <div className="flex-1">
-                  <input
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder={
-                      active === "general"
-                        ? "Write a catchy title for your post…"
-                        : mode === "question"
-                        ? "Ask an academic/career question…"
-                        : lookingKind === "course_materials"
-                        ? "Course name (e.g., STAT101)"
-                        : "Seeking… (short title)"
-                    }
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-[15px] font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900"
-                  />
-                  <p className="mt-1 text-xs text-slate-500">
-                    Posting as <span className="font-medium">anonymous</span>
-                  </p>
-                </div>
+              {/* Header */}
+              <div className="px-5 pt-5">
+                <p className="text-[13px] text-slate-500">
+                  Posting as <span className="font-semibold">anonymous</span> in{" "}
+                  <span className="font-semibold">
+                    {active === "general" ? "Free Board" : "Academic Board"}
+                  </span>
+                </p>
               </div>
 
-              <div className="p-4 space-y-4">
-                {/* Academic일 때 상단 모드 토글 */}
-                {active === "academic" && (
-                  <div className="flex items-center gap-2">
+              {/* === Academic: tab (General Q&A / Seeking) === */}
+              {active === "academic" && (
+                <div className="px-5 mt-3">
+                  <div className="flex items-center gap-6 text-sm font-semibold">
                     <button
                       type="button"
                       onClick={() => setMode("question")}
-                      className={`px-3 py-1.5 rounded-full text-sm border ${
-                        mode === "question"
-                          ? "bg-slate-900 text-white border-slate-900"
-                          : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
+                      className={`pb-2 relative ${
+                        mode === "question" ? "text-slate-900" : "text-slate-400"
                       }`}
                       aria-pressed={mode === "question"}
                     >
-                      General question
+                      General Q&A
+                      {mode === "question" && (
+                        <span className="absolute left-0 right-0 -bottom-[2px] h-[2px] bg-rose-300 rounded-full" />
+                      )}
                     </button>
                     <button
                       type="button"
                       onClick={() => setMode("seeking")}
-                      className={`px-3 py-1.5 rounded-full text-sm border ${
-                        mode === "seeking"
-                          ? "bg-slate-900 text-white border-slate-900"
-                          : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
+                      className={`pb-2 relative ${
+                        mode === "seeking" ? "text-slate-900" : "text-slate-400"
                       }`}
                       aria-pressed={mode === "seeking"}
                     >
-                      Seeking 📥
+                      Seeking
+                      {mode === "seeking" && (
+                        <span className="absolute left-0 right-0 -bottom-[2px] h-[2px] bg-rose-300 rounded-full" />
+                      )}
                     </button>
-
-                    {mode === "seeking" && (
-                      <select
-                        value={lookingKind}
-                        onChange={(e) => setLookingKind(e.target.value)}
-                        className="ml-2 rounded-full border border-slate-300 px-3 py-1.5 text-sm"
-                      >
-                        <option value="course_materials">Course Materials</option>
-                        <option value="study_mate">Study Mate</option>
-                        <option value="coffee_chat">Coffee Chat</option>
-                      </select>
-                    )}
                   </div>
+                </div>
+              )}
+
+              {/* Divider */}
+              <div className="mt-3 border-t border-slate-200" />
+
+              <div className="p-5">
+                {/* === Seeking: type picker cards (smaller + strong hover/active) === */}
+                {active === "academic" && mode === "seeking" && (
+                  <>
+                    <div className="flex gap-4 justify-start">
+                      {[
+                        { key: "course_materials", label: "Study\nMaterial", icon: "📄" },
+                        { key: "coffee_chat", label: "Coffee\nChat", icon: "☕️" },
+                        { key: "study_mate", label: "Study\nGroup", icon: "👥" },
+                      ].map((opt) => {
+                        const selected = lookingKind === opt.key;
+                        return (
+                          <button
+                            key={opt.key}
+                            type="button"
+                            onClick={() => setLookingKind(opt.key)}
+                            className={`w-[116px] h-[142px] rounded-3xl border transition 
+                                        whitespace-pre-line shadow-sm will-change-transform
+                                        ${selected
+                                          ? "bg-rose-500 text-white border-rose-500 scale-110"
+                                          : "bg-rose-50 text-rose-500 border-rose-200"} 
+                                        hover:bg-rose-500 hover:text-white hover:border-rose-500
+                                        hover:shadow-md hover:scale-110 active:scale-110
+                                        duration-200 ease-out`}
+                            aria-pressed={selected}
+                          >
+                            <div className="h-full flex flex-col items-center justify-center gap-2">
+                              <div className="text-[30px] leading-none">{opt.icon}</div>
+                              <div className="text-[16px] font-semibold text-center">
+                                {opt.label}
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div className="h-5" />
+                  </>
                 )}
 
-                {/* 본문/세부필드 */}
-                {active === "academic" &&
-                mode === "seeking" &&
-                lookingKind === "course_materials" ? (
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700">
-                        Professor (optional)
+                {/* === FORM FIELDS === */}
+                {active === "general" && (
+                  <>
+                    {/* Free Board form */}
+                    <label className="block text-sm text-slate-600 mb-1">Title</label>
+                    <input
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      placeholder="Any core course recommendation?"
+                      className="w-full rounded-xl border border-rose-200 px-3 py-2 text-[15px] focus:outline-none focus:ring-2 focus:ring-rose-200/70"
+                    />
+
+                    <div className="mt-4">
+                      <label className="block text-sm text-slate-600 mb-1">
+                        Related Course (if there is any)
                       </label>
                       <input
-                        type="text"
-                        value={professor}
-                        onChange={(e) => setProfessor(e.target.value)}
-                        placeholder="Professor name (optional)"
-                        className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900"
+                        placeholder="Intro to Micro Economics .."
+                        className="w-full rounded-xl border border-rose-200 px-3 py-2 text-[15px] focus:outline-none focus:ring-2 focus:ring-rose-200/70"
                       />
                     </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-2">
-                        Personal Materials (choose one or more)
-                      </label>
-                      <div className="grid grid-cols-2 gap-2">
-                        {MATERIAL_OPTIONS.map((opt) => (
-                          <label
-                            key={opt.key}
-                            className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm cursor-pointer ${
-                              materials.includes(opt.key)
-                                ? "border-slate-900 bg-slate-900/5"
-                                : "border-slate-300 hover:bg-slate-50"
-                            }`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={materials.includes(opt.key)}
-                              onChange={() => toggleMaterial(opt.key)}
-                              className="accent-black"
-                            />
-                            <span>{opt.label}</span>
-                          </label>
-                        ))}
-                      </div>
-                      <p className="mt-2 text-xs text-slate-500">
-                        You can select multiple. Title will be used as course name.
-                      </p>
+                    <div className="mt-4">
+                      <label className="block text-sm text-slate-600 mb-1">Content</label>
+                      <textarea
+                        value={content}
+                        onChange={(e) => setContent(e.target.value)}
+                        placeholder="I'm Freshman, and looking for a core course which is not that strictly graded and has no exams."
+                        className="w-full min-h-[120px] rounded-xl border border-rose-200 px-3 py-2 text-[14px] focus:outline-none focus:ring-2 focus:ring-rose-200/70"
+                      />
                     </div>
-                  </div>
-                ) : (
-                  <textarea
-                    value={content}
-                    onChange={(e) => setContent(e.target.value)}
-                    placeholder={
-                      active === "general"
-                        ? "Write your content here…"
-                        : mode === "question"
-                        ? "Describe your academic/career question…"
-                        : lookingKind === "study_mate"
-                        ? "Describe schedule, level, topic…"
-                        : "Say hello and what you'd like to chat about…"
-                    }
-                    className="w-full min-h-[120px] rounded-xl border border-slate-300 px-3 py-2 text-[14px] text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900"
-                  />
+                  </>
                 )}
 
-                {/* Images: freeboard 전용 업로드 등은 기존 유지할 수 있게 자리만 남김 */}
-                {/* ... */}
+                {active === "academic" && mode === "question" && (
+                  <>
+                    {/* Academic - General Q&A */}
+                    <label className="block text-sm text-slate-600 mb-1">Title</label>
+                    <input
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      placeholder="Any core course recommendation?"
+                      className="w-full rounded-xl border border-rose-200 px-3 py-2 text-[15px] focus:outline-none focus:ring-2 focus:ring-rose-200/70"
+                    />
 
-                <div className="flex items-center justify-between pt-2">
+                    <div className="mt-4">
+                      <label className="block text-sm text-slate-600 mb-1">
+                        Related Course (if there is any)
+                      </label>
+                      <input
+                        placeholder="Intro to Micro Economics .."
+                        className="w-full rounded-xl border border-rose-200 px-3 py-2 text-[15px] focus:outline-none focus:ring-2 focus:ring-rose-200/70"
+                      />
+                    </div>
+
+                    <div className="mt-4">
+                      <label className="block text-sm text-slate-600 mb-1">Content</label>
+                      <textarea
+                        value={content}
+                        onChange={(e) => setContent(e.target.value)}
+                        placeholder="Describe your academic/career question…"
+                        className="w-full min-h-[140px] rounded-xl border border-rose-200 px-3 py-2 text-[14px] focus:outline-none focus:ring-2 focus:ring-rose-200/70"
+                      />
+                    </div>
+                  </>
+                )}
+
+                {active === "academic" &&
+                  mode === "seeking" &&
+                  lookingKind === "course_materials" && (
+                    <>
+                      {/* Seeking - Study Material */}
+                      <label className="block text-sm text-slate-600 mb-1">
+                        Course Name
+                      </label>
+                      <input
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                        placeholder="Intro to Micro Economics"
+                        className="w-full rounded-xl border border-rose-200 px-3 py-2 text-[15px] focus:outline-none focus:ring-2 focus:ring-rose-200/70"
+                      />
+
+                      <div className="mt-4">
+                        <label className="block text-sm text-slate-600 mb-1">
+                          Professor (Optional)
+                        </label>
+                        <input
+                          value={professor}
+                          onChange={(e) => setProfessor(e.target.value)}
+                          placeholder="Andy Park"
+                          className="w-full rounded-xl border border-rose-200 px-3 py-2 text-[15px] focus:outline-none focus:ring-2 focus:ring-rose-200/70"
+                        />
+                      </div>
+
+                      <div className="mt-6">
+                        <p className="text-sm text-slate-600">
+                          It’d be great if you have personal note on,
+                          <span className="ml-2 text-slate-400">(Select all)</span>
+                        </p>
+
+                        {/* ✅ 체크박스만 붉은색으로 (바깥 박스 없음) */}
+                        <div className="mt-3 flex flex-col gap-3">
+                          {[
+                            { key: "syllabus", label: "Syllabus" },
+                            { key: "lecture_notes", label: "Other class material" },
+                            { key: "past_exams", label: "Past Exams" },
+                            { key: "quiz_prep", label: "Projects" },
+                          ].map((opt) => (
+                            <label key={opt.key} className="flex items-center gap-3">
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4 accent-rose-500 ring-1 ring-rose-300 rounded-[3px] focus:ring-2 focus:ring-rose-400"
+                                checked={materials.includes(opt.key)}
+                                onChange={() => toggleMaterial(opt.key)}
+                              />
+                              <span className="text-[15px] text-slate-700">{opt.label}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                {active === "academic" &&
+                  mode === "seeking" &&
+                  lookingKind === "coffee_chat" && (
+                    <>
+                      {/* Seeking - Coffee Chat */}
+                      <label className="block text-sm text-slate-600 mb-1">Title</label>
+                      <input
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                        placeholder="Transfer from CAS to TISCH"
+                        className="w-full rounded-xl border border-rose-200 px-3 py-2 text-[15px] focus:outline-none focus:ring-2 focus:ring-rose-200/70"
+                      />
+
+                      <div className="mt-4">
+                        <label className="block text-sm text-slate-600 mb-1">Topic</label>
+                        <textarea
+                          value={content}
+                          onChange={(e) => setContent(e.target.value)}
+                          placeholder="I’m thinking about transferring... looking for some advice..."
+                          className="w-full min-h-[140px] rounded-xl border border-rose-200 px-3 py-2 text-[14px] focus:outline-none focus:ring-2 focus:ring-rose-200/70"
+                        />
+                      </div>
+                    </>
+                  )}
+
+                {active === "academic" &&
+                  mode === "seeking" &&
+                  lookingKind === "study_mate" && (
+                    <>
+                      {/* Seeking - Study Group */}
+                      <label className="block text-sm text-slate-600 mb-1">Title</label>
+                      <input
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                        placeholder="Econ 101 midterm study group"
+                        className="w-full rounded-xl border border-rose-200 px-3 py-2 text-[15px] focus:outline-none focus:ring-2 focus:ring-rose-200/70"
+                      />
+
+                      <div className="mt-4">
+                        <label className="block text-sm text-slate-600 mb-1">
+                          (optional) Related Course (if any)
+                        </label>
+                        <input
+                          placeholder="Intro to Micro Economics"
+                          className="w-full rounded-xl border border-rose-200 px-3 py-2 text-[15px] focus:outline-none focus:ring-2 focus:ring-rose-200/70"
+                        />
+                      </div>
+
+                      <div className="mt-4">
+                        <label className="block text-sm text-slate-600 mb-1">Topic</label>
+                        <textarea
+                          value={content}
+                          onChange={(e) => setContent(e.target.value)}
+                          placeholder="For the Midterm coming in next week, I’m looking for some study buddies..."
+                          className="w-full min-h-[140px] rounded-xl border border-rose-200 px-3 py-2 text-[14px] focus:outline-none focus:ring-2 focus:ring-rose-200/70"
+                        />
+                      </div>
+                    </>
+                  )}
+
+                {/* Footer / Post button */}
+                <div className="mt-6 flex items-center justify-between">
                   <p className="text-[12px] text-slate-500">
                     Posting to{" "}
                     <strong>
                       {active === "general"
-                        ? "Freeboard"
+                        ? "Free Board"
                         : mode === "question"
                         ? "Academic"
-                        : `Seeking: ${
-                            lookingKind === "course_materials"
-                              ? "Course Materials"
-                              : lookingKind === "study_mate"
-                              ? "Study Mate"
-                              : "Coffee Chat"
-                          }`}
+                        : lookingKind === "course_materials"
+                        ? "Seeking • Study Material"
+                        : lookingKind === "coffee_chat"
+                        ? "Seeking • Coffee Chat"
+                        : "Seeking • Study Group"}
                     </strong>
                     .
                   </p>
 
-                  {active === "academic" && mode === "seeking" ? (
-                    <div className="flex flex-col items-end">
-                      <button
-                        type="submit"
-                        disabled={!canPostAcademic || posting}
-                        className="rounded-xl bg-[#3044f0] px-4 py-2 text-sm font-semibold text-white hover:bg-[#2433c4] active:scale-[0.98] transition-all shadow-md hover:shadow-lg disabled:opacity-60"
-                      >
-                        {posting ? (
-                          "Posting…"
-                        ) : (
-                          <>
-                            Post{" "}
-                            <span className="line-through text-[11px] text-gray-400 ml-1">
-                              6 C point
-                            </span>
-                          </>
-                        )}
-                      </button>
-                      <span className="text-[10px] text-gray-400 mt-[2px]">
-                        0 point during beta season
-                      </span>
-                    </div>
-                  ) : (
+                  <div className="flex flex-col items-end">
                     <button
                       type="submit"
                       disabled={
                         posting ||
                         (active === "general" ? !canPostGeneral : !canPostAcademic)
                       }
-                      className="rounded-xl bg-[#3044f0] px-4 py-2 text-sm font-semibold text-white hover:bg-[#2433c4] active:scale-[0.98] transition-all shadow-md hover:shadow-lg disabled:opacity-60"
+                      className="rounded-2xl bg-rose-500 px-5 py-2 text-sm font-semibold text-white shadow-md hover:bg-rose-600 active:scale-[0.98] disabled:opacity-60"
                     >
                       {posting ? "Posting…" : "Post"}
+                      <span className="ml-2 text-white/80">
+                        <span className="line-through"> 6 C points</span>
+                      </span>
                     </button>
-                  )}
+                    <span className="text-[11px] text-slate-400 mt-[3px]">
+                      0 C points during the beta
+                    </span>
+                  </div>
                 </div>
 
                 {!!msg.text && (
                   <div
-                    className={`text-sm rounded-lg px-3 py-2 ${
+                    className={`mt-4 text-sm rounded-lg px-3 py-2 ${
                       msg.type === "success"
                         ? "bg-green-50 text-green-700 border border-green-200"
-                        : "bg-red-50 text-red-700 border-red-200"
+                        : "bg-red-50 text-red-700 border border-red-200"
                     }`}
                   >
                     {msg.text}
@@ -884,8 +1000,10 @@ export default function Dashboard() {
                 )}
               </div>
             </form>
-          </CardBox>
+          </div>
         </aside>
+
+
       </main>
     </div>
   );

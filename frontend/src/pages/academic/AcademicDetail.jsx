@@ -316,6 +316,7 @@ import {
 import CommentSection from "../../components/CommentSection";
 import VoteButtons from "../../components/VoteButtons";
 import UserBadge from "../../components/UserBadge";
+import { useSocket } from "../../contexts/SocketContext"; // ✅ 추가
 
 const MATERIAL_LABELS = {
   lecture_notes: "Lecture Notes",
@@ -338,10 +339,11 @@ export default function AcademicDetail() {
   const { school: ctxSchool } = useSchool();
   const school = schoolFromPath || ctxSchool || "nyu";
   const { user } = useAuth();
+  const { emit, on } = useSocket(); // ✅ 소켓 훅
 
   const [state, setState] = useState({ loading: true, error: "", post: null });
 
-  // 1) 공개 상세
+  // 공개 상세
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -357,7 +359,7 @@ export default function AcademicDetail() {
     return () => { alive = false; };
   }, [school, id]);
 
-  // 2) 로그인 시 보호 상세(내 투표/작성자 여부 포함)
+  // 보호 상세
   useEffect(() => {
     if (!user) return;
     let alive = true;
@@ -370,6 +372,24 @@ export default function AcademicDetail() {
     })();
     return () => { alive = false; };
   }, [user, school, id]);
+
+  // ✅ 소켓 room join / leave + 실시간 수신
+  useEffect(() => {
+    if (!id) return;
+    emit("post:join", { postId: id });
+    const off = on("post:voteUpdated", (payload) => {
+      if (!payload || payload.postId !== id) return;
+      setState((s) => {
+        if (!s.post) return s;
+        const next = { ...s.post, upCount: payload.upCount ?? 0, downCount: payload.downCount ?? 0 };
+        return { ...s, post: next };
+      });
+    });
+    return () => {
+      off?.();
+      emit("post:leave", { postId: id });
+    };
+  }, [id, emit, on]);
 
   if (state.loading) return <div className="max-w-3xl mx-auto px-4 py-6 text-sm text-slate-600">Loading…</div>;
   if (state.error) return <div className="max-w-3xl mx-auto px-4 py-6 text-sm text-red-600">{state.error}</div>;
@@ -388,7 +408,7 @@ export default function AcademicDetail() {
   const {
     title, content, createdAt,
     kind, professor, materials = [],
-    upCount, downCount, myVote,
+    upCount = 0, downCount = 0, myVote,
   } = p;
 
   const materialLabels = (Array.isArray(materials) ? materials : []).map((k) => MATERIAL_LABELS[k]).filter(Boolean);
@@ -425,11 +445,10 @@ export default function AcademicDetail() {
           {/* Author & Voting */}
           <div className="mt-3 flex items-center justify-between">
             <UserBadge username={p.authorNickname || p.nickname || "anonymous"} tier={p.authorTier} className="text-sm" />
-            {/* ⬆️ general question 에서만, 작성자는 disabled */}
             <VoteButtons
               targetType="academic"
               targetId={id}
-              initialCounts={{ up: upCount || 0, down: downCount || 0 }}
+              initialCounts={{ up: upCount, down: downCount }}
               initialVote={myVote ?? null}
               disabled={!isGeneral || !!isAuthor}
               className="scale-90"
@@ -457,7 +476,6 @@ export default function AcademicDetail() {
           {content}
         </div>
 
-        {/* seeking 은 코멘트 비활성(기존 정책 유지) */}
         <div className="px-5 py-5 border-t border-slate-200 bg-white">
           {isGeneral ? <CommentSection postId={id} /> : <CommentSection postId={id} disabled />}
         </div>

@@ -304,11 +304,10 @@ router.post("/:school/posts/:id/like", requireAuth, schoolGuard, async (req, res
 });
 
 // ---------------------------------------------
-// ✅ NEW: POST /:school/posts/:id/vote  (Up/Down vote for Freeboard)
-// body: { dir: "up" | "down" }
-// - Freeboard 전용
+// ✅ POST /:school/posts/:id/vote  (Freeboard 전용 Up/Down)
 // - 상호배타 + 토글
-// - ❗ 반대편 전환 금지(먼저 취소해야 함)
+// - 반대편 전환 금지(먼저 취소)
+// - ✔ 투표 후 socket.io로 같은 게시글 room에 브로드캐스트
 // ---------------------------------------------
 router.post("/:school/posts/:id/vote", requireAuth, schoolGuard, async (req, res, next) => {
   try {
@@ -323,12 +322,10 @@ router.post("/:school/posts/:id/vote", requireAuth, schoolGuard, async (req, res
     const post = await Post.findOne({ _id: id, school });
     if (!post) return res.status(404).json({ message: "Post not found" });
 
-    // 자유게시판만 허용
     if (post.board !== "free") {
       return res.status(400).json({ message: "Voting is allowed on Freeboard only." });
     }
 
-    // 작성자 금지
     if (String(post.author) === userId) {
       return res.status(403).json({ message: "Authors cannot vote on their own posts." });
     }
@@ -336,17 +333,15 @@ router.post("/:school/posts/:id/vote", requireAuth, schoolGuard, async (req, res
     const hasUp = Array.isArray(post.upvoters) && post.upvoters.some(u => String(u) === userId);
     const hasDown = Array.isArray(post.downvoters) && post.downvoters.some(u => String(u) === userId);
 
-    // ❗ 반대편 전환 금지: 먼저 취소해야 함
+    // 반대편 전환 금지
     if ((dir === "up" && hasDown) || (dir === "down" && hasUp)) {
       return res.status(400).json({ message: "Cancel your current vote before switching." });
     }
 
     if (dir === "up") {
       if (hasUp) {
-        // 동일 버튼 재클릭 → 취소
         await Post.updateOne({ _id: id, school }, { $pull: { upvoters: req.user._id } });
       } else {
-        // 최초 투표
         await Post.updateOne({ _id: id, school }, { $addToSet: { upvoters: req.user._id } });
       }
     } else {
@@ -364,11 +359,18 @@ router.post("/:school/posts/:id/vote", requireAuth, schoolGuard, async (req, res
       (fresh?.upvoters || []).some(u => String(u) === userId) ? "up" :
       (fresh?.downvoters || []).some(u => String(u) === userId) ? "down" : null;
 
+    // ✅ 소켓 브로드캐스트
+    const io = req.app.get("io");
+    if (io) {
+      io.to(`post:${id}`).emit("post:voteUpdated", { postId: id, upCount, downCount });
+    }
+
     return res.json({ ok: true, upCount, downCount, myVote });
   } catch (err) { next(err); }
 });
 
 module.exports = router;
+
 
 
 
