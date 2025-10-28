@@ -6,6 +6,7 @@ import { listMyPosts, deletePost } from "../../api/posts";
 import { Link, useLocation } from "react-router-dom";
 
 export default function MyPosts() {
+  console.log("🧭 Loaded MyPosts.jsx component");
   const { user } = useAuth();
   const { school, schoolTheme } = useSchool();
   const schoolPath = useSchoolPath();
