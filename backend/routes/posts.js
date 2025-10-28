@@ -58,6 +58,25 @@ async function findPostByAnyId({ id, school }) {
 }
 
 // ---------------------------------------------
+// GET /:school/posts/my  (only current user's posts)
+// ---------------------------------------------
+router.get("/:school/posts/myposts", requireAuth, schoolGuard, async (req, res, next) => {
+  try {
+    const { school } = req.params;
+    const userId = String(req.user._id || req.user.id);
+
+    const posts = await Post.find({ school, author: userId })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    res.json(posts.map(serializePost));
+  } catch (err) {
+    next(err);
+  }
+});
+
+
+// ---------------------------------------------
 // GET /:school/posts  (protected list)
 // ---------------------------------------------
 router.get("/:school/posts", requireAuth, schoolGuard, async (req, res, next) => {

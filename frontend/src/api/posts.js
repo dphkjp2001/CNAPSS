@@ -13,6 +13,11 @@ function buildQuery(params = {}) {
   return s ? `?${s}` : "";
 }
 
+export function listMyPosts({ school }) {
+  return fetchJson(`/${encodeURIComponent(school)}/posts/myposts`);
+}
+
+
 /* 공개(비로그인) */
 export function getPublicPosts({ school, page, limit, q, sort } = {}) {
   const qs = buildQuery({ page, limit, q, sort });
