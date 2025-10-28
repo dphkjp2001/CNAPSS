@@ -38,11 +38,11 @@ export default function MyPosts() {
   }, [fetchMyPosts, location.pathname]);
 
   // 🗑 Delete post -> then re-fetch from MongoDB
-  const handleDelete = async (postId) => {
+  const handleDelete = async (id) => {
     if (!window.confirm("Delete this post?")) return;
     try {
-      await deletePost({ school, token, postId });
-      await fetchMyPosts();
+      await deletePost({ school, id });
+      await fetchMyPosts(); // re-fetch from MongoDB
     } catch (e) {
       console.error(e);
       alert("Failed to delete post.");
