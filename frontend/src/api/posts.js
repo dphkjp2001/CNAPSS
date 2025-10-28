@@ -14,7 +14,7 @@ function buildQuery(params = {}) {
 }
 
 export function listMyPosts({ school }) {
-  return getJson(`${encodeURIComponent(school)}/posts/my`);
+  return getJson(`/${encodeURIComponent(school)}/posts/my`);
 }
 
 
