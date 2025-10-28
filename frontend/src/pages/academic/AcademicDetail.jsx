@@ -315,16 +315,14 @@ import {
 } from "../../api/academicPosts";
 import CommentSection from "../../components/CommentSection";
 import VoteButtons from "../../components/VoteButtons";
-import UserBadge from "../../components/UserBadge";
-import { useSocket } from "../../contexts/SocketContext"; // ✅ 추가
+import dayjs from "dayjs";
+import relativeTime from "dayjs/plugin/relativeTime";
+import "dayjs/locale/en";
 
-const MATERIAL_LABELS = {
-  lecture_notes: "Lecture Notes",
-  syllabus: "Syllabus",
-  past_exams: "Past Exams",
-  quiz_prep: "Quiz Prep",
-};
+dayjs.extend(relativeTime);
+dayjs.locale("en");
 
+// Optional: small helper for emoji by kind (kept from your previous version)
 function kindEmoji(kind = "") {
   const k = String(kind || "").toLowerCase().replace(/[\s-]+/g, "_");
   if (k.includes("course_material")) return "📝";
@@ -339,11 +337,14 @@ export default function AcademicDetail() {
   const { school: ctxSchool } = useSchool();
   const school = schoolFromPath || ctxSchool || "nyu";
   const { user } = useAuth();
-  const { emit, on } = useSocket(); // ✅ 소켓 훅
 
-  const [state, setState] = useState({ loading: true, error: "", post: null });
+  const [state, setState] = useState({
+    loading: true,
+    error: "",
+    post: null,
+  });
 
-  // 공개 상세
+  // 1) 공개 상세 먼저 로드
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -353,13 +354,19 @@ export default function AcademicDetail() {
         setState({ loading: false, error: "", post: p });
       } catch (err) {
         if (!alive) return;
-        setState({ loading: false, error: err?.message || "Failed to load post.", post: null });
+        setState({
+          loading: false,
+          error: err?.message || "Failed to load post.",
+          post: null,
+        });
       }
     })();
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, [school, id]);
 
-  // 보호 상세
+  // 2) 로그인 상태면 보호 상세로 보강(myVote 포함)
   useEffect(() => {
     if (!user) return;
     let alive = true;
@@ -368,116 +375,134 @@ export default function AcademicDetail() {
         const pr = await getAcademicPost({ school, id });
         if (!alive) return;
         setState((s) => ({ ...s, post: pr || s.post }));
-      } catch {}
+      } catch {
+        /* ignore */
+      }
     })();
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, [user, school, id]);
 
-  // ✅ 소켓 room join / leave + 실시간 수신
-  useEffect(() => {
-    if (!id) return;
-    emit("post:join", { postId: id });
-    const off = on("post:voteUpdated", (payload) => {
-      if (!payload || payload.postId !== id) return;
-      setState((s) => {
-        if (!s.post) return s;
-        const next = { ...s.post, upCount: payload.upCount ?? 0, downCount: payload.downCount ?? 0 };
-        return { ...s, post: next };
-      });
-    });
-    return () => {
-      off?.();
-      emit("post:leave", { postId: id });
-    };
-  }, [id, emit, on]);
+  if (state.loading) {
+    return (
+      <div className="max-w-3xl mx-auto px-4 py-6 text-sm text-slate-600">
+        Loading…
+      </div>
+    );
+  }
+  if (state.error) {
+    return (
+      <div className="max-w-3xl mx-auto px-4 py-6 text-sm text-red-600">
+        {state.error}
+      </div>
+    );
+  }
+  if (!state.post) {
+    return (
+      <div className="max-w-3xl mx-auto px-4 py-6 text-sm text-slate-600">
+        Post not found.
+      </div>
+    );
+  }
 
-  if (state.loading) return <div className="max-w-3xl mx-auto px-4 py-6 text-sm text-slate-600">Loading…</div>;
-  if (state.error) return <div className="max-w-3xl mx-auto px-4 py-6 text-sm text-red-600">{state.error}</div>;
-  if (!state.post) return null;
-
+  // ---- Derived meta ----
   const p = state.post;
-  const mode = (p.mode || p.postType || p.type || (p.lookingFor ? "looking_for" : "general")).toString().toLowerCase();
-  const isGeneral = mode === "general" || mode === "question";
+  const mode = (
+    p.mode ||
+    p.postType ||
+    p.type ||
+    (p.lookingFor ? "looking_for" : "general")
+  )
+    .toString()
+    .toLowerCase();
 
+  const isGeneral = mode === "general" || mode === "question"; // ✅ general question만 투표 허용
   const isAuthor =
     user &&
-    [String(p.author?._id || p.author), String(p.userId), String(p.authorId)]
+    [p.author?._id, p.author?.id, p.userId, p.authorId]
       .filter(Boolean)
+      .map(String)
       .some((aid) => String(aid) === String(user._id || user.id));
 
-  const {
-    title, content, createdAt,
-    kind, professor, materials = [],
-    upCount = 0, downCount = 0, myVote,
-  } = p;
-
-  const materialLabels = (Array.isArray(materials) ? materials : []).map((k) => MATERIAL_LABELS[k]).filter(Boolean);
+  const upCount = Number(p.upCount || 0);
+  const downCount = Number(p.downCount || 0);
+  const myVote = p.myVote ?? null;
 
   const handleDelete = async () => {
     if (!window.confirm("Delete this post?")) return;
-    await deleteAcademicPost({ school, id });
-    navigate(`/${encodeURIComponent(school)}/dashboard?tab=academic`);
+    try {
+      await deleteAcademicPost({ school, id });
+      alert("Post deleted.");
+      navigate(`/${encodeURIComponent(school)}/dashboard?tab=academic`);
+    } catch (err) {
+      alert("Delete failed: " + (err?.message || "Unknown error"));
+    }
   };
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-6">
       <article className="bg-white rounded-2xl shadow border border-slate-200 overflow-hidden">
+        {/* Header */}
         <header className="px-5 py-4 border-b border-slate-200">
-          <div className="flex items-center justify-between text-sm text-slate-500">
-            <div className="inline-flex items-center gap-2">
-              <span>{isGeneral ? "💬" : kindEmoji(kind)}</span>
-              <span className="font-medium">{isGeneral ? "General question" : "Seeking"}</span>
+          <div className="flex items-start gap-4">
+            {/* Left: title/meta */}
+            <div className="flex-1">
+              <div className="flex items-center justify-between text-sm text-slate-500">
+                <div className="inline-flex items-center gap-2">
+                  <span>{isGeneral ? "💬" : kindEmoji(p.kind)}</span>
+                  <span className="font-medium">
+                    {isGeneral ? "General question" : "Seeking"}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <time dateTime={p.createdAt}>
+                    {dayjs(p.createdAt).fromNow()}
+                  </time>
+                  {isAuthor && (
+                    <button
+                      onClick={handleDelete}
+                      className="ml-2 rounded-xl bg-red-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-600"
+                      title="Delete this post"
+                    >
+                      Delete
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <h1 className="mt-2 text-2xl font-semibold text-slate-900">
+                {p.title}
+              </h1>
             </div>
 
-            <div className="flex items-center gap-3">
-              <time dateTime={createdAt}>{new Date(createdAt).toLocaleString()}</time>
-              {isAuthor && (
-                <button onClick={handleDelete}
-                  className="ml-2 rounded-xl bg-red-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-600">
-                  Delete
-                </button>
-              )}
-            </div>
+            {/* Right: vote widget — ✅ general question에만 노출 */}
+            {isGeneral && (
+              <VoteButtons
+                school={school}
+                postId={p._id || id}
+                initialCounts={{ up: upCount, down: downCount }}
+                initialVote={myVote}
+                disabled={!!isAuthor} // 작성자는 투표 금지
+                className="shrink-0"
+              />
+            )}
           </div>
-
-          <h1 className="mt-2 text-2xl font-semibold text-slate-900">{title}</h1>
-
-          {/* Author & Voting */}
-          <div className="mt-3 flex items-center justify-between">
-            <UserBadge username={p.authorNickname || p.nickname || "anonymous"} tier={p.authorTier} className="text-sm" />
-            <VoteButtons
-              targetType="academic"
-              targetId={id}
-              initialCounts={{ up: upCount, down: downCount }}
-              initialVote={myVote ?? null}
-              disabled={!isGeneral || !!isAuthor}
-              className="scale-90"
-            />
-          </div>
-
-          {/* materials & professor badges (seeking 전용) */}
-          {!isGeneral && (
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              {materialLabels.map((lbl) => (
-                <span key={lbl} className="inline-flex items-center rounded-full border border-slate-300 bg-slate-50 px-3 py-1 text-xs text-slate-700">
-                  {lbl}
-                </span>
-              ))}
-              {professor && (
-                <span className="inline-flex items-center rounded-full border border-slate-300 bg-slate-50 px-3 py-1 text-xs text-slate-700">
-                  Professor: {professor}
-                </span>
-              )}
-            </div>
-          )}
         </header>
 
+        {/* Body */}
         <div className="px-5 py-5 whitespace-pre-wrap text-[15px] leading-7 text-slate-800">
-          {content}
+          {p.content}
         </div>
 
+        {/* Comments: 기존 정책 유지 (general은 활성 / seeking은 비활성 혹은 읽기) */}
         <div className="px-5 py-5 border-t border-slate-200 bg-white">
-          {isGeneral ? <CommentSection postId={id} /> : <CommentSection postId={id} disabled />}
+          {isGeneral ? (
+            <CommentSection postId={p._id || id} />
+          ) : (
+            <CommentSection postId={p._id || id} disabled />
+          )}
         </div>
       </article>
     </div>

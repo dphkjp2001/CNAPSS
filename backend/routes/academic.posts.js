@@ -286,6 +286,10 @@ function serialize(doc) {
     postType: o.postType || m,
     lookingFor: typeof o.lookingFor === "boolean" ? o.lookingFor : m === "looking_for",
     likesCount: Array.isArray(o.likes) ? o.likes.length : 0,
+    upCount:
+      Array.isArray(o.upvoters) ? o.upvoters.length : (o.counts?.up || 0),
+    downCount:
+      Array.isArray(o.downvoters) ? o.downvoters.length : (o.counts?.down || 0),
   };
 }
 
@@ -338,22 +342,125 @@ router.get("/:school/academic-posts/:id", requireAuth, schoolGuard, async (req, 
     const up = Array.isArray(doc.upvoters) && doc.upvoters.some(u => String(u) === me);
     const down = Array.isArray(doc.downvoters) && doc.downvoters.some(u => String(u) === me);
     out.myVote = up ? "up" : down ? "down" : null;
+    out.isMine = String(doc.author) === me;
 
     res.json(out);
   } catch (err) { next(err); }
 });
 
-/** ---------------- create/update/delete ---------------- **/
-// (생략: 기존 코드 유지)
+/** ---------------- create ---------------- **/
+router.post("/:school/academic-posts", requireAuth, schoolGuard, async (req, res, next) => {
+  try {
+    const { school } = req.params;
+    const {
+      title,
+      content = "",
+      mode, type, postType,
+      kind = "",
+      images = [],
+      anonymous = false,
+      courseName, professor = "", materials = [],
+    } = req.body;
 
-/** ---------------- NEW: vote ----------------
- * POST /:school/academic-posts/:id/vote
- * body: { dir: "up" | "down" }
- * - 작성자 금지
- * - mode === "general" 만
- * - 상호배타 + 토글
- * - ✔ 소켓 브로드캐스트
- ------------------------------------------------*/
+    const normalizedMode = resolveMode({ mode, type, postType });
+    const normalizedKind = String(kind || "").toLowerCase().replace(/[\s-]+/g, "_");
+
+    if (!title || typeof title !== "string") {
+      return res.status(400).json({ message: "title is required" });
+    }
+
+    // seeking: course_materials
+    if (normalizedMode === "looking_for" && normalizedKind === "course_materials") {
+      const course = String(courseName || title || "").trim();
+      const allowed = new Set(["lecture_notes", "syllabus", "past_exams", "quiz_prep"]);
+      const mats = Array.isArray(materials) ? materials.filter((m) => allowed.has(String(m))) : [];
+      if (!course) return res.status(400).json({ message: "courseName (or title) is required." });
+      if (mats.length === 0) return res.status(400).json({ message: "Select at least one material." });
+
+      const doc = await AcademicPost.create({
+        school,
+        title: course,
+        content: "",
+        mode: normalizedMode,
+        kind: "course_materials",
+        images: [],
+        anonymous: !!anonymous,
+        author: req.user.id || req.user._id,
+        courseName: course,
+        professor: String(professor || ""),
+        materials: mats,
+        type, postType, lookingFor: true,
+      });
+      return res.status(201).json(serialize(doc));
+    }
+
+    // general or other seeking kinds
+    const doc = await AcademicPost.create({
+      school,
+      title: title.trim(),
+      content: String(content || ""),
+      mode: normalizedMode,
+      kind: normalizedKind,
+      images: Array.isArray(images) ? images.map((u) => (typeof u === "string" ? { url: u } : u)) : [],
+      anonymous: !!anonymous,
+      author: req.user.id || req.user._id,
+      type, postType, lookingFor: normalizedMode === "looking_for",
+    });
+    res.status(201).json(serialize(doc));
+  } catch (err) {
+    console.error("AcademicPost create error:", err);
+    next(err);
+  }
+});
+
+/** ---------------- update ---------------- **/
+router.patch("/:school/academic-posts/:id", requireAuth, schoolGuard, async (req, res, next) => {
+  try {
+    const { school, id } = req.params;
+    const doc = await AcademicPost.findOne({ _id: id, school });
+    if (!doc) return res.status(404).json({ message: "Post not found" });
+
+    const me = String(req.user.id || req.user._id);
+    if (String(doc.author) !== me) return res.status(403).json({ message: "Forbidden" });
+
+    const { title, content, mode, type, postType, kind, images, anonymous } = req.body;
+
+    if (typeof title !== "undefined") doc.title = String(title).trim();
+    if (typeof content !== "undefined") doc.content = String(content);
+    if (typeof images !== "undefined")
+      doc.images = Array.isArray(images) ? images.map((u) => (typeof u === "string" ? { url: u } : u)) : [];
+    if (typeof anonymous !== "undefined") doc.anonymous = !!anonymous;
+
+    if (typeof kind !== "undefined")
+      doc.kind = String(kind || "").toLowerCase().replace(/[\s-]+/g, "_");
+
+    if (typeof mode !== "undefined") doc.mode = mode;
+    if (typeof type !== "undefined") doc.type = type;
+    if (typeof postType !== "undefined") doc.postType = postType;
+
+    doc.mode = resolveMode({ mode: doc.mode, type: doc.type, postType: doc.postType });
+
+    await doc.save();
+    res.json(serialize(doc));
+  } catch (err) { next(err); }
+});
+
+/** ---------------- delete ---------------- **/
+router.delete("/:school/academic-posts/:id", requireAuth, schoolGuard, async (req, res, next) => {
+  try {
+    const { school, id } = req.params;
+    const doc = await AcademicPost.findOne({ _id: id, school });
+    if (!doc) return res.status(404).json({ message: "Post not found" });
+
+    const me = String(req.user.id || req.user._id);
+    if (String(doc.author) !== me) return res.status(403).json({ message: "Forbidden" });
+
+    await AcademicPost.deleteOne({ _id: id, school });
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
+/** ---------------- vote (mutually exclusive + toggle) ---------------- **/
 router.post("/:school/academic-posts/:id/vote", requireAuth, schoolGuard, async (req, res, next) => {
   try {
     const { school, id } = req.params;
@@ -378,6 +485,7 @@ router.post("/:school/academic-posts/:id/vote", requireAuth, schoolGuard, async 
     const hasUp = Array.isArray(post.upvoters) && post.upvoters.some(u => String(u) === userId);
     const hasDown = Array.isArray(post.downvoters) && post.downvoters.some(u => String(u) === userId);
 
+    // must cancel before switching
     if ((dir === "up" && hasDown) || (dir === "down" && hasUp)) {
       return res.status(400).json({ message: "Cancel your current vote before switching." });
     }
@@ -403,15 +511,12 @@ router.post("/:school/academic-posts/:id/vote", requireAuth, schoolGuard, async 
       (fresh?.upvoters || []).some(u => String(u) === userId) ? "up" :
       (fresh?.downvoters || []).some(u => String(u) === userId) ? "down" : null;
 
-    // ✅ 소켓 브로드캐스트
+    // broadcast (optional)
     const io = req.app.get("io");
-    if (io) {
-      io.to(`post:${id}`).emit("post:voteUpdated", { postId: id, upCount, downCount });
-    }
+    if (io) io.to(`post:${id}`).emit("post:voteUpdated", { postId: id, upCount, downCount });
 
     res.json({ ok: true, upCount, downCount, myVote });
   } catch (err) { next(err); }
 });
 
 module.exports = router;
-
