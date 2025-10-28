@@ -7,18 +7,16 @@ const Post = require("../models/Post");
 // Keep in sync with Post.js enum
 const ALLOWED_SCHOOLS = ["nyu", "columbia", "boston"];
 
-// 공용 헬퍼: 다양한 id 키로 조회
+// 공용 헬퍼: 다양한 id 키로 조회(ObjectId | shortId | slug | publicId)
 async function findPostByAnyId({ id, school }) {
   const s = String(school || "").toLowerCase();
   const key = String(id || "");
   const isObjId = mongoose.Types.ObjectId.isValid(key);
 
-  // 1단계: ObjectId 시도
   if (isObjId) {
     const byOid = await Post.findOne({ _id: key, school: s }).lean();
     if (byOid) return byOid;
   }
-  // 2단계: shortId / slug / publicId 시도
   return await Post.findOne(
     { school: s, $or: [{ shortId: key }, { slug: key }, { publicId: key }] }
   ).lean();
@@ -119,6 +117,9 @@ router.get("/:id", async (req, res) => {
       upCount,
       downCount,
       score: upCount - downCount,
+      shortId: doc.shortId,
+      slug: doc.slug,
+      publicId: doc.publicId,
     });
   } catch (err) {
     console.error("Public post detail error:", err);
@@ -127,5 +128,6 @@ router.get("/:id", async (req, res) => {
 });
 
 module.exports = router;
+
 
 

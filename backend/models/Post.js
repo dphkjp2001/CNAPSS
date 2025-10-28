@@ -10,7 +10,7 @@ const ImageSchema = new mongoose.Schema(
 );
 
 // NOTE:
-// - strict:false 로 두어 기존 스키마에 없던 필드가 있어도 그대로 저장/반환되게 합니다.
+// - strict:false 로 두어 기존 스키마에 없던 필드가 있어도 그대로 저장/반환됩니다.
 // - 'mode' 는 academic board 에서만 의미가 있으며 'general' | 'looking_for' 를 가집니다.
 const PostSchema = new mongoose.Schema(
   {
@@ -21,6 +21,7 @@ const PostSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+
     // Academic board only
     mode: {
       type: String,
@@ -45,20 +46,20 @@ const PostSchema = new mongoose.Schema(
     // (legacy thumbs) kept for compatibility
     likes: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
 
-    // ✅ New: Up/Down vote (Freeboard 전용으로 사용)
+    // ✅ Up/Down vote
     upvoters: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
     downvoters: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
 
     commentCount: { type: Number, default: 0 },
 
-    // Voting
+    // 계산 캐시(선택)
     counts: {
       up: { type: Number, default: 0 },
-      down: { type: Number, default: 0 }
+      down: { type: Number, default: 0 },
     },
     hotScore: { type: Number, default: 0, index: true },
 
-    // ✅ (optional) 공개링크용 키들 — 실제 도큐먼트에 있을 수도/없을 수도 있음
+    // ✅ 공개 링크용 키들(있을 수도/없을 수도 있음)
     shortId: { type: String },
     slug: { type: String },
     publicId: { type: String },
@@ -69,7 +70,6 @@ const PostSchema = new mongoose.Schema(
     toJSON: {
       virtuals: true,
       transform: (_doc, ret) => {
-        // Normalize mode for FE compatibility
         const inbound =
           ret.mode ||
           ret.kind ||
@@ -91,7 +91,6 @@ const PostSchema = new mongoose.Schema(
         if (!ret.kind) ret.kind = ret.mode;
         if (!ret.type) ret.type = ret.mode;
 
-        // ✅ add counts for convenience
         ret.upCount = Array.isArray(ret.upvoters) ? ret.upvoters.length : 0;
         ret.downCount = Array.isArray(ret.downvoters) ? ret.downvoters.length : 0;
         ret.score = ret.upCount - ret.downCount;
@@ -102,12 +101,12 @@ const PostSchema = new mongoose.Schema(
   }
 );
 
-// 성능 및 유니크 보장(있을 때만) — 기존 데이터에 해당 필드가 없으면 무시됨(sparse)
+// ✅ 유니크/희소 인덱스(해당 필드가 존재할 때만)
 PostSchema.index({ school: 1, shortId: 1 }, { unique: true, sparse: true });
 PostSchema.index({ school: 1, slug: 1 }, { unique: true, sparse: true });
 PostSchema.index({ school: 1, publicId: 1 }, { unique: true, sparse: true });
 
-// Ensure we always store a normalized mode on save
+// Normalize mode
 PostSchema.pre("validate", function (next) {
   const inbound =
     this.mode || this.kind || this.type || (this.lookingFor ? "looking_for" : null);
@@ -122,6 +121,7 @@ PostSchema.pre("validate", function (next) {
 });
 
 module.exports = mongoose.model("Post", PostSchema);
+
 
 
 
