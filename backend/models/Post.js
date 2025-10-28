@@ -50,13 +50,18 @@ const PostSchema = new mongoose.Schema(
     downvoters: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
 
     commentCount: { type: Number, default: 0 },
-    
+
     // Voting
     counts: {
       up: { type: Number, default: 0 },
       down: { type: Number, default: 0 }
     },
     hotScore: { type: Number, default: 0, index: true },
+
+    // ✅ (optional) 공개링크용 키들 — 실제 도큐먼트에 있을 수도/없을 수도 있음
+    shortId: { type: String },
+    slug: { type: String },
+    publicId: { type: String },
   },
   {
     timestamps: true,
@@ -97,6 +102,11 @@ const PostSchema = new mongoose.Schema(
   }
 );
 
+// 성능 및 유니크 보장(있을 때만) — 기존 데이터에 해당 필드가 없으면 무시됨(sparse)
+PostSchema.index({ school: 1, shortId: 1 }, { unique: true, sparse: true });
+PostSchema.index({ school: 1, slug: 1 }, { unique: true, sparse: true });
+PostSchema.index({ school: 1, publicId: 1 }, { unique: true, sparse: true });
+
 // Ensure we always store a normalized mode on save
 PostSchema.pre("validate", function (next) {
   const inbound =
@@ -112,6 +122,7 @@ PostSchema.pre("validate", function (next) {
 });
 
 module.exports = mongoose.model("Post", PostSchema);
+
 
 
 

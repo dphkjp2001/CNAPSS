@@ -5,6 +5,7 @@ const router = express.Router();
 const requireAuth = require("../middleware/requireAuth");
 const schoolGuard = require("../middleware/schoolGuard");
 
+const mongoose = require("mongoose");
 const Post = require("../models/Post");
 const Comment = require("../models/Comment");
 
@@ -38,6 +39,22 @@ function serializePost(doc) {
       (Array.isArray(obj.upvoters) ? obj.upvoters.length : 0) -
       (Array.isArray(obj.downvoters) ? obj.downvoters.length : 0),
   };
+}
+
+// ✅ 다양한 id 키로 조회
+async function findPostByAnyId({ id, school }) {
+  const s = String(school || "").toLowerCase();
+  const key = String(id || "");
+  const isObjId = mongoose.Types.ObjectId.isValid(key);
+
+  if (isObjId) {
+    const byOid = await Post.findOne({ _id: key, school: s });
+    if (byOid) return byOid;
+  }
+  return await Post.findOne({
+    school: s,
+    $or: [{ shortId: key }, { slug: key }, { publicId: key }],
+  });
 }
 
 // ---------------------------------------------
@@ -128,11 +145,13 @@ router.get("/:school/posts", requireAuth, schoolGuard, async (req, res, next) =>
 
 // ---------------------------------------------
 // GET /:school/posts/:id  (detail)
+//  - id가 ObjectId가 아니면 shortId/slug/publicId로 조회
 // ---------------------------------------------
 router.get("/:school/posts/:id", requireAuth, schoolGuard, async (req, res, next) => {
   try {
     const { school, id } = req.params;
-    const post = await Post.findOne({ _id: id, school }).lean();
+
+    const post = await findPostByAnyId({ id, school });
     if (!post) return res.status(404).json({ message: "Post not found" });
 
     const serialized = serializePost(post);
@@ -212,7 +231,7 @@ router.patch("/:school/posts/:id", requireAuth, schoolGuard, async (req, res, ne
       lookingFor,
     } = req.body;
 
-    const post = await Post.findOne({ _id: id, school });
+    const post = await findPostByAnyId({ id, school });
     if (!post) return res.status(404).json({ message: "Post not found" });
     if (String(post.author) !== String(req.user._id)) {
       return res.status(403).json({ message: "Forbidden" });
@@ -251,15 +270,15 @@ router.delete("/:school/posts/:id", requireAuth, schoolGuard, async (req, res, n
   try {
     const { school, id } = req.params;
 
-    const post = await Post.findOne({ _id: id, school });
+    const post = await findPostByAnyId({ id, school });
     if (!post) return res.status(404).json({ message: "Post not found" });
     if (String(post.author) !== String(req.user._id)) {
       return res.status(403).json({ message: "Forbidden" });
     }
 
     await Promise.all([
-      Post.deleteOne({ _id: id, school }),
-      Comment.deleteMany({ postId: id, school }),
+      Post.deleteOne({ _id: post._id, school }),
+      Comment.deleteMany({ postId: post._id, school }),
     ]);
 
     res.json({ ok: true });
@@ -267,6 +286,7 @@ router.delete("/:school/posts/:id", requireAuth, schoolGuard, async (req, res, n
     next(err);
   }
 });
+
 
 // ---------------------------------------------
 // (legacy) POST /:school/posts/:id/like (toggle like)
