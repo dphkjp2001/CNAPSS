@@ -1,14 +1,15 @@
+// frontend/src/api/chat.js
 import { getJson, postJson } from "./http";
 const API = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 
-/** 내 대화 목록(학교 스코프) */
+/** List conversations (scoped by school) */
 export function getConversations({ school, token }) {
   return getJson(`${API}/${school}/chat/conversations`, {
     headers: { Authorization: `Bearer ${token}` },
   });
 }
 
-/** 대화 메시지(신규가 위로 오므로 UI에서 reverse) */
+/** Messages in a conversation (newest first on UI via reverse) */
 export function getMessages({ school, token, conversationId, cursor, limit = 50 }) {
   const url = new URL(`${API}/${school}/chat/conversations/${conversationId}/messages`);
   if (cursor) url.searchParams.set("cursor", cursor);
@@ -16,7 +17,7 @@ export function getMessages({ school, token, conversationId, cursor, limit = 50 
   return getJson(url.toString(), { headers: { Authorization: `Bearer ${token}` } });
 }
 
-/** 메시지 전송 */
+/** Send a message */
 export function sendMessage({ school, token, conversationId, content }) {
   return postJson(
     `${API}/${school}/chat/conversations/${conversationId}/messages`,
@@ -25,7 +26,7 @@ export function sendMessage({ school, token, conversationId, content }) {
   );
 }
 
-/** 읽음 처리 */
+/** Mark as read */
 export function markRead({ school, token, conversationId }) {
   return postJson(
     `${API}/${school}/chat/conversations/${conversationId}/read`,
@@ -34,14 +35,15 @@ export function markRead({ school, token, conversationId }) {
   );
 }
 
-/** 대화 시작(없으면 생성) */
-export function startConversation({ school, token, peerEmail, itemId }) {
+/** Start (or reuse) a conversation — supports optional initialMessage */
+export function startConversation({ school, token, peerEmail, itemId, initialMessage }) {
   return postJson(
     `${API}/${school}/chat/start`,
-    { peerEmail, itemId },
+    { peerEmail, itemId, initialMessage },
     { headers: { Authorization: `Bearer ${token}` } }
   );
 }
+
 
 
 
