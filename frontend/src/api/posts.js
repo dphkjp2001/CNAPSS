@@ -1,5 +1,7 @@
 // frontend/src/api/posts.js
 import { getJson, postJson, putJson, deleteJson } from "./http";
+import axios from "axios";
+
 
 function buildQuery(params = {}) {
   const sp = new URLSearchParams();
@@ -65,3 +67,17 @@ export function votePost({ school, id, dir }) {
   return postJson(`/${encodeURIComponent(school)}/posts/${encodeURIComponent(id)}/vote`, { dir });
 }
 
+
+export async function listPosts({ school, token }) {
+  const res = await axios.get(`/api/${school}/posts`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return res.data;
+}
+
+export async function deletePost({ school, token, postId }) {
+  const res = await axios.delete(`/api/${school}/posts/${postId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return res.data;
+}

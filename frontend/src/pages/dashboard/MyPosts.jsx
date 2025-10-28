@@ -1,38 +1,53 @@
-// frontend/src/pages/dashboard/MyPosts.jsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useSchool } from "../../contexts/SchoolContext";
 import { useSchoolPath } from "../../utils/schoolPath";
-import { listPosts } from "../../api/posts";
-import { Link } from "react-router-dom";
+import { listPosts, deletePost } from "../../api/posts";
+import { Link, useLocation } from "react-router-dom";
 
 export default function MyPosts() {
   const { user, token } = useAuth();
   const { school, schoolTheme } = useSchool();
   const schoolPath = useSchoolPath();
+  const location = useLocation();
 
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
 
-  useEffect(() => {
+  const fetchMyPosts = useCallback(async () => {
     if (!user?.email || !school || !token) return;
-    (async () => {
-      setLoading(true);
-      try {
-        const data = await listPosts({ school, token });
-        const me = user.email.toLowerCase();
-        const mine = (Array.isArray(data) ? data : []).filter(
-          (p) => (p.email || "").toLowerCase() === me
-        );
-        setPosts(mine);
-      } catch (e) {
-        setErr(e?.message || "Failed to load my posts.");
-      } finally {
-        setLoading(false);
-      }
-    })();
+    setLoading(true);
+    try {
+      const data = await listPosts({ school, token });
+      const me = user.email.toLowerCase();
+      const mine = (Array.isArray(data) ? data : []).filter(
+        (p) => (p.email || "").toLowerCase() === me
+      );
+      setPosts(mine);
+    } catch (e) {
+      setErr(e?.message || "Failed to load my posts.");
+    } finally {
+      setLoading(false);
+    }
   }, [user?.email, school, token]);
+
+  // 🔁 Always refetch when navigating to My Posts
+  useEffect(() => {
+    fetchMyPosts();
+  }, [fetchMyPosts, location.pathname]);
+
+  // 🗑 Delete post -> then re-fetch from MongoDB
+  const handleDelete = async (postId) => {
+    if (!window.confirm("Delete this post?")) return;
+    try {
+      await deletePost({ school, token, postId });
+      await fetchMyPosts();
+    } catch (e) {
+      console.error(e);
+      alert("Failed to delete post.");
+    }
+  };
 
   return (
     <div
@@ -55,16 +70,27 @@ export default function MyPosts() {
         ) : (
           <ul className="space-y-3">
             {posts.map((post) => (
-              <li key={post._id} className="rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
-                <Link
-                  to={schoolPath(`/freeboard/${post._id}`)}
-                  className="font-medium text-blue-700 hover:underline"
+              <li
+                key={post._id}
+                className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm"
+              >
+                <div>
+                  <Link
+                    to={schoolPath(`/freeboard/${post._id}`)}
+                    className="font-medium text-blue-700 hover:underline"
+                  >
+                    {post.title}
+                  </Link>
+                  <p className="text-xs text-gray-500">
+                    {new Date(post.createdAt).toLocaleDateString()}
+                  </p>
+                </div>
+                <button
+                  onClick={() => handleDelete(post._id)}
+                  className="rounded-lg bg-red-500 px-3 py-1 text-sm font-semibold text-white hover:bg-red-600"
                 >
-                  {post.title}
-                </Link>
-                <p className="text-xs text-gray-500">
-                  {new Date(post.createdAt).toLocaleDateString()}
-                </p>
+                  Delete
+                </button>
               </li>
             ))}
           </ul>
@@ -73,5 +99,3 @@ export default function MyPosts() {
     </div>
   );
 }
-
-
