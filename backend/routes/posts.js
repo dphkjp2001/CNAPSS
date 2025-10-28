@@ -60,7 +60,7 @@ async function findPostByAnyId({ id, school }) {
 // ---------------------------------------------
 // GET /:school/posts/my  (only current user's posts)
 // ---------------------------------------------
-router.get("/:school/posts/myposts", requireAuth, schoolGuard, async (req, res, next) => {
+router.get("/:school/posts/my", requireAuth, schoolGuard, async (req, res, next) => {
   try {
     const { school } = req.params;
     const userId = String(req.user._id || req.user.id);
