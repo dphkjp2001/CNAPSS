@@ -64,6 +64,8 @@ router.get("/:school/posts/my", requireAuth, schoolGuard, async (req, res, next)
   try {
     const { school } = req.params;
     const userId = String(req.user._id || req.user.id);
+    console.log("req.user", req.user);
+
 
     const posts = await Post.find({ school, author: userId })
       .sort({ createdAt: -1 })
