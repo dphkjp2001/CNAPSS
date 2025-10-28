@@ -13,6 +13,7 @@ import About from "./pages/About";
 import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
 import AuthRequired from "./pages/auth/AuthRequired";
+import MyPosts from "./pages/dashboard/MyPosts";
 
 // Dashboard + Boards
 const Dashboard = lazy(() => import("./pages/dashboard/Dashboard"));
@@ -121,7 +122,7 @@ export default function App() {
               path="myposts"
               element={
                 <RequireAuth>
-                  <Dashboard />
+                  <MyPosts />
                 </RequireAuth>
               }
             />
