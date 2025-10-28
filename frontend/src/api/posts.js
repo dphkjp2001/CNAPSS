@@ -75,9 +75,4 @@ export async function listPosts({ school, token }) {
   return res.data;
 }
 
-export async function deletePost({ school, token, postId }) {
-  const res = await axios.delete(`/api/${school}/posts/${postId}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  return res.data;
-}
+
