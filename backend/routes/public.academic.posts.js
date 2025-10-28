@@ -52,6 +52,7 @@ router.get("/", async (req, res) => {
           mode: 1,
           kind: 1,
           counts: 1,
+          commentCount: 1,
           hotScore: 1,
           author: 1,
           authorNickname: { $arrayElemAt: ['$authorData.nickname', 0] },

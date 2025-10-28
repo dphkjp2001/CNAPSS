@@ -24,7 +24,7 @@ const publicMaterialsRouter = require("./routes/public.materials");
 const publicMarketRouter = require("./routes/public.market");
 const publicCommentsRouter = require("./routes/public.comments");
 
-// ✅ Academic board (career 대체)
+// ✅ Academic board
 const academicPostsRoutes = require("./routes/academic.posts");
 const publicAcademicPostsRouter = require("./routes/public.academic.posts");
 
@@ -47,12 +47,11 @@ const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:5173",
 ];
+
 app.use((req, res, next) => {
   console.log(`${req.method} ${req.originalUrl}`);
   next();
-}); 
-// debugging purposes
-
+});
 
 app.use(
   cors({
@@ -77,7 +76,6 @@ app.use("/api/public/:school/posts", publicPostsRouter);
 app.use("/api/public/:school/materials", publicMaterialsRouter);
 app.use("/api/public/:school/market", publicMarketRouter);
 app.use("/api/public/:school/comments", publicCommentsRouter);
-// ✅ Academic (public)
 app.use("/api/public/:school/academic-posts", publicAcademicPostsRouter);
 
 /* ----------------------- Protected (school scoped) ----------------------- */
@@ -87,7 +85,6 @@ app.use((err, req, res, next) => {
   console.error("🔥 Global error handler:", err);
   res.status(500).json({ message: err.message || "Internal server error" });
 });
-//debugging purposes
 
 app.use("/api/:school/comments", commentRoutes);
 app.use("/api/:school/market", marketRoutes);
@@ -97,23 +94,13 @@ app.use("/api/:school/request", requireAuth, schoolGuard, requestRoutes);
 app.use("/api/:school/schedule", requireAuth, schoolGuard, scheduleRoutes);
 app.use("/api/:school/courses", requireAuth, schoolGuard, courseHubRoutes);
 app.use("/api/:school/materials", requireAuth, schoolGuard, materialsRoutes);
-// ✅ Academic (protected)
 app.use("/api", academicPostsRoutes);
 
-// (Optional)
-app.use("/api/:school/reviews", requireAuth, schoolGuard, reviewsRoutes);
 
-// Voting routes
-app.use("/api/:school/votes", require("./routes/votes.routes"));
 
-// (예: places 프록시가 school 스코프가 아니라면 별도 경로로 마운트)
 app.use("/api/places", placesRouter);
 
 module.exports = app;
-
-
-
-
 
 
 

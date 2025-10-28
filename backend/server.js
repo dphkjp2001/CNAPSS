@@ -8,7 +8,7 @@ const mongoose = require("mongoose");
 const Conversation = require("./models/Conversation");
 const Message = require("./models/Message");
 const Post = require("./models/Post");
-// const CareerPost = require("./models/CareerPost"); // ✅ add: allow career posts to join rooms
+// ⚠️ const CareerPost = require("./models/CareerPost");  // 사용 안 함. 아래에서 참조 제거
 const Request = require("./models/Request");
 
 if (process.env.NODE_ENV !== "production") {
@@ -17,7 +17,6 @@ if (process.env.NODE_ENV !== "production") {
 
 const server = http.createServer(app);
 
-// Render/프록시 환경에서 안정성 옵션 추가
 const io = new Server(server, {
   path: "/socket.io",
   cors: {
@@ -43,7 +42,7 @@ mongoose
   .then(() => console.log("✅ MongoDB connected"))
   .catch((err) => console.error("❌ MongoDB connect failed", err));
 
-// ✅ Mongo 연결 완료 후 인덱스 마이그레이션 실행
+// 인덱스 마이그레이션
 mongoose.connection.once("open", async () => {
   try {
     await Request.ensureIndexesUpToDate();
@@ -53,7 +52,7 @@ mongoose.connection.once("open", async () => {
   }
 });
 
-// 소켓 인증 (JWT)
+// 소켓 인증
 io.use((socket, next) => {
   try {
     const token =
@@ -73,6 +72,7 @@ io.use((socket, next) => {
     next(new Error("UNAUTHORIZED"));
   }
 });
+
 
 async function authorizeConversation(conversationId, email, school) {
   const convo = await Conversation.findById(conversationId);
@@ -155,7 +155,25 @@ io.on("connection", (socket) => {
   });
 
   socket.on("post:leave", ({ postId }) => postId && socket.leave(`post:${postId}`));
+
+  // ✅ Post detail room join (Freeboard/Academic 공통)
+  socket.on("post:join", async ({ postId }) => {
+    try {
+      if (!postId) return;
+
+      const free = await Post.findById(postId).select("school").lean();
+      const schoolOf = free?.school;
+
+      if (!schoolOf || schoolOf !== school) return; // tenant guard
+      socket.join(`post:${postId}`);
+    } catch (e) {
+      console.error("post:join error", e);
+    }
+  });
+
+  socket.on("post:leave", ({ postId }) => postId && socket.leave(`post:${postId}`));
 });
+
 
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => console.log(`🚀 Server listening on http://localhost:${PORT}`));

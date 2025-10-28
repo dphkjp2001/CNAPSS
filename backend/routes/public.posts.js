@@ -1,10 +1,26 @@
 // backend/routes/public.posts.js
 const express = require("express");
 const router = express.Router({ mergeParams: true });
+const mongoose = require("mongoose");
 const Post = require("../models/Post");
 
 // Keep in sync with Post.js enum
 const ALLOWED_SCHOOLS = ["nyu", "columbia", "boston"];
+
+// 공용 헬퍼: 다양한 id 키로 조회(ObjectId | shortId | slug | publicId)
+async function findPostByAnyId({ id, school }) {
+  const s = String(school || "").toLowerCase();
+  const key = String(id || "");
+  const isObjId = mongoose.Types.ObjectId.isValid(key);
+
+  if (isObjId) {
+    const byOid = await Post.findOne({ _id: key, school: s }).lean();
+    if (byOid) return byOid;
+  }
+  return await Post.findOne(
+    { school: s, $or: [{ shortId: key }, { slug: key }, { publicId: key }] }
+  ).lean();
+}
 
 /**
  * GET /api/public/:school/posts
@@ -52,10 +68,14 @@ router.get("/", async (req, res) => {
           title: 1,
           content: 1,
           images: 1,
+          commentCount: 1,
           createdAt: 1,
           upCount: 1,
           downCount: 1,
           score: 1,
+          shortId: 1,
+          slug: 1,
+          publicId: 1,
         },
       },
     ];
@@ -73,6 +93,7 @@ router.get("/", async (req, res) => {
 /**
  * GET /api/public/:school/posts/:id
  * - 공개 상세 조회 (비로그인 허용)
+ * - id가 ObjectId가 아니면 shortId/slug/publicId로 조회
  */
 router.get("/:id", async (req, res) => {
   try {
@@ -81,21 +102,24 @@ router.get("/:id", async (req, res) => {
       return res.status(400).json({ message: "Invalid school." });
     }
 
-    const post = await Post.findOne({ _id: req.params.id, school }).lean();
-    if (!post) return res.status(404).json({ message: "Post not found." });
+    const doc = await findPostByAnyId({ id: req.params.id, school });
+    if (!doc) return res.status(404).json({ message: "Post not found." });
 
-    const upCount = Array.isArray(post.upvoters) ? post.upvoters.length : 0;
-    const downCount = Array.isArray(post.downvoters) ? post.downvoters.length : 0;
+    const upCount = Array.isArray(doc.upvoters) ? doc.upvoters.length : 0;
+    const downCount = Array.isArray(doc.downvoters) ? doc.downvoters.length : 0;
 
     res.json({
-      _id: post._id,
-      title: post.title,
-      content: post.content,
-      images: post.images,
-      createdAt: post.createdAt,
+      _id: doc._id,
+      title: doc.title,
+      content: doc.content,
+      images: doc.images,
+      createdAt: doc.createdAt,
       upCount,
       downCount,
       score: upCount - downCount,
+      shortId: doc.shortId,
+      slug: doc.slug,
+      publicId: doc.publicId,
     });
   } catch (err) {
     console.error("Public post detail error:", err);

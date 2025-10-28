@@ -5,6 +5,7 @@ const router = express.Router();
 const requireAuth = require("../middleware/requireAuth");
 const schoolGuard = require("../middleware/schoolGuard");
 
+const mongoose = require("mongoose");
 const Post = require("../models/Post");
 const Comment = require("../models/Comment");
 
@@ -38,6 +39,22 @@ function serializePost(doc) {
       (Array.isArray(obj.upvoters) ? obj.upvoters.length : 0) -
       (Array.isArray(obj.downvoters) ? obj.downvoters.length : 0),
   };
+}
+
+// ✅ 다양한 id 키로 조회
+async function findPostByAnyId({ id, school }) {
+  const s = String(school || "").toLowerCase();
+  const key = String(id || "");
+  const isObjId = mongoose.Types.ObjectId.isValid(key);
+
+  if (isObjId) {
+    const byOid = await Post.findOne({ _id: key, school: s });
+    if (byOid) return byOid;
+  }
+  return await Post.findOne({
+    school: s,
+    $or: [{ shortId: key }, { slug: key }, { publicId: key }],
+  });
 }
 
 // ---------------------------------------------
@@ -80,10 +97,12 @@ router.get("/:school/posts", requireAuth, schoolGuard, async (req, res, next) =>
           $addFields: {
             upCount: { $size: { $ifNull: ["$upvoters", []] } },
             downCount: { $size: { $ifNull: ["$downvoters", []] } },
-            score: { $subtract: [
-              { $size: { $ifNull: ["$upvoters", []] } },
-              { $size: { $ifNull: ["$downvoters", []] } }
-            ] },
+            score: {
+              $subtract: [
+                { $size: { $ifNull: ["$upvoters", []] } },
+                { $size: { $ifNull: ["$downvoters", []] } },
+              ],
+            },
           },
         },
         { $sort: sortObj },
@@ -126,19 +145,23 @@ router.get("/:school/posts", requireAuth, schoolGuard, async (req, res, next) =>
 
 // ---------------------------------------------
 // GET /:school/posts/:id  (detail)
+//  - id가 ObjectId가 아니면 shortId/slug/publicId로 조회
 // ---------------------------------------------
 router.get("/:school/posts/:id", requireAuth, schoolGuard, async (req, res, next) => {
   try {
     const { school, id } = req.params;
-    const post = await Post.findOne({ _id: id, school }).lean();
+
+    const post = await findPostByAnyId({ id, school });
     if (!post) return res.status(404).json({ message: "Post not found" });
 
     const serialized = serializePost(post);
 
-    // ✅ include myVote for convenience (protected only)
-    const me = String(req.user._id);
-    const up = Array.isArray(post.upvoters) && post.upvoters.some((u) => String(u) === me);
-    const down = Array.isArray(post.downvoters) && post.downvoters.some((u) => String(u) === me);
+    // ✅ include myVote (req.user.id 보장)
+    const me = String(req.user._id || req.user.id || "");
+    const up =
+      Array.isArray(post.upvoters) && post.upvoters.some((u) => String(u) === me);
+    const down =
+      Array.isArray(post.downvoters) && post.downvoters.some((u) => String(u) === me);
     serialized.myVote = up ? "up" : down ? "down" : null;
 
     res.json(serialized);
@@ -152,11 +175,6 @@ router.get("/:school/posts/:id", requireAuth, schoolGuard, async (req, res, next
 // ---------------------------------------------
 router.post("/:school/posts", requireAuth, schoolGuard, async (req, res, next) => {
   try {
-    console.log("✅ /api/:school/posts hit");
-    console.log("req.user:", req.user);
-    console.log("req.body:", req.body);
-    console.log("req.params:", req.params);
-
     const { school } = req.params;
     const {
       title,
@@ -215,9 +233,9 @@ router.patch("/:school/posts/:id", requireAuth, schoolGuard, async (req, res, ne
       lookingFor,
     } = req.body;
 
-    const post = await Post.findOne({ _id: id, school });
+    const post = await findPostByAnyId({ id, school });
     if (!post) return res.status(404).json({ message: "Post not found" });
-    if (String(post.author) !== String(req.user._id)) {
+    if (String(post.author) !== String(req.user._id || req.user.id)) {
       return res.status(403).json({ message: "Forbidden" });
     }
 
@@ -254,16 +272,15 @@ router.delete("/:school/posts/:id", requireAuth, schoolGuard, async (req, res, n
   try {
     const { school, id } = req.params;
 
-    const post = await Post.findOne({ _id: id, school });
+    const post = await findPostByAnyId({ id, school });
     if (!post) return res.status(404).json({ message: "Post not found" });
-    if (String(post.author) !== String(req.user._id)) {
+    if (String(post.author) !== String(req.user._id || req.user.id)) {
       return res.status(403).json({ message: "Forbidden" });
     }
 
     await Promise.all([
-      Post.deleteOne({ _id: id, school }),
-      // ✅ 필드명 교정: postId
-      Comment.deleteMany({ postId: id, school }),
+      Post.deleteOne({ _id: post._id, school }),
+      Comment.deleteMany({ postId: post._id, school }),
     ]);
 
     res.json({ ok: true });
@@ -273,51 +290,21 @@ router.delete("/:school/posts/:id", requireAuth, schoolGuard, async (req, res, n
 });
 
 // ---------------------------------------------
-// (legacy) POST /:school/posts/:id/like (toggle like)
+// ❌ (legacy) thumbs like 라우트 제거됨
 // ---------------------------------------------
-router.post("/:school/posts/:id/like", requireAuth, schoolGuard, async (req, res, next) => {
-  try {
-    const { school, id } = req.params;
-    const { action } = req.body || {};
-    const userId = String(req.user._id);
-
-    const post = await Post.findOne({ _id: id, school });
-    if (!post) return res.status(404).json({ message: "Post not found" });
-
-    const hasLiked = post.likes.some((u) => String(u) === userId);
-
-    let doLike = !hasLiked;
-    if (action === "like") doLike = true;
-    if (action === "unlike") doLike = false;
-
-    if (doLike && !hasLiked) {
-      post.likes.push(req.user._id);
-    } else if (!doLike && hasLiked) {
-      post.likes = post.likes.filter((u) => String(u) !== userId);
-    }
-
-    await post.save();
-
-    res.json({
-      ...serializePost(post.toObject()),
-      liked: doLike,
-    });
-  } catch (err) {
-    next(err);
-  }
-});
 
 // ---------------------------------------------
-// ✅ NEW: POST /:school/posts/:id/vote  (up/downvote for Freeboard)
-// body: { dir: "up" | "down" }
-// - Freeboard( board === "free" ) 에서만 의미 있음
-// - 상호배타 토글, 다시 누르면 취소
+// ✅ POST /:school/posts/:id/vote  (Up/Down)
+// - 상호배타 + 토글
+// - 반대편 전환 금지(먼저 취소)
+// - free / academic 모두 허용
+// - 투표 후 socket.io로 같은 게시글 room에 브로드캐스트
 // ---------------------------------------------
 router.post("/:school/posts/:id/vote", requireAuth, schoolGuard, async (req, res, next) => {
   try {
     const { school, id } = req.params;
     const { dir } = req.body || {};
-    const userId = String(req.user._id);
+    const userId = String(req.user._id || req.user.id);
 
     if (!["up", "down"].includes(dir)) {
       return res.status(400).json({ message: "Invalid vote direction" });
@@ -326,54 +313,53 @@ router.post("/:school/posts/:id/vote", requireAuth, schoolGuard, async (req, res
     const post = await Post.findOne({ _id: id, school });
     if (!post) return res.status(404).json({ message: "Post not found" });
 
-    // Only for Freeboard
-    if (post.board !== "free") {
-      return res.status(400).json({ message: "Voting is allowed on Freeboard only." });
+    // ✅ author cannot vote on own post
+    if (String(post.author) === userId) {
+      return res.status(403).json({ message: "Authors cannot vote on their own posts." });
     }
 
-    const hasUp = Array.isArray(post.upvoters) && post.upvoters.some((u) => String(u) === userId);
-    const hasDown =
-      Array.isArray(post.downvoters) && post.downvoters.some((u) => String(u) === userId);
+    const hasUp = Array.isArray(post.upvoters) && post.upvoters.some(u => String(u) === userId);
+    const hasDown = Array.isArray(post.downvoters) && post.downvoters.some(u => String(u) === userId);
+
+    // 반대편 전환 금지
+    if ((dir === "up" && hasDown) || (dir === "down" && hasUp)) {
+      return res.status(400).json({ message: "Cancel your current vote before switching." });
+    }
 
     if (dir === "up") {
-      // toggle up
       if (hasUp) {
-        post.upvoters = post.upvoters.filter((u) => String(u) !== userId);
+        await Post.updateOne({ _id: id, school }, { $pull: { upvoters: req.user._id || req.user.id } });
       } else {
-        post.upvoters.push(req.user._id);
-        if (hasDown) {
-          post.downvoters = post.downvoters.filter((u) => String(u) !== userId);
-        }
+        await Post.updateOne({ _id: id, school }, { $addToSet: { upvoters: req.user._id || req.user.id } });
       }
     } else {
-      // dir === "down"
       if (hasDown) {
-        post.downvoters = post.downvoters.filter((u) => String(u) !== userId);
+        await Post.updateOne({ _id: id, school }, { $pull: { downvoters: req.user._id || req.user.id } });
       } else {
-        post.downvoters.push(req.user._id);
-        if (hasUp) {
-          post.upvoters = post.upvoters.filter((u) => String(u) !== userId);
-        }
+        await Post.updateOne({ _id: id, school }, { $addToSet: { downvoters: req.user._id || req.user.id } });
       }
     }
 
-    await post.save();
-    const serialized = serializePost(post.toObject());
+    const fresh = await Post.findOne({ _id: id, school }, { upvoters: 1, downvoters: 1 }).lean();
+    const upCount = (fresh?.upvoters || []).length;
+    const downCount = (fresh?.downvoters || []).length;
+    const myVote =
+      (fresh?.upvoters || []).some(u => String(u) === userId) ? "up" :
+      (fresh?.downvoters || []).some(u => String(u) === userId) ? "down" : null;
 
-    // add myVote to response
-    const upNow = serialized.upCount && post.upvoters.some((u) => String(u) === userId);
-    const downNow = serialized.downCount && post.downvoters.some((u) => String(u) === userId);
+    // ✅ 소켓 브로드캐스트
+    const io = req.app.get("io");
+    if (io) {
+      io.to(`post:${id}`).emit("post:voteUpdated", { postId: id, upCount, downCount });
+    }
 
-    res.json({
-      ...serialized,
-      myVote: upNow ? "up" : downNow ? "down" : null,
-    });
-  } catch (err) {
-    next(err);
-  }
+    return res.json({ ok: true, upCount, downCount, myVote });
+  } catch (err) { next(err); }
 });
 
 module.exports = router;
+
+
 
 
 

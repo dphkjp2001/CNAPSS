@@ -1,99 +1,168 @@
-import React, { useState, useCallback } from 'react';
-import { voteApi } from '../api/votes.api';
-import { cn } from '../utils/tailwind';
+// frontend/src/components/VoteButtons.jsx
+import React, { useEffect, useMemo, useState } from "react";
+import { votePost } from "../api/posts";
+import { useAuth } from "../contexts/AuthContext";
+import { useSocket } from "../contexts/SocketContext";
 
-const VoteButtons = ({ 
-  targetType, 
-  targetId, 
-  initialCounts = { up: 0, down: 0 }, 
-  initialVote = 0,
-  onVoteChange,
+/**
+ * Vertical vote widget for posts.
+ *
+ * Props:
+ * - school: string
+ * - postId: string
+ * - initialCounts?: { up: number, down: number }
+ * - initialVote?: "up" | "down" | null
+ * - disabled?: boolean               // e.g., author cannot vote
+ * - className?: string
+ */
+export default function VoteButtons({
+  school,
+  postId,
+  initialCounts = { up: 0, down: 0 },
+  initialVote = null,
   disabled = false,
-  className
-}) => {
-  const [counts, setCounts] = useState(initialCounts);
+  className = "",
+}) {
+  const { user } = useAuth();
+  const { emit, on } = useSocket();
+
+  const [upCount, setUpCount] = useState(initialCounts.up || 0);
+  const [downCount, setDownCount] = useState(initialCounts.down || 0);
   const [myVote, setMyVote] = useState(initialVote);
   const [isVoting, setIsVoting] = useState(false);
 
-  const handleVote = useCallback(async (newValue) => {
+  const score = useMemo(() => (upCount || 0) - (downCount || 0), [upCount, downCount]);
+
+  // Sync when props change (e.g., page navigation or refresh)
+  useEffect(() => {
+    setUpCount(initialCounts.up || 0);
+  }, [initialCounts.up]);
+  useEffect(() => {
+    setDownCount(initialCounts.down || 0);
+  }, [initialCounts.down]);
+  useEffect(() => {
+    setMyVote(initialVote ?? null);
+  }, [initialVote]);
+
+  // Join socket room and listen live
+  useEffect(() => {
+    if (!postId) return;
+    emit?.("post:join", { postId });
+    const off = on?.("post:voteUpdated", (payload) => {
+      if (!payload || payload.postId !== postId) return;
+      if (typeof payload.upCount === "number") setUpCount(payload.upCount);
+      if (typeof payload.downCount === "number") setDownCount(payload.downCount);
+      // myVote isn't changed here (server response only)
+    });
+    return () => {
+      off?.();
+      emit?.("post:leave", { postId });
+    };
+  }, [postId, emit, on]);
+
+  const tryVote = async (dir) => {
     if (disabled || isVoting) return;
+    if (!user) {
+      alert("Please log in to vote.");
+      return;
+    }
+    // Strict: must cancel before switching (no auto-switch)
+    if (myVote && myVote !== dir) {
+      alert("Cancel your current vote first.");
+      return;
+    }
 
+    setIsVoting(true);
     try {
-      setIsVoting(true);
-      const effectiveValue = myVote === newValue ? 0 : newValue;
-      
-      const { target } = await voteApi.vote({
-        targetType,
-        targetId,
-        value: effectiveValue
-      });
-
-      setCounts(target.counts);
-      setMyVote(effectiveValue);
-      onVoteChange?.({ counts: target.counts, myVote: effectiveValue });
-
-    } catch (error) {
-      console.error('Vote error:', error);
+      const res = await votePost({ school, id: postId, dir });
+      if (typeof res?.upCount === "number") setUpCount(res.upCount);
+      if (typeof res?.downCount === "number") setDownCount(res.downCount);
+      if (typeof res?.myVote !== "undefined") setMyVote(res.myVote);
+    } catch (err) {
+      alert("Vote failed: " + (err?.message || "Unknown error"));
     } finally {
       setIsVoting(false);
     }
-  }, [targetType, targetId, myVote, disabled, isVoting, onVoteChange]);
+  };
 
-  const buttonClassName = useCallback((active) => cn(
-    "flex items-center gap-1 px-2 py-1 rounded",
-    "transition-colors duration-200",
-    "hover:bg-gray-100 active:bg-gray-200",
-    "disabled:opacity-50 disabled:cursor-not-allowed",
-    active && "text-blue-600 font-medium"
-  ), []);
-
-  const iconClassName = useCallback((type, active) => cn(
-    "w-4 h-4",
-    "transition-colors duration-200",
-    active && (type === 'up' ? "text-blue-600" : "text-red-600")
-  ), []);
+  const upActive = myVote === "up";
+  const downActive = myVote === "down";
 
   return (
-    <div className={cn("flex items-center gap-2", className)}>
+    <div
+      className={`flex flex-col items-center gap-1 select-none ${className}`}
+      aria-label="Voting controls"
+    >
+      {/* Up */}
       <button
-        onClick={() => handleVote(1)}
-        disabled={disabled || isVoting}
-        className={buttonClassName(myVote === 1)}
+        type="button"
+        onClick={() => tryVote("up")}
+        disabled={disabled || isVoting || downActive}
+        aria-pressed={upActive}
+        aria-label="Upvote"
+        className={[
+          "w-9 h-9 rounded-full border border-slate-300 flex items-center justify-center",
+          "hover:bg-slate-50 active:scale-[0.97] transition disabled:opacity-50",
+          upActive ? "ring-2 ring-red-200" : "",
+        ].join(" ")}
+        title={
+          disabled
+            ? "Voting disabled"
+            : downActive
+            ? "Cancel your downvote first"
+            : "Upvote"
+        }
       >
-        <svg 
-          className={iconClassName('up', myVote === 1)}
-          viewBox="0 0 20 20"
-          fill="currentColor"
-        >
-          <path 
-            fillRule="evenodd" 
-            d="M3.293 9.707a1 1 0 010-1.414l6-6a1 1 0 011.414 0l6 6a1 1 0 01-1.414 1.414L11 5.414V17a1 1 0 11-2 0V5.414L4.707 9.707a1 1 0 01-1.414 0z" 
-            clipRule="evenodd"
+        {/* ▲ icon (pure CSS/SVG) */}
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+          <path
+            d="M12 5l7 9H5l7-9z"
+            fill={upActive ? "currentColor" : "none"}
+            stroke="currentColor"
+            strokeWidth="1.8"
           />
         </svg>
-        <span>{counts.up}</span>
       </button>
 
+      {/* Score (up - down) */}
+      <div className="px-2 py-1">
+        <span className="text-2xl font-extrabold leading-none text-red-600 tabular-nums">
+          {score}
+        </span>
+      </div>
+
+      {/* Down */}
       <button
-        onClick={() => handleVote(-1)}
-        disabled={disabled || isVoting}
-        className={buttonClassName(myVote === -1)}
+        type="button"
+        onClick={() => tryVote("down")}
+        disabled={disabled || isVoting || upActive}
+        aria-pressed={downActive}
+        aria-label="Downvote"
+        className={[
+          "w-9 h-9 rounded-full border border-slate-300 flex items-center justify-center",
+          "hover:bg-slate-50 active:scale-[0.97] transition disabled:opacity-50",
+          downActive ? "ring-2 ring-slate-300" : "",
+        ].join(" ")}
+        title={
+          disabled
+            ? "Voting disabled"
+            : upActive
+            ? "Cancel your upvote first"
+            : "Downvote"
+        }
       >
-        <svg 
-          className={iconClassName('down', myVote === -1)}
-          viewBox="0 0 20 20"
-          fill="currentColor"
-        >
-          <path 
-            fillRule="evenodd"
-            d="M16.707 10.293a1 1 0 010 1.414l-6 6a1 1 0 01-1.414 0l-6-6a1 1 0 111.414-1.414L9 14.586V3a1 1 0 012 0v11.586l4.293-4.293a1 1 0 011.414 0z"
-            clipRule="evenodd"  
+        {/* ▼ icon */}
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+          <path
+            d="M12 19l-7-9h14l-7 9z"
+            fill={downActive ? "currentColor" : "none"}
+            stroke="currentColor"
+            strokeWidth="1.8"
           />
         </svg>
-        <span>{counts.down}</span>
       </button>
     </div>
   );
-};
+}
 
-export default VoteButtons;
+

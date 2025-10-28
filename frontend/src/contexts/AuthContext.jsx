@@ -8,7 +8,6 @@ export function useAuth() {
 }
 
 export function AuthProvider({ children }) {
-  // Restore from localStorage on init
   const [user, setUser] = useState(() => {
     try {
       const raw = localStorage.getItem("user");
@@ -27,7 +26,6 @@ export function AuthProvider({ children }) {
     }
   });
 
-  // Persist whenever user/token change
   useEffect(() => {
     if (user) localStorage.setItem("user", JSON.stringify(user));
     else localStorage.removeItem("user");
@@ -40,14 +38,18 @@ export function AuthProvider({ children }) {
 
   /**
    * login expects an object like:
-   *   { user: { email, nickname, school, verified }, token: "..." }
+   *   { user: { _id, id, email, nickname, school, verified }, token: "..." }
    */
   const login = (payload) => {
+    const src = payload?.user || {};
     const normalizedUser = {
-      email: payload?.user?.email,
-      nickname: payload?.user?.nickname,
-      school: payload?.user?.school,   // ✅ store school
-      verified: payload?.user?.verified,
+      // ✅ id 보존(있으면)
+      id: src.id || src._id || undefined,
+      _id: src._id || src.id || undefined,
+      email: src.email,
+      nickname: src.nickname,
+      school: src.school,
+      verified: src.verified,
     };
     setUser(normalizedUser);
     if (payload?.token) setToken(payload.token);
