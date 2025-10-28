@@ -18,6 +18,9 @@ import "dayjs/locale/en";
 dayjs.extend(relativeTime);
 dayjs.locale("en");
 
+console.log("🔵 AcademicList.jsx mounted");
+
+
 function kindEmoji(kind = "") {
   const k = String(kind || "").toLowerCase().replace(/[\s-]+/g, "_");
   if (k.includes("course_material")) return "📝";

@@ -21,6 +21,9 @@ import {
 
 import { Bookmark, Repeat2, Share, Send, MessageSquare } from "lucide-react";
 
+console.log("🟠 Dashboard.jsx mounted");
+
+
 /* ===== Design tokens ===== */
 const TOKENS = {
   pageBg: "#FFFFFF",
