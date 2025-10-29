@@ -28,7 +28,7 @@ export default function RequestOfferPanel({ school, postId, kind }) {
 
   // --- Fixed message for Study Buddy (request) ---
   const FIXED_STUDY_BUDDY_MSG =
-    "Hi,\nI would love to study with!\nLet me know what days are you thinking of :)";
+    "Hi,\nI would love to study with you!\nLet me know what days you are thinking of :)";
 
   // defaults
   const [option, setOption] = useState("lunch");
@@ -47,7 +47,7 @@ export default function RequestOfferPanel({ school, postId, kind }) {
           : option === "small"
           ? "a small cost"
           : "anything is fine";
-      return `Hi,\nI have the class materials you're looking for. You can get it by ${suffix}.`;
+      return `Hi,\nI have the class materials you're looking for. You can get it for ${suffix}.`;
     }
     if (isCoffeeChat) {
       const suffix =
@@ -56,7 +56,7 @@ export default function RequestOfferPanel({ school, postId, kind }) {
           : option === "small"
           ? "a small cost"
           : "anything is fine";
-      return `Hi,\nI can have a coffee chat with you by ${suffix}.`;
+      return `Hi,\nI can have a coffee chat with you for ${suffix}.`;
     }
     return message || "";
   }, [isCourseMaterials, isCoffeeChat, isStudyMate, message, option]);
@@ -94,8 +94,8 @@ export default function RequestOfferPanel({ school, postId, kind }) {
     <aside className="bg-white rounded-2xl shadow border border-slate-200 p-4 h-max">
       <div className="text-sm text-slate-900 font-semibold mb-1">Hi,</div>
       <div className="text-sm text-slate-700 mb-3">
-        {isCourseMaterials && "I have the class materials you're looking for. You can get it by"}
-        {isCoffeeChat && "I can have a coffee chat with you by"}
+        {isCourseMaterials && "I have the class materials you're looking for. You can get it for"}
+        {isCoffeeChat && "I can have a coffee chat with you for"}
         {isStudyMate && "Send a request message:"}
       </div>
 
