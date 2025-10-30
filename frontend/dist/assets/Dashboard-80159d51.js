@@ -1,8 +1,4 @@
-<<<<<<<< HEAD:frontend/dist/assets/Dashboard-1cf80032.js
-import{r as o,u as ge,a as fe,b as pe,c as xe,d as be,g as he,R as e,e as ye}from"./index-48998c15.js";import{u as Ee}from"./uploadToCloudinary-dc971086.js";import{g as Ne,c as Q}from"./academicPosts-832ae680.js";/**
-========
-import{r as o,u as ge,a as fe,b as pe,c as xe,d as be,g as he,R as e,e as ye}from"./index-1b4f2925.js";import{u as Ee}from"./uploadToCloudinary-dc971086.js";import{g as Ne,c as Q}from"./academicPosts-0c95531b.js";/**
->>>>>>>> 99fb563f14b2cfbba2dba733622514820d21e499:frontend/dist/assets/Dashboard-8180f72a.js
+import{r as o,u as ge,a as fe,b as pe,c as xe,d as be,g as he,R as e,e as ye}from"./index-870b77fa.js";import{u as Ee}from"./uploadToCloudinary-dc971086.js";import{g as Ne,c as Q}from"./academicPosts-ce5dd01a.js";/**
  * @license lucide-react v0.548.0 - ISC
  *
  * This source code is licensed under the ISC license.
