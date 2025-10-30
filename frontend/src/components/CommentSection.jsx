@@ -530,12 +530,12 @@ function ThreadNode({
             </div>
           </div>
         ) : (
-          <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-relaxed text-gray-800">
+          <p className="mt-1.5 whitespace-pre-wrap break-words text-sm text-gray-800">
             {node.content}
           </p>
         )}
 
-          <div className="mt-2 flex items-center gap-3 text-xs leading-relaxed text-gray-600">
+          <div className="mt-2 flex items-center gap-3 text-xs text-gray-600">
             {/* <button
               onClick={() => onToggleLike(node._id, node.email)}
               disabled={likingId === node._id || isMine || !isAuthed}
