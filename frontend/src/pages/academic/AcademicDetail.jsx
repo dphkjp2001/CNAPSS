@@ -136,7 +136,7 @@ export default function AcademicDetail() {
               </div>
 
               {/* Right-top: Vote (ONLY for general question) */}
-              {isGeneral && (
+              {/* {isGeneral && (
                 <VoteButtons
                   school={school}
                   postId={p._id || id}
@@ -145,7 +145,7 @@ export default function AcademicDetail() {
                   disabled={!!isAuthor}
                   className="shrink-0"
                 />
-              )}
+              )} */}
             </div>
           </header>
 

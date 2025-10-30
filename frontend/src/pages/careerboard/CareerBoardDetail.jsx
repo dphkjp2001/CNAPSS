@@ -264,14 +264,14 @@ export default function CareerBoardDetail() {
 
           <div className="flex items-center justify-between border-t border-gray-100 px-5 py-3 sm:px-6">
             <div className="flex items-center gap-2">
-              <button
+              {/* <button
                 onClick={handleThumb}
                 disabled={isAuthor}
                 className="rounded-lg border px-3 py-1 text-sm hover:bg-gray-50 disabled:opacity-60"
                 title={isAuthor ? "You can’t like your own post." : "Like post"}
               >
                 👍 Like
-              </button>
+              </button> */}
               <span className="text-xs text-gray-500">{post.thumbsUpUsers?.length || 0} likes</span>
             </div>
             <div className="flex items-center gap-2">

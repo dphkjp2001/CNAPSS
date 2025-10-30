@@ -96,7 +96,7 @@ export default function VoteButtons({
       {/* Up */}
       <button
         type="button"
-        onClick={() => tryVote("up")}
+        // onClick={() => tryVote("up")}
         disabled={disabled || isVoting || downActive}
         aria-pressed={upActive}
         aria-label="Upvote"
@@ -134,7 +134,7 @@ export default function VoteButtons({
       {/* Down */}
       <button
         type="button"
-        onClick={() => tryVote("down")}
+        // onClick={() => tryVote("down")}
         disabled={disabled || isVoting || upActive}
         aria-pressed={downActive}
         aria-label="Downvote"

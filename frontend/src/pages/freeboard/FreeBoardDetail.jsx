@@ -568,14 +568,14 @@ export default function FreeBoardDetail() {
               </div>
 
               {/* Right-side vertical vote widget */}
-              <VoteButtons
+              {/* <VoteButtons
                 school={school}
                 postId={post._id || id}
                 initialCounts={{ up: upCount, down: downCount }}
                 initialVote={myVote}
                 disabled={!!isAuthor}
                 className="shrink-0"
-              />
+              /> */}
             </div>
           </div>
 

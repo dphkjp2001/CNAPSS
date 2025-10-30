@@ -729,7 +729,7 @@ function FBCard({ width, height, fixedHeight = false, tag, color, emoji, title, 
         </p>
 
         <div className="mt-4 flex items-center gap-4 text-[12px] text-slate-600">
-          <span className="flex items-center gap-1">👍 {likes}</span>
+          {/* <span className="flex items-center gap-1">👍 {likes}</span> */}
           <span className="flex items-center gap-1">💬 {comments}</span>
           <span className="ml-auto">{ago} ago</span>
         </div>

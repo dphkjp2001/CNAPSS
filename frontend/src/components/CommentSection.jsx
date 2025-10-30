@@ -440,13 +440,13 @@ function ThreadNode({
               />
               <span className="text-xs text-gray-500">• {dayjs(node.createdAt).fromNow()}</span>
             </div>
-            <VoteButtons 
+            {/* <VoteButtons 
               targetType="Comment"
               targetId={node._id}
               initialCounts={node.counts}
               initialVote={node.myVote}
               className="scale-75"
-            />
+            /> */}
           </div>
 
           {editingId === toId(node._id) ? (
@@ -478,14 +478,14 @@ function ThreadNode({
           )}
 
           <div className="mt-2 flex items-center gap-3 text-xs text-gray-600">
-            <button
+            {/* <button
               onClick={() => onToggleLike(node._id, node.email)}
               disabled={likingId === node._id || isMine || !isAuthed}
               className={`rounded px-2 py-1 ${liked ? "bg-blue-50 text-blue-600" : "hover:bg-gray-100"} disabled:opacity-60`}
               title={!isAuthed ? "Log in to like" : isMine ? "You can’t like your own comment." : "Like comment"}
             >
               👍 {likeCount}
-            </button>
+            </button> */}
 
             <button
               onClick={() => {
