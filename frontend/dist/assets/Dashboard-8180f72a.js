@@ -1,4 +1,4 @@
-import{r as o,u as ge,a as fe,b as pe,c as xe,d as be,g as he,R as e,e as ye}from"./index-eb093d36.js";import{u as Ee}from"./uploadToCloudinary-dc971086.js";import{g as Ne,c as Q}from"./academicPosts-018ecfcf.js";/**
+import{r as o,u as ge,a as fe,b as pe,c as xe,d as be,g as he,R as e,e as ye}from"./index-1b4f2925.js";import{u as Ee}from"./uploadToCloudinary-dc971086.js";import{g as Ne,c as Q}from"./academicPosts-0c95531b.js";/**
  * @license lucide-react v0.548.0 - ISC
  *
  * This source code is licensed under the ISC license.

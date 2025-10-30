@@ -25,11 +25,11 @@ dayjs.locale("en");
 const toId = (v) => (v == null ? "" : String(v));
 const norm = (e) => String(e || "").toLowerCase().trim();
 
-export default function CommentSection({ 
-  postId, 
-  authorEmail = "", 
-  highlightId = null, 
-  anonymousMode = false 
+export default function CommentSection({
+  postId,
+  authorEmail = "",
+  highlightId = null,
+  anonymousMode = false,
 }) {
   const { user, token } = useAuth();
   const { school } = useSchool();
@@ -81,7 +81,9 @@ export default function CommentSection({
     }
   }, [postId, school, token]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   // ---------- socket sync ----------
   useEffect(() => {
@@ -91,11 +93,15 @@ export default function CommentSection({
 
     const onNew = (c) => {
       if (!c || String(c.postId) !== String(postId)) return;
-      setComments((prev) => (prev.some((x) => toId(x._id) === toId(c._id)) ? prev : [...prev, c]));
+      setComments((prev) =>
+        prev.some((x) => toId(x._id) === toId(c._id)) ? prev : [...prev, c]
+      );
     };
     const onUpdate = (c) => {
       if (!c || String(c.postId) !== String(postId)) return;
-      setComments((prev) => prev.map((x) => (toId(x._id) === toId(c._id) ? c : x)));
+      setComments((prev) =>
+        prev.map((x) => (toId(x._id) === toId(c._id) ? c : x))
+      );
     };
     const onDelete = ({ _id }) => {
       if (!_id) return;
@@ -106,7 +112,11 @@ export default function CommentSection({
       setComments((prev) =>
         prev.map((x) =>
           toId(x._id) === toId(_id)
-            ? { ...x, thumbsUpUsers: thumbs || [], thumbsCount: (thumbs || []).length }
+            ? {
+                ...x,
+                thumbsUpUsers: thumbs || [],
+                thumbsCount: (thumbs || []).length,
+              }
             : x
         )
       );
@@ -117,7 +127,9 @@ export default function CommentSection({
     socket.on("comment:delete", onDelete);
     socket.on("comment:thumbs", onThumbs);
     return () => {
-      try { socket.emit("post:leave", { postId }); } catch (_) {}
+      try {
+        socket.emit("post:leave", { postId });
+      } catch (_) {}
       socket.off("comment:new", onNew);
       socket.off("comment:update", onUpdate);
       socket.off("comment:delete", onDelete);
@@ -148,6 +160,7 @@ export default function CommentSection({
     (email) => anonLabelByEmail.get(norm(email)) || "anonymous",
     [anonLabelByEmail]
   );
+
   // highlight fade
   useEffect(() => {
     if (!highlightId) return;
@@ -158,7 +171,11 @@ export default function CommentSection({
 
   // build tree
   const { roots, childrenMap } = useMemo(() => {
-    const list = (comments || []).map((c) => ({ ...c, _id: toId(c._id), parentId: toId(c.parentId) || null }));
+    const list = (comments || []).map((c) => ({
+      ...c,
+      _id: toId(c._id),
+      parentId: toId(c.parentId) || null,
+    }));
     const byParent = new Map();
     const roots = [];
     for (const c of list) {
@@ -172,7 +189,10 @@ export default function CommentSection({
 
   // action-gate
   const ensureBeforeAction = () => {
-    if (!user || !token) { ensureAuth(); return false; }
+    if (!user || !token) {
+      ensureAuth();
+      return false;
+    }
     return true;
   };
 
@@ -186,7 +206,11 @@ export default function CommentSection({
     try {
       const newCmt = await addComment({ school, token, postId, content });
       if (newCmt?._id) {
-        setComments((prev) => (prev.some((x) => toId(x._id) === toId(newCmt._id)) ? prev : [...prev, newCmt]));
+        setComments((prev) =>
+          prev.some((x) => toId(x._id) === toId(newCmt._id))
+            ? prev
+            : [...prev, newCmt]
+        );
       }
       setRootText("");
     } catch (e) {
@@ -206,9 +230,19 @@ export default function CommentSection({
     const pid = toId(parentId);
     setPostingReplyId(pid);
     try {
-      const newCmt = await addComment({ school, token, postId, content, parentId: pid });
+      const newCmt = await addComment({
+        school,
+        token,
+        postId,
+        content,
+        parentId: pid,
+      });
       if (newCmt?._id) {
-        setComments((prev) => (prev.some((x) => toId(x._id) === toId(newCmt._id)) ? prev : [...prev, newCmt]));
+        setComments((prev) =>
+          prev.some((x) => toId(x._id) === toId(newCmt._id))
+            ? prev
+            : [...prev, newCmt]
+        );
       }
       setReplyingId(null);
       setReplyText("");
@@ -232,14 +266,17 @@ export default function CommentSection({
     // optimistic apply
     const prev = comments;
     setComments((list) =>
-      list.map((c) => (toId(c._id) === toId(id) ? { ...c, content, updatedAt: new Date().toISOString() } : c))
+      list.map((c) =>
+        toId(c._id) === toId(id)
+          ? { ...c, content, updatedAt: new Date().toISOString() }
+          : c
+      )
     );
 
     try {
       await apiUpdateComment({ school, token, commentId: id, content });
       setEditingId(null);
       setEditText("");
-      // socket will also broadcast; our optimistic update keeps UI instant.
     } catch (e) {
       // revert on failure
       setComments(prev);
@@ -260,11 +297,12 @@ export default function CommentSection({
 
     const prev = comments;
     // optimistic remove
-    setComments((list) => list.filter((x) => toId(x._id) !== target && toId(x.parentId) !== target));
+    setComments((list) =>
+      list.filter((x) => toId(x._id) !== target && toId(x.parentId) !== target)
+    );
 
     try {
       await apiDeleteComment({ school, token, commentId: target });
-      // socket will also broadcast; nothing else to do
     } catch (e) {
       // revert on failure
       setComments(prev);
@@ -298,7 +336,6 @@ export default function CommentSection({
 
     try {
       await toggleCommentThumbs({ school, token, commentId: target });
-      // socket will normalize counts for everyone else
     } catch (e) {
       // revert on failure
       setComments(prev);
@@ -310,10 +347,10 @@ export default function CommentSection({
 
   return (
     <div className="mt-8">
-      <h3 className="mb-3 text-lg font-semibold text-gray-900">Comments</h3>
+      <h3 className="mb-2 text-lg font-semibold text-gray-900">Comments</h3>
 
       {/* Root composer */}
-      <div className="mb-4 rounded-xl border bg-white p-3 shadow-sm">
+      <div className="mb-3 rounded-xl border bg-white p-3 shadow-sm">
         <textarea
           value={rootText}
           onChange={(e) => setRootText(e.target.value)}
@@ -329,7 +366,11 @@ export default function CommentSection({
           className="h-20 w-full resize-none rounded-lg border px-3 py-2 text-sm"
         />
         <div className="mt-2 flex items-center justify-between">
-          {!user && <span className="text-xs text-gray-500">You’ll be asked to log in when you post.</span>}
+          {!user && (
+            <span className="text-xs text-gray-500">
+              You’ll be asked to log in when you post.
+            </span>
+          )}
           <AsyncButton
             disabled={postingRoot}
             onClick={submitRoot}
@@ -372,7 +413,10 @@ export default function CommentSection({
                   setEditingId(toId(x._id));
                   setEditText(x.content || "");
                 }}
-                onCancelEdit={() => { setEditingId(null); setEditText(""); }}
+                onCancelEdit={() => {
+                  setEditingId(null);
+                  setEditText("");
+                }}
                 onChangeEdit={setEditText}
                 onSaveEdit={saveEdit}
                 onDelete={deleteOne}
@@ -420,128 +464,160 @@ function ThreadNode({
   const liked = thumbsArr.map((e) => norm(e)).includes(me);
   const likeCount = node.thumbsCount ?? thumbsArr.length;
 
-  const children = (childrenMap.get(toId(node._id)) || []).filter((x) => toId(x._id) !== toId(node._id));
+  const children = (childrenMap.get(toId(node._id)) || []).filter(
+    (x) => toId(x._id) !== toId(node._id)
+  );
 
   return (
     <li>
       <div
         id={`comment-${node._id}`}
-        className={`flex items-start gap-3 rounded-lg p-2 ${flashId === toId(node._id) ? "bg-yellow-50" : ""} ${depth ? "border-l border-gray-200 pl-4" : ""}`}
-        style={{ marginLeft: depth ? depth * 30 : 0 }}
+        className={`rounded-lg p-3 ${flashId === toId(node._id) ? "bg-yellow-50" : ""} ${
+          depth ? "border-l border-gray-200 pl-4" : ""
+        }`}
+        style={{ marginLeft: depth ? depth * 24 : 0 }}
       >
-        <div className="h-8 w-8 shrink-0 rounded-full bg-gray-200" />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <UserBadge 
-                username={anonymousMode ? labelOf(node.email) : (node.nickname || "Unknown")}
+        {/* 헤더: 아바타 + 닉네임/타임 + 투표를 같은 높이에 맞춤 */}
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="h-9 w-9 shrink-0 rounded-full bg-gray-200" />
+            <div className="flex items-center gap-2 min-w-0">
+              <UserBadge
+                username={
+                  anonymousMode
+                    ? labelOf(node.email)
+                    : node.nickname || "Unknown"
+                }
                 tier={node.authorTier}
                 className="text-sm"
               />
-              <span className="text-xs text-gray-500">• {dayjs(node.createdAt).fromNow()}</span>
+              <span className="text-xs text-gray-500">
+                • {dayjs(node.createdAt).fromNow()}
+              </span>
             </div>
-            <VoteButtons 
-              targetType="Comment"
-              targetId={node._id}
-              initialCounts={node.counts}
-              initialVote={node.myVote}
-              className="scale-75"
+          </div>
+
+          <VoteButtons
+            targetType="Comment"
+            targetId={node._id}
+            initialCounts={node.counts}
+            initialVote={node.myVote}
+            className="scale-75"
+          />
+        </div>
+
+        {/* 본문: 위로 조금 당김 (mt-1) */}
+        {editingId === toId(node._id) ? (
+          <div className="mt-1">
+            <textarea
+              defaultValue={node.content}
+              onChange={(e) => onChangeEdit(e.target.value)}
+              className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-900 focus:ring-1 focus:ring-gray-900/20"
             />
-          </div>
-
-          {editingId === toId(node._id) ? (
-            <div className="mt-2">
-              <textarea
-                defaultValue={node.content}
-                onChange={(e) => onChangeEdit(e.target.value)}
-                className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10"
-              />
-              <div className="mt-2 flex gap-2">
-                <button
-                  onClick={onSaveEdit}
-                  disabled={savingId === node._id || !isAuthed}
-                  className="rounded-lg bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-black disabled:opacity-60"
-                  title={!isAuthed ? "Log in to edit" : "Save"}
-                >
-                  {savingId === node._id ? "Saving…" : "Save"}
-                </button>
-                <button
-                  onClick={onCancelEdit}
-                  className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700"
-                >
-                  Cancel
-                </button>
-              </div>
+            <div className="mt-2 flex gap-2">
+              <button
+                onClick={onSaveEdit}
+                disabled={savingId === node._id || !isAuthed}
+                className="rounded-md bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-black disabled:opacity-60"
+                title={!isAuthed ? "Log in to edit" : "Save"}
+              >
+                {savingId === node._id ? "Saving…" : "Save"}
+              </button>
+              <button
+                onClick={onCancelEdit}
+                className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700"
+              >
+                Cancel
+              </button>
             </div>
-          ) : (
-            <p className="mt-1 whitespace-pre-wrap break-words text-sm text-gray-800">{node.content}</p>
-          )}
-
-          <div className="mt-2 flex items-center gap-3 text-xs text-gray-600">
-            <button
-              onClick={() => onToggleLike(node._id, node.email)}
-              disabled={likingId === node._id || isMine || !isAuthed}
-              className={`rounded px-2 py-1 ${liked ? "bg-blue-50 text-blue-600" : "hover:bg-gray-100"} disabled:opacity-60`}
-              title={!isAuthed ? "Log in to like" : isMine ? "You can’t like your own comment." : "Like comment"}
-            >
-              👍 {likeCount}
-            </button>
-
-            <button
-              onClick={() => {
-                setReplyingId(toId(node._id));
-                setReplyText("");
-              }}
-              className="rounded px-2 py-1 hover:bg-gray-100"
-              title="Reply"
-            >
-              Reply
-            </button>
-
-            {isAuthed && isMine && (
-              <>
-                <button onClick={() => onStartEdit(node)} className="rounded px-2 py-1 hover:bg-gray-100">
-                  Edit
-                </button>
-                <button
-                  onClick={() => onDelete(node._id)}
-                  disabled={deletingId === node._id}
-                  className="rounded px-2 py-1 text-red-600 hover:bg-red-50 disabled:opacity-60"
-                >
-                  {deletingId === node._id ? "Deleting…" : "Delete"}
-                </button>
-              </>
-            )}
           </div>
+        ) : (
+          <p className="mt-1 whitespace-pre-wrap break-words text-sm text-gray-800">
+            {node.content}
+          </p>
+        )}
 
-          {replyingId === toId(node._id) && (
-            <div className="mt-2 rounded-lg border bg-white p-2">
-              <textarea
-                value={replyText}
-                onChange={(e) => setReplyText(e.target.value)}
-                placeholder="Write a reply…"
-                className="h-16 w-full resize-none rounded-md border px-3 py-2 text-sm"
-              />
-              <div className="mt-2 flex items-center gap-2">
-                <AsyncButton
-                  onClick={() => submitReply(node._id)}
-                  disabled={postingReplyId === node._id || !replyText.trim()}
-                  className="rounded-md bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-black disabled:opacity-60"
-                >
-                  {postingReplyId === node._id ? "Posting…" : "Reply"}
-                </AsyncButton>
-                <button
-                  onClick={() => { setReplyingId(null); setReplyText(""); }}
-                  className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
+        {/* 액션: 여백 축소, 같은 라인 높이 정렬 */}
+        <div className="mt-1 flex items-center gap-3 text-xs text-gray-600">
+          <button
+            onClick={() => onToggleLike(node._id, node.email)}
+            disabled={likingId === node._id || isMine || !isAuthed}
+            className={`rounded px-2 py-1 ${
+              liked ? "bg-blue-50 text-blue-600" : "hover:bg-gray-100"
+            } disabled:opacity-60`}
+            title={
+              !isAuthed
+                ? "Log in to like"
+                : isMine
+                ? "You can’t like your own comment."
+                : "Like comment"
+            }
+          >
+            👍 {likeCount}
+          </button>
+
+          <button
+            onClick={() => {
+              setReplyingId(toId(node._id));
+              setReplyText("");
+            }}
+            className="rounded px-2 py-1 hover:bg-gray-100"
+            title="Reply"
+          >
+            Reply
+          </button>
+
+          {isAuthed && isMine && (
+            <>
+              <button
+                onClick={() => onStartEdit(node)}
+                className="rounded px-2 py-1 hover:bg-gray-100"
+              >
+                Edit
+              </button>
+              <button
+                onClick={() => onDelete(node._id)}
+                disabled={deletingId === node._id}
+                className="rounded px-2 py-1 text-red-600 hover:bg-red-50 disabled:opacity-60"
+              >
+                {deletingId === node._id ? "Deleting…" : "Delete"}
+              </button>
+            </>
           )}
         </div>
+
+        {/* 답글 입력 */}
+        {replyingId === toId(node._id) && (
+          <div className="mt-2 rounded-lg border bg-white p-2">
+            <textarea
+              value={replyText}
+              onChange={(e) => setReplyText(e.target.value)}
+              placeholder="Write a reply…"
+              className="h-16 w-full resize-none rounded-md border px-3 py-2 text-sm"
+            />
+            <div className="mt-2 flex items-center gap-2">
+              <AsyncButton
+                onClick={() => submitReply(node._id)}
+                disabled={postingReplyId === node._id || !replyText.trim()}
+                className="rounded-md bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-black disabled:opacity-60"
+              >
+                {postingReplyId === node._id ? "Posting…" : "Reply"}
+              </AsyncButton>
+              <button
+                onClick={() => {
+                  setReplyingId(null);
+                  setReplyText("");
+                }}
+                className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
+      {/* 자식 노드 */}
       {children.length > 0 && (
         <ul className="mt-2 space-y-3">
           {children.map((child) => (
@@ -578,6 +654,8 @@ function ThreadNode({
     </li>
   );
 }
+
+
 
 
 
