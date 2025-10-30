@@ -516,23 +516,21 @@ export default function Dashboard() {
         if (!canPostGeneral) throw new Error("Missing fields");
         let imageUrls = [];
         if (images.length) imageUrls = await uploadFiles(images);
-        await createPost({
+        const newPost = await createPost({
           school: schoolKey,
           title: title.trim(),
           content: content.trim(),
           images: imageUrls,
         });
+        
+        //a single post object is in const normalized
+        const normalized = normalizePosts([newPost])[0];
+
+        //Your frontend doesn’t actually re-fetch from the server when posting in General.
+        //Instead, it manually injects a placeholder post into state:
         setGeneralRaw((s) => ({
           ...s,
-          items: [
-            {
-              _id: Math.random().toString(36).slice(2),
-              title: title.trim(),
-              createdAt: new Date().toISOString(),
-              raw: { title: title.trim(), content: content.trim() },
-            },
-            ...s.items,
-          ],
+          items: [normalized, ...s.items],
         }));
       } else {
         if (!canPostAcademic) throw new Error("Missing fields");

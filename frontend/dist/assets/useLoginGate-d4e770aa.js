@@ -1,1 +1,0 @@
-import{c as u,a,t as c}from"./index-870b77fa.js";function p(){const{user:e}=u(),{pathname:r,search:n}=a(),o=`${r}${n||""}`;function t(s){if(e)return s==null?void 0:s();c(o)}return{ensureAuth:t,isAuthed:!!e}}export{p as u};
