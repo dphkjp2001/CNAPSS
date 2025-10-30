@@ -1,6 +1,11 @@
-// frontend/src/pages/SchoolSelect.jsx
 
-import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useCallback,
+} from "react";
 import { useSchool } from "../contexts/SchoolContext";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -19,26 +24,37 @@ const TOKENS = {
   amber: "#F59E0B",
 };
 
+const ACCENT = "#F15B5B";
+
+// 지금은 NYU만 활성
 const SCHOOLS = [
-  { key: "nyu", short: "NYU", name: "New York University", enabled: true, domains: ["nyu.edu"] },
-  { key: "boston", short: "Boston", name: "Boston University", enabled: false, domains: ["bu.edu", "boston.edu"] },
-  { key: "columbia", short: "Columbia", name: "Columbia University", enabled: false, domains: ["columbia.edu"] },
+  {
+    key: "nyu",
+    short: "NYU",
+    name: "New York University",
+    enabled: true,
+    domains: ["nyu.edu"],
+  },
 ];
 
 export default function SchoolSelect() {
   const { setSchool } = useSchool();
   const navigate = useNavigate();
 
-  // === Header modal state (kept) ===
+  // === header modal state (유지) ===
   const [showPicker, setShowPicker] = useState(false);
 
-  // === Bottom Quick Enter state (independent from header) ===
+  // === hero 내부 선택 상태 ===
+  const [selectedSchool, setSelectedSchool] = useState(null);
+
+  // === bottom quick enter 상태 (기존 코드 유지 호환) ===
   const [quickChosen, setQuickChosen] = useState(null);
   const quickInfo = useMemo(
     () => (quickChosen ? SCHOOLS.find((s) => s.key === quickChosen) : null),
     [quickChosen]
   );
 
+  // header에서 열리는 모달
   const openHeaderPicker = () => setShowPicker(true);
 
   const handlePickFromHeader = (school) => {
@@ -51,6 +67,14 @@ export default function SchoolSelect() {
     navigate(`/${school.key}/dashboard`);
   };
 
+  // HERO 섹션에서 "Click to Enter"
+  const handleEnterFromHero = () => {
+    if (!selectedSchool) return;
+    setSchool?.(selectedSchool);
+    navigate(`/${selectedSchool}/dashboard`);
+  };
+
+  // QUICK ENTER 섹션에서의 이동(기존 로직 유지)
   const handleQuickEnter = () => {
     if (!quickInfo || !quickInfo.enabled) return;
     setSchool?.(quickInfo.key);
@@ -59,21 +83,27 @@ export default function SchoolSelect() {
 
   return (
     <div className="min-h-screen" style={{ background: TOKENS.pageBg }}>
-      {/* === TOP NAV (unchanged) === */}
+      {/* === TOP NAV (기존 유지) === */}
       <header className="fixed inset-x-0 top-0 z-30 bg-white border-b border-black/10">
         <div className="w-full h-16 px-0 flex items-center justify-between relative">
           <div className="flex items-center gap-10 md:gap-12 pl-28 md:pl-32 [&>a]:tracking-[.02em]">
             <Link
               to="/"
               className="font-semibold tracking-[.01em] text-2xl md:text-3xl"
-              style={{ color: "#EF4444" }}
+              style={{ color: ACCENT }}
             >
               CNAPSS
             </Link>
-            <Link to="/about" className="text-black hover:opacity-70 text-sm font-semibold">
+            <Link
+              to="/about"
+              className="text-black hover:opacity-70 text-sm font-semibold"
+            >
               About us
             </Link>
-            <Link to="/contact" className="text-black hover:opacity-70 text-sm font-semibold">
+            <Link
+              to="/contact"
+              className="text-black hover:opacity-70 text-sm font-semibold"
+            >
               Contacts
             </Link>
           </div>
@@ -89,7 +119,7 @@ export default function SchoolSelect() {
         </div>
       </header>
 
-      {/* === Centered School Picker Modal (kept) === */}
+      {/* === 헤더에서 띄우는 학교 선택 모달 === */}
       {showPicker && (
         <EnterModal
           onClose={() => setShowPicker(false)}
@@ -98,48 +128,140 @@ export default function SchoolSelect() {
         />
       )}
 
-      {/* === HERO (gap fixed + copy replaced) === */}
-      <section
-        className="relative isolate text-white min-h-screen flex flex-col justify-center overflow-x-hidden"
-        style={{
-          background:
-            "linear-gradient(180deg, #EE5C5C 0%, #F16969 40%, #F78A8A 80%, #F59F9F 100%)",
-        }}
-      >
-        <div className="relative mx-auto max-w-6xl px-4 md:px-6 pt-32 pb-24 text-center">
-          <h1 className="font-black tracking-tight leading-tight text-[40px] sm:text-[56px] md:text-[72px]">
-            AI doesn’t know your campus.<br />
-            Cnapss does.
-          </h1>
+      {/* ========================================================= */}
+      {/* ================= HERO SECTION (스샷 버전) =============== */}
+      // 포인트 색상 변경
+const ACCENT = "#F28585"; // 더 핑크 섞인 코랄
 
-          <p className="mt-10 text-white/95 text-base sm:text-lg md:text-xl leading-relaxed max-w-4xl mx-auto">
-            <span className="font-semibold">CNAPSS</span> connects verified students —
-            sharing <span className="font-semibold">Real Stories, Opinions, and Experiences.</span>
+<section className="relative bg-white pt-16 md:pt-16">
+  <div
+    className="relative w-full max-w-[1600px] mx-auto flex flex-col md:flex-row"
+    style={{
+      height: "calc(100vh - 4rem)",
+      minHeight: "540px",
+      maxHeight: "900px",
+    }}
+  >
+    {/* 오른쪽 이미지 */}
+    <div className="absolute inset-y-0 right-0 w-full md:w-1/2">
+      <img
+        src="/NYU-fall.png"
+        alt="NYU fall campus"
+        className="w-full h-full object-cover"
+        style={{ objectPosition: "center center" }}
+      />
+    </div>
+
+    {/* 왼쪽 텍스트 */}
+    <div className="relative z-10 flex items-center md:w-1/2 px-6 md:pl-40 py-10 bg-white/95 md:bg-white">
+      <div className="w-full text-left max-w-[48rem]">
+        {/* 헤드라인 */}
+        <h1
+          className="font-black text-slate-900"
+          style={{
+            fontSize: "2.25rem", // 36px
+            lineHeight: "1.2",
+            wordBreak: "keep-all",
+          }}
+        >
+          AI doesn’t know your campus.
+          <br />
+          CNAPSS does.
+        </h1>
+
+        {/* 👉 간격을 확 띄움 */}
+        <div className="h-24" />
+
+        {/* Choose section */}
+        <div className="mb-10">
+          <p className="font-semibold text-slate-800 text-lg mb-6">
+            Choose your Campus and Share your voice
+          </p>
+
+          {/* 캠퍼스 목록 */}
+          <div className="flex flex-wrap gap-3 mb-4">
+            {/* NYU 버튼 */}
+            <button
+              onClick={() => setSelectedSchool("nyu")}
+              className={`
+                px-5 py-3 rounded-full border font-semibold text-sm transition-all
+                ${
+                  selectedSchool === "nyu"
+                    ? "text-white"
+                    : "text-slate-800 hover:bg-slate-50"
+                }
+              `}
+              style={{
+                backgroundColor:
+                  selectedSchool === "nyu" ? ACCENT : "transparent",
+                borderColor: ACCENT,
+                cursor: "pointer",
+              }}
+            >
+              New York University
+            </button>
+
+            {/* 나머지 학교 (비활성) */}
+            {[
+              "Boston University",
+              "Columbia University",
+              "Fordham University",
+              "Baruch College",
+            ].map((label, idx) => (
+              <button
+                key={idx}
+                disabled
+                className="px-5 py-3 rounded-full border font-semibold text-sm text-slate-400 cursor-not-allowed bg-transparent"
+                style={{
+                  borderColor: "#D1D5DB",
+                }}
+                title="Coming soon"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <p className="text-[14px] text-slate-500">
+            … more campuses coming soon
           </p>
         </div>
 
-        {/* scope chips (kept styles, safe for overflow-x-hidden) */}
-        <style>{`
-          .chip {
-            display: inline-block;
-            padding: .1em .5em;
-            border-radius: .7em;
-            line-height: 1;
-            white-space: nowrap;
-          }
-          .chip--ai { background: #fff; color: #E11D48; }
-          .chip--peers {
-            color: #fff; border: 2px solid rgba(255,255,255,.85);
-            border-radius: 1em; padding: .1em .7em;
-          }
-          @keyframes fadeInUp { from { opacity: 0; transform: translateY(8px) scale(.98);} to { opacity: 1; transform: translateY(0) scale(1);} }
-          .animate-fadeInUp { animation: fadeInUp .18s ease-out; }
-          @keyframes fadeBg { from { opacity: 0; } to { opacity: 1; } }
-          .animate-fadeBg { animation: fadeBg .15s ease-out; }
-        `}</style>
-      </section>
+        {/* Click to Enter */}
+        <div className="mb-16">
+          <button
+            onClick={handleEnterFromHero}
+            disabled={selectedSchool !== "nyu"}
+            className="px-7 py-4 rounded-full font-semibold text-[16px] transition-all text-white w-[220px] text-left shadow-sm"
+            style={{
+              backgroundColor:
+                selectedSchool === "nyu" ? ACCENT : "rgba(242,133,133,0.4)",
+              cursor:
+                selectedSchool === "nyu" ? "pointer" : "not-allowed",
+            }}
+          >
+            Click to Enter
+          </button>
+        </div>
 
-      {/* === NEW INTERLUDE SECTION === */}
+        {/* Explore CNAPSS */}
+        <div
+          className="flex items-center gap-2 text-sm font-semibold select-none"
+          style={{ color: ACCENT }}
+        >
+          <span className="text-lg leading-none">⬇</span>
+          <span>Explore CNAPSS</span>
+        </div>
+      </div>
+    </div>
+
+    <div className="hidden md:block md:w-1/2" />
+  </div>
+</section>
+
+
+
+      {/* ===================== INTERLUDE ===================== */}
       <section className="py-16 sm:py-24 bg-white">
         <div className="mx-auto max-w-6xl px-4 md:px-6">
           <h2
@@ -151,7 +273,7 @@ export default function SchoolSelect() {
         </div>
       </section>
 
-      {/* === ANONYMITY · BUT · VERIFIED (unchanged) === */}
+      {/* ===================== ANON / BUT / VERIFIED ===================== */}
       <section className="relative w-full pt-10 pb-0 md:pt-12 md:pb-2 -mb-10 md:-mb-16">
         <div className="-mx-4 md:-mx-6">
           <div className="relative mx-0 rounded-3xl overflow-hidden shadow-[0_24px_80px_rgba(0,0,0,.12)]">
@@ -159,7 +281,7 @@ export default function SchoolSelect() {
               className="absolute inset-0"
               style={{
                 background:
-                  "linear-gradient(90deg, #E5E9EE 0%, #D8DEE6 46%, #EBDADA 50%, #EE5C5C 54%, #F16969 72%, #F59F9F 100%)",
+                  "linear-gradient(90deg, #E5E9EE 0%, #D8DEE6 46%, #EBDADA 50%, #F15B5B 54%, #F58A8A 72%, #F7A6A6 100%)",
               }}
             />
             <div
@@ -171,11 +293,16 @@ export default function SchoolSelect() {
             />
 
             <div className="relative">
+              {/* 데스크탑 */}
               <div className="hidden md:grid grid-cols-3 place-items-center h-[320px] lg:h-[360px]">
                 <div className="text-center">
-                  <div className="text-[12px] font-extrabold tracking-[.25em] text-slate-600 mb-3">ANONYMITY</div>
+                  <div className="text-[12px] font-extrabold tracking-[.25em] text-slate-600 mb-3">
+                    ANONYMITY
+                  </div>
                   <div className="text-white drop-shadow-sm">
-                    <h3 className="text-[38px] lg:text-[46px] font-black">Anonymous</h3>
+                    <h3 className="text-[38px] lg:text-[46px] font-black">
+                      Anonymous
+                    </h3>
                   </div>
                 </div>
                 <div className="flex items-center justify-center">
@@ -184,24 +311,37 @@ export default function SchoolSelect() {
                   </span>
                 </div>
                 <div className="text-center">
-                  <div className="text-[12px] font-extrabold tracking-[.25em] text-white/80 mb-3">VERIFIED</div>
+                  <div className="text-[12px] font-extrabold tracking-[.25em] text-white/80 mb-3">
+                    VERIFIED
+                  </div>
                   <div className="text-white drop-shadow-sm">
-                    <h3 className="text-[38px] lg:text-[46px] font-black">Verified</h3>
+                    <h3 className="text-[38px] lg:text-[46px] font-black">
+                      Verified
+                    </h3>
                   </div>
                 </div>
               </div>
 
+              {/* 모바일 */}
               <div className="md:hidden flex flex-col items-center text-center py-12 gap-6">
                 <div>
-                  <div className="text-[11px] font-extrabold tracking-[.25em] text-slate-700 mb-2">ANONYMITY</div>
-                  <h3 className="text-white text-[32px] font-black drop-shadow-sm">Anonymous</h3>
+                  <div className="text-[11px] font-extrabold tracking-[.25em] text-slate-700 mb-2">
+                    ANONYMITY
+                  </div>
+                  <h3 className="text-white text-[32px] font-black drop-shadow-sm">
+                    Anonymous
+                  </h3>
                 </div>
                 <span className="rounded-full bg-black/80 text-white px-5 py-2 text-[13px] font-black shadow-md">
                   BUT
                 </span>
                 <div>
-                  <div className="text-[11px] font-extrabold tracking-[.25em] text-white/85 mb-2">VERIFIED</div>
-                  <h3 className="text-white text-[32px] font-black drop-shadow-sm">Verified</h3>
+                  <div className="text-[11px] font-extrabold tracking-[.25em] text-white/85 mb-2">
+                    VERIFIED
+                  </div>
+                  <h3 className="text-white text-[32px] font-black drop-shadow-sm">
+                    Verified
+                  </h3>
                 </div>
               </div>
             </div>
@@ -209,14 +349,14 @@ export default function SchoolSelect() {
         </div>
       </section>
 
-      {/* === FEATURE SHOWCASE (unchanged) === */}
+      {/* ===================== FEATURE SHOWCASE ===================== */}
       <Band bg="white" roomy>
         <div className="mx-auto max-w-6xl px-4 md:px-6">
           <FeatureShowcase />
         </div>
       </Band>
 
-      {/* === QUICK ENTER (kept) === */}
+      {/* ===================== QUICK ENTER ===================== */}
       <Band bg="white" roomy>
         <div className="mx-auto max-w-5xl px-4">
           <h2
@@ -225,8 +365,12 @@ export default function SchoolSelect() {
           >
             Choose your campus to continue
           </h2>
-          <p className="mt-4 text-center text-[16px]" style={{ color: TOKENS.sub }}>
-            Pick one here to enter directly. (Top-right button still works as well.)
+          <p
+            className="mt-4 text-center text-[16px]"
+            style={{ color: TOKENS.sub }}
+          >
+            Pick one here to enter directly. (Top-right button still works as
+            well.)
           </p>
 
           <div
@@ -240,11 +384,13 @@ export default function SchoolSelect() {
                   <button
                     key={s.key}
                     onClick={() => setQuickChosen(s.key)}
-                    className={`rounded-full border px-3.5 py-1.5 text-sm font-semibold transition
-                      ${active ? "bg-red-50 border-red-200 text-red-700" : "bg-white hover:bg-black/5"}
-                      ${!s.enabled ? "opacity-60" : ""}`}
-                    style={{ borderColor: TOKENS.border }}
-                    title={s.enabled ? s.name : "Coming soon"}
+                    className="rounded-full border px-3.5 py-1.5 text-sm font-semibold transition text-white"
+                    style={{
+                      backgroundColor: active ? ACCENT : "#fff",
+                      borderColor: active ? ACCENT : TOKENS.border,
+                      color: active ? "#fff" : "#0F172A",
+                    }}
+                    title={s.name}
                   >
                     {s.short}
                   </button>
@@ -258,13 +404,11 @@ export default function SchoolSelect() {
                   <span className="text-slate-500">No campus selected.</span>
                 )}
                 {quickInfo && quickInfo.enabled && (
-                  <span className="text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full">
+                  <span
+                    className="px-2.5 py-1 rounded-full font-semibold text-white"
+                    style={{ backgroundColor: ACCENT }}
+                  >
                     {quickInfo.name} selected
-                  </span>
-                )}
-                {quickInfo && !quickInfo.enabled && (
-                  <span className="text-slate-700 bg-slate-100 px-2.5 py-1 rounded-full">
-                    {quickInfo.name} · Coming soon
                   </span>
                 )}
               </div>
@@ -272,15 +416,17 @@ export default function SchoolSelect() {
               <button
                 onClick={handleQuickEnter}
                 disabled={!quickInfo || !quickInfo.enabled}
-                className={`rounded-xl px-6 py-3 text-sm font-semibold transition ring-1
-                  ${!quickInfo || !quickInfo.enabled
-                    ? "bg-white text-slate-400 cursor-not-allowed ring-black/10"
-                    : "bg-black text-white hover:bg-black/90 ring-black/10"}`}
+                className="rounded-xl px-6 py-3 text-sm font-semibold transition ring-1 text-white"
+                style={{
+                  backgroundColor: ACCENT,
+                  opacity: !quickInfo ? 0.5 : 1,
+                  cursor: !quickInfo ? "not-allowed" : "pointer",
+                  boxShadow: "0 0 0 1px rgba(0,0,0,0.05)",
+                  borderColor: "rgba(0,0,0,0.05)",
+                }}
                 title={
                   !quickInfo
                     ? "Pick a campus"
-                    : !quickInfo.enabled
-                    ? "Coming soon"
                     : `Enter ${quickInfo.short} dashboard`
                 }
               >
@@ -290,7 +436,8 @@ export default function SchoolSelect() {
           </div>
 
           <p className="mt-6 text-center text-[13px] text-slate-500">
-            You can also use the <strong>“Click to enter”</strong> button at the top right.
+            You can also use the <strong>“Click to enter”</strong> button at the
+            top right.
           </p>
         </div>
       </Band>
@@ -298,7 +445,7 @@ export default function SchoolSelect() {
   );
 }
 
-/* === Centered Picker Modal (header) === */
+/* ===================== MODAL ===================== */
 function EnterModal({ onClose, onPick, schools }) {
   const cardRef = useRef(null);
 
@@ -317,8 +464,12 @@ function EnterModal({ onClose, onPick, schools }) {
         className="relative w-[min(92vw,28rem)] rounded-2xl bg-white shadow-2xl ring-1 ring-black/10 p-4 sm:p-5 animate-fadeInUp"
       >
         <div className="px-1 pb-3">
-          <div className="text-sm font-semibold text-slate-800">Choose your campus</div>
-          <div className="text-xs text-slate-500 mt-1">Pick a school to open its dashboard.</div>
+          <div className="text-sm font-semibold text-slate-800">
+            Choose your campus
+          </div>
+          <div className="text-xs text-slate-500 mt-1">
+            Pick a school to open its dashboard.
+          </div>
         </div>
 
         <div className="mt-1 flex flex-col">
@@ -328,7 +479,11 @@ function EnterModal({ onClose, onPick, schools }) {
               onClick={() => onPick(s)}
               disabled={!s.enabled}
               className={`w-full text-left px-4 py-3 rounded-xl transition
-                ${s.enabled ? "hover:bg-black/5 active:scale-[0.99]" : "opacity-60 cursor-not-allowed bg-slate-50"}
+                ${
+                  s.enabled
+                    ? "hover:bg-black/5 active:scale-[0.99]"
+                    : "opacity-60 cursor-not-allowed bg-slate-50"
+                }
                 ${i !== 0 ? "mt-2" : ""}
               `}
             >
@@ -336,11 +491,6 @@ function EnterModal({ onClose, onPick, schools }) {
                 <div className="font-medium text-[15px] text-slate-900">
                   {s.name}
                 </div>
-                {!s.enabled && (
-                  <span className="text-[11px] font-semibold text-slate-600 bg-slate-100 px-2 py-1 rounded-full">
-                    Coming soon
-                  </span>
-                )}
               </div>
               <div className="text-[12px] text-slate-500">{s.short}</div>
             </button>
@@ -361,21 +511,9 @@ function EnterModal({ onClose, onPick, schools }) {
   );
 }
 
-/* --- Supporting components (unchanged) --- */
 
-function HeroRed({ children }) {
-  return (
-    <div
-      className="w-full"
-      style={{
-        background: "linear-gradient(180deg,#EF4444 0%,#F87171 100%)",
-        color: "#fff",
-      }}
-    >
-      {children}
-    </div>
-  );
-}
+/* Band, FeatureShowcase 등 밑에 것들은 기존 코드 그대로 둔다 */
+/* ========================================================= */
 
 function Band({ bg = "white", roomy = false, children }) {
   const bgColor = bg === "gray" ? TOKENS.bandGray : TOKENS.white;
@@ -386,46 +524,6 @@ function Band({ bg = "white", roomy = false, children }) {
     >
       {children}
     </section>
-  );
-}
-
-function Primary({ children, ...props }) {
-  return (
-    <button
-      {...props}
-      className="rounded-xl bg-black text-white font-semibold px-6 py-3 hover:bg-black/90 transition disabled:opacity-50"
-    >
-      {children}
-    </button>
-  );
-}
-
-function ValueCard({ eyebrow, title, emoji, text, tone = "slate" }) {
-  const toneMap = {
-    slate: { bg: "bg-slate-50", ring: "ring-slate-200", txt: "text-slate-600" },
-    rose: { bg: "bg-rose-50", ring: "ring-rose-200", txt: "text-rose-600" },
-  };
-  const t = toneMap[tone] || toneMap.slate;
-
-  return (
-    <div
-      className={`rounded-2xl ${t.bg} ring-1 ${t.ring} p-6 md:p-7 shadow-sm`}
-      style={{ borderColor: TOKENS.border }}
-    >
-      <div className="text-[11px] font-extrabold uppercase tracking-wider mb-2">
-        {eyebrow}
-      </div>
-      <div className="flex items-center gap-2">
-        <div className="text-2xl">{emoji}</div>
-        <h3
-          className="text-[22px] sm:text-[24px] font-black"
-          style={{ color: TOKENS.text }}
-        >
-          {title}
-        </h3>
-      </div>
-      <p className={`mt-3 text-[16px] ${t.txt}`}>{text}</p>
-    </div>
   );
 }
 
@@ -484,38 +582,69 @@ function FeatureShowcase() {
       {/* LEFT copy */}
       <div className="md:col-span-5">
         {[0, 1, 2].map((i) => (
-          <article key={i} ref={(el) => (sectionRefs.current[i] = el)} className="flex items-center min-h-[90vh]">
+          <article
+            key={i}
+            ref={(el) => (sectionRefs.current[i] = el)}
+            className="flex items-center min-h-[90vh]"
+          >
             <div className="space-y-3">
               {i === 0 && (
                 <>
-                  <p className="text-[11px] font-extrabold tracking-wider text-red-600 uppercase">COMMUNITY · ANONYMOUS</p>
-                  <h3 className="text-[34px] sm:text-[48px] font-black leading-[1.08]" style={{ color: TOKENS.text }}>
+                  <p className="text-[11px] font-extrabold tracking-wider text-red-600 uppercase">
+                    COMMUNITY · ANONYMOUS
+                  </p>
+                  <h3
+                    className="text-[34px] sm:text-[48px] font-black leading-[1.08]"
+                    style={{ color: TOKENS.text }}
+                  >
                     Freeboard
                   </h3>
-                  <p className="text-[16px] leading-[1.8]" style={{ color: TOKENS.sub }}>
-                    Real-time campus banter and memes. A scrolling magazine of student voices — always anonymous.
+                  <p
+                    className="text-[16px] leading-[1.8]"
+                    style={{ color: TOKENS.sub }}
+                  >
+                    Real-time campus banter and memes. A scrolling magazine of
+                    student voices — always anonymous.
                   </p>
                 </>
               )}
               {i === 1 && (
                 <>
-                  <p className="text-[11px] font-extrabold tracking-wider text-red-600 uppercase">ACADEMICS · Q&A</p>
-                  <h3 className="text-[34px] sm:text-[48px] font-black leading-[1.08]" style={{ color: TOKENS.text }}>
+                  <p className="text-[11px] font-extrabold tracking-wider text-red-600 uppercase">
+                    ACADEMICS · Q&A
+                  </p>
+                  <h3
+                    className="text-[34px] sm:text-[48px] font-black leading-[1.08]"
+                    style={{ color: TOKENS.text }}
+                  >
                     Academic Board — General Q
                   </h3>
-                  <p className="text-[16px] leading-[1.8]" style={{ color: TOKENS.sub }}>
-                    Swipe through school questions as cards — reveal actionable answers from real students.
+                  <p
+                    className="text-[16px] leading-[1.8]"
+                    style={{ color: TOKENS.sub }}
+                  >
+                    Swipe through school questions as cards — reveal actionable
+                    answers from real students.
                   </p>
                 </>
               )}
               {i === 2 && (
                 <>
-                  <p className="text-[11px] font-extrabold tracking-wider text-red-600 uppercase">SEEKING · CONNECT</p>
-                  <h3 className="text-[34px] sm:text-[48px] font-black leading-[1.08]" style={{ color: TOKENS.text }}>
+                  <p className="text-[11px] font-extrabold tracking-wider text-red-600 uppercase">
+                    SEEKING · CONNECT
+                  </p>
+                  <h3
+                    className="text-[34px] sm:text-[48px] font-black leading-[1.08]"
+                    style={{ color: TOKENS.text }}
+                  >
                     Academic Board — Seeking
                   </h3>
-                  <p className="text-[16px] leading-[1.8]" style={{ color: TOKENS.sub }}>
-                    Find study buddies, chat live, and lock the plan — all in a desktop-like flow.
+                  <p
+                    className="text-[16px] leading-[1.8]"
+                    style={{ color: TOKENS.sub }}
+                  >
+                    Find study buddies, chat live, and lock the plan — all in a
+                    desktop-like flow.
                   </p>
                 </>
               )}
@@ -528,7 +657,7 @@ function FeatureShowcase() {
       <div className="md:col-span-7">
         <div className="sticky top-20">
           <div className="relative h-[640px]">
-            {/* Anonymous (Freeboard) demo with darker bg */}
+            {/* Anonymous (Freeboard) demo */}
             <Panel visible={active === 0}>
               <AnonymousQSwipe play={active === 0} />
             </Panel>
@@ -553,7 +682,9 @@ function Panel({ children, visible, delay = 0 }) {
       className="absolute inset-0 transition-all duration-[800ms] ease-out"
       style={{
         opacity: visible ? 1 : 0,
-        transform: visible ? "translateY(0px) scale(1)" : "translateY(28px) scale(0.97)",
+        transform: visible
+          ? "translateY(0px) scale(1)"
+          : "translateY(28px) scale(0.97)",
         transitionDelay: `${delay}ms`,
         pointerEvents: visible ? "auto" : "none",
       }}

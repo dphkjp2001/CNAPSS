@@ -472,178 +472,173 @@ function ThreadNode({
     <li>
       <div
         id={`comment-${node._id}`}
-        className={`rounded-lg p-3 ${flashId === toId(node._id) ? "bg-yellow-50" : ""} ${
-          depth ? "border-l border-gray-200 pl-4" : ""
-        }`}
+        className={`rounded-lg p-3 ${
+          flashId === toId(node._id) ? "bg-yellow-50" : ""
+        } ${depth ? "border-l border-gray-200 pl-4" : ""}`}
         style={{ marginLeft: depth ? depth * 24 : 0 }}
       >
-        {/* 헤더: 아바타 + 닉네임/타임 + 투표를 같은 높이에 맞춤 */}
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="h-9 w-9 shrink-0 rounded-full bg-gray-200" />
-            <div className="flex items-center gap-2 min-w-0">
-              <UserBadge
-                username={
-                  anonymousMode
-                    ? labelOf(node.email)
-                    : node.nickname || "Unknown"
-                }
-                tier={node.authorTier}
-                className="text-sm"
-              />
-              <span className="text-xs text-gray-500">
+        {/* ROW: avatar + content column */}
+        <div className="flex">
+          {/* avatar */}
+          <div className="mr-3 h-9 w-9 shrink-0 rounded-full bg-gray-200" />
+
+          {/* right side column */}
+          <div className="flex-1">
+            {/* 1) top row: name/badge (left) + time (right) */}
+            <div className="flex items-start justify-between">
+              <div className="flex items-center flex-wrap gap-2">
+                <UserBadge
+                  username={
+                    anonymousMode
+                      ? labelOf(node.email)
+                      : node.nickname || "Unknown"
+                  }
+                  tier={node.authorTier}
+                  className="text-sm"
+                />
+              </div>
+
+              <span className="text-xs text-gray-500 whitespace-nowrap">
                 • {dayjs(node.createdAt).fromNow()}
               </span>
             </div>
-            {/* <VoteButtons 
-              targetType="Comment"
-              targetId={node._id}
-              initialCounts={node.counts}
-              initialVote={node.myVote}
-              className="scale-75"
-            /> */}
-          </div>
 
-        {/* 본문: 위로 조금 당김 (mt-1) */}
-        {editingId === toId(node._id) ? (
-          <div className="mt-1">
-            <textarea
-              defaultValue={node.content}
-              onChange={(e) => onChangeEdit(e.target.value)}
-              className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-900 focus:ring-1 focus:ring-gray-900/20"
-            />
-            <div className="mt-2 flex gap-2">
-              <button
-                onClick={onSaveEdit}
-                disabled={savingId === node._id || !isAuthed}
-                className="rounded-md bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-black disabled:opacity-60"
-                title={!isAuthed ? "Log in to edit" : "Save"}
-              >
-                {savingId === node._id ? "Saving…" : "Save"}
-              </button>
-              <button
-                onClick={onCancelEdit}
-                className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        ) : (
-          <p className="mt-1 whitespace-pre-wrap break-words text-sm text-gray-800">
-            {node.content}
-          </p>
-        )}
+            {/* 2) content (본문) */}
+            {editingId === toId(node._id) ? (
+              <div className="mt-3">
+                <textarea
+                  defaultValue={node.content}
+                  onChange={(e) => onChangeEdit(e.target.value)}
+                  className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-900 focus:ring-1 focus:ring-gray-900/20"
+                />
+                <div className="mt-3 flex gap-3">
+                  <button
+                    onClick={onSaveEdit}
+                    disabled={savingId === node._id || !isAuthed}
+                    className="rounded-md bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-black disabled:opacity-60"
+                  >
+                    {savingId === node._id ? "Saving…" : "Save"}
+                  </button>
+                  <button
+                    onClick={onCancelEdit}
+                    className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <p className="mt-3 whitespace-pre-wrap break-words text-sm text-gray-800">
+                {node.content}
+              </p>
+            )}
 
-          <div className="mt-2 flex items-center gap-3 text-xs text-gray-600">
-            {/* <button
-              onClick={() => onToggleLike(node._id, node.email)}
-              disabled={likingId === node._id || isMine || !isAuthed}
-              className={`rounded px-2 py-1 ${liked ? "bg-blue-50 text-blue-600" : "hover:bg-gray-100"} disabled:opacity-60`}
-              title={!isAuthed ? "Log in to like" : isMine ? "You can’t like your own comment." : "Like comment"}
-            >
-              👍 {likeCount}
-            </button> */}
-
-          <button
-            onClick={() => {
-              setReplyingId(toId(node._id));
-              setReplyText("");
-            }}
-            className="rounded px-2 py-1 hover:bg-gray-100"
-            title="Reply"
-          >
-            Reply
-          </button>
-
-          {isAuthed && isMine && (
-            <>
-              <button
-                onClick={() => onStartEdit(node)}
-                className="rounded px-2 py-1 hover:bg-gray-100"
-              >
-                Edit
-              </button>
-              <button
-                onClick={() => onDelete(node._id)}
-                disabled={deletingId === node._id}
-                className="rounded px-2 py-1 text-red-600 hover:bg-red-50 disabled:opacity-60"
-              >
-                {deletingId === node._id ? "Deleting…" : "Delete"}
-              </button>
-            </>
-          )}
-        </div>
-
-        {/* 답글 입력 */}
-        {replyingId === toId(node._id) && (
-          <div className="mt-2 rounded-lg border bg-white p-2">
-            <textarea
-              value={replyText}
-              onChange={(e) => setReplyText(e.target.value)}
-              placeholder="Write a reply…"
-              className="h-16 w-full resize-none rounded-md border px-3 py-2 text-sm"
-            />
-            <div className="mt-2 flex items-center gap-2">
-              <AsyncButton
-                onClick={() => submitReply(node._id)}
-                disabled={postingReplyId === node._id || !replyText.trim()}
-                className="rounded-md bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-black disabled:opacity-60"
-              >
-                {postingReplyId === node._id ? "Posting…" : "Reply"}
-              </AsyncButton>
+            {/* 3) actions (Reply / Edit / Delete) 
+                ⬅︎ 이 줄도 본문이랑 같은 시작선 */}
+            <div className="mt-3 flex items-center gap-5 text-xs text-gray-600">
               <button
                 onClick={() => {
-                  setReplyingId(null);
+                  setReplyingId(toId(node._id));
                   setReplyText("");
                 }}
-                className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700"
+                className="rounded px-0 py-1 hover:bg-gray-100"
+                title="Reply"
               >
-                Cancel
+                Reply
               </button>
-            </div>
-          </div>
-        )}
-      </div>
 
-      {/* 자식 노드 */}
-      {children.length > 0 && (
-        <ul className="mt-2 space-y-3">
-          {children.map((child) => (
-            <ThreadNode
-              key={toId(child._id)}
-              node={child}
-              depth={Math.min(depth + 1, 6)}
-              me={me}
-              labelOf={labelOf}
-              childrenMap={childrenMap}
-              replyingId={replyingId}
-              replyText={replyText}
-              postingReplyId={postingReplyId}
-              setReplyingId={setReplyingId}
-              setReplyText={setReplyText}
-              submitReply={submitReply}
-              onToggleLike={onToggleLike}
-              likingId={likingId}
-              deletingId={deletingId}
-              savingId={savingId}
-              onStartEdit={onStartEdit}
-              onCancelEdit={onCancelEdit}
-              onChangeEdit={onChangeEdit}
-              onSaveEdit={onSaveEdit}
-              onDelete={onDelete}
-              editingId={editingId}
-              flashId={flashId}
-              isAuthed={isAuthed}
-              anonymousMode={anonymousMode}
-            />
-          ))}
-        </ul>
-      )}
+              {isAuthed && isMine && (
+                <>
+                  <button
+                    onClick={() => onStartEdit(node)}
+                    className="rounded px-2 py-1 hover:bg-gray-100"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => onDelete(node._id)}
+                    disabled={deletingId === node._id}
+                    className="rounded px-2 py-1 text-red-600 hover:bg-red-50 disabled:opacity-60"
+                  >
+                    {deletingId === node._id ? "Deleting…" : "Delete"}
+                  </button>
+                </>
+              )}
+            </div>
+
+            {/* 4) reply composer (only when replying) */}
+            {replyingId === toId(node._id) && (
+              <div className="mt-4 rounded-lg border bg-white p-2">
+                <textarea
+                  value={replyText}
+                  onChange={(e) => setReplyText(e.target.value)}
+                  placeholder="Write a reply…"
+                  className="h-16 w-full resize-none rounded-md border px-3 py-2 text-sm"
+                />
+                <div className="mt-3 flex items-center gap-3">
+                  <AsyncButton
+                    onClick={() => submitReply(node._id)}
+                    disabled={
+                      postingReplyId === node._id || !replyText.trim()
+                    }
+                    className="rounded-md bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-black disabled:opacity-60"
+                  >
+                    {postingReplyId === node._id ? "Posting…" : "Reply"}
+                  </AsyncButton>
+                  <button
+                    onClick={() => {
+                      setReplyingId(null);
+                      setReplyText("");
+                    }}
+                    className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* children comments */}
+        {children.length > 0 && (
+          <ul className="mt-4 space-y-3">
+            {children.map((child) => (
+              <ThreadNode
+                key={toId(child._id)}
+                node={child}
+                depth={Math.min(depth + 1, 6)}
+                me={me}
+                labelOf={labelOf}
+                childrenMap={childrenMap}
+                replyingId={replyingId}
+                replyText={replyText}
+                postingReplyId={postingReplyId}
+                setReplyingId={setReplyingId}
+                setReplyText={setReplyText}
+                submitReply={submitReply}
+                onToggleLike={onToggleLike}
+                likingId={likingId}
+                deletingId={deletingId}
+                savingId={savingId}
+                onStartEdit={onStartEdit}
+                onCancelEdit={onCancelEdit}
+                onChangeEdit={onChangeEdit}
+                onSaveEdit={onSaveEdit}
+                onDelete={onDelete}
+                editingId={editingId}
+                flashId={flashId}
+                isAuthed={isAuthed}
+                anonymousMode={anonymousMode}
+              />
+            ))}
+          </ul>
+        )}
       </div>
     </li>
   );
 }
+
 
 
 
