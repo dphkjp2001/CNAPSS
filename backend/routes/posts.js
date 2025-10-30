@@ -8,6 +8,8 @@ const schoolGuard = require("../middleware/schoolGuard");
 const mongoose = require("mongoose");
 const Post = require("../models/Post");
 const Comment = require("../models/Comment");
+const { nanoid } = require("nanoid");
+
 
 // ---------------------------------------------
 // Helpers
@@ -227,6 +229,7 @@ router.post("/:school/posts", requireAuth, schoolGuard, async (req, res, next) =
       kind,
       type,
       lookingFor,
+      shortId: nanoid(10),
     });
 
     res.status(201).json(serializePost(post));

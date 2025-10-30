@@ -1,5 +1,7 @@
 // backend/models/AcademicPost.js
 const mongoose = require("mongoose");
+const { nanoid } = require("nanoid");
+
 
 const ImageSchema = new mongoose.Schema(
   { url: String, publicId: String },
@@ -13,6 +15,8 @@ function normalizeMode({ mode, type, postType, lookingFor }) {
 }
 
 const MATERIAL_ENUM = ["lecture_notes", "syllabus", "past_exams", "quiz_prep"];
+
+
 
 const AcademicPostSchema = new mongoose.Schema(
   {
@@ -51,6 +55,8 @@ const AcademicPostSchema = new mongoose.Schema(
     },
 
     hotScore: { type: Number, default: 0, index: true },
+
+    shortId: { type: String, index: true },
   },
   {
     timestamps: true,
@@ -80,6 +86,13 @@ AcademicPostSchema.pre("validate", function (next) {
   // seeking:course_materials일 때 title = courseName 로 자연정규화(있으면)
   if (this.mode === "looking_for" && this.kind === "course_materials") {
     if (this.courseName && !this.title) this.title = this.courseName;
+  }
+  next();
+});
+
+AcademicPostSchema.pre("save", function (next) {
+  if (this.board === "academic" && !this.shortId) {
+    this.shortId = nanoid(10); // length=10, URL-safe, fast
   }
   next();
 });

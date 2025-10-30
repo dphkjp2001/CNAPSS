@@ -1,5 +1,6 @@
 // backend/models/Post.js
 const mongoose = require("mongoose");
+const { nanoid } = require("nanoid");
 
 const ImageSchema = new mongoose.Schema(
   {
@@ -12,6 +13,7 @@ const ImageSchema = new mongoose.Schema(
 // NOTE:
 // - strict:false 로 두어 기존 스키마에 없던 필드가 있어도 그대로 저장/반환됩니다.
 // - 'mode' 는 academic board 에서만 의미가 있으며 'general' | 'looking_for' 를 가집니다.
+
 const PostSchema = new mongoose.Schema(
   {
     school: { type: String, required: true, index: true },
@@ -119,6 +121,14 @@ PostSchema.pre("validate", function (next) {
   this.mode = this.board === "academic" ? normalized : "general";
   next();
 });
+
+PostSchema.pre("save", function (next) {
+  if (!this.shortId) {
+    this.shortId = nanoid(10);
+  }
+  next();
+});
+
 
 module.exports = mongoose.model("Post", PostSchema);
 

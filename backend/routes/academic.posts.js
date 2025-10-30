@@ -268,6 +268,7 @@ const router = express.Router();
 const requireAuth = require("../middleware/requireAuth");
 const schoolGuard = require("../middleware/schoolGuard");
 const AcademicPost = require("../models/AcademicPost");
+const { nanoid } = require("nanoid");
 
 /** ---------------- helpers ---------------- **/
 function resolveMode({ mode, type, postType, lookingFor }) {
@@ -390,6 +391,7 @@ router.post("/:school/academic-posts", requireAuth, schoolGuard, async (req, res
         professor: String(professor || ""),
         materials: mats,
         type, postType, lookingFor: true,
+        shortId: nanoid(10),
       });
       return res.status(201).json(serialize(doc));
     }
@@ -405,6 +407,7 @@ router.post("/:school/academic-posts", requireAuth, schoolGuard, async (req, res
       anonymous: !!anonymous,
       author: req.user.id || req.user._id,
       type, postType, lookingFor: normalizedMode === "looking_for",
+      shortId: nanoid(10),
     });
     res.status(201).json(serialize(doc));
   } catch (err) {
