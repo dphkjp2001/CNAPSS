@@ -343,12 +343,12 @@ async function seedDummyComments(users, posts) {
 
 async function main() {
   await connectDB();
-  // await clearExistingPostsAndComments();
-  console.log("seeding users...");
-  const users = await seedDummyUsers();
+  console.log("Deleting posts and comments...");
+  await clearExistingPostsAndComments();
+  // const users = await seedDummyUsers();
   // const posts = await seedDummyPosts(users);
   // await seedDummyComments(users, posts);
-  // console.log("✅ Deleted all posts and comments; seeded dummy users, posts, comments successfully!");
+  console.log("✅ Deleted all posts and comments successfully!");
   process.exit(0);
 }
 
