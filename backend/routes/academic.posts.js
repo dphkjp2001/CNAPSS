@@ -463,6 +463,19 @@ router.delete("/:school/academic-posts/:id", requireAuth, schoolGuard, async (re
   } catch (err) { next(err); }
 });
 
+
+router.get("/:school/academic-posts/my", requireAuth, schoolGuard, async (req, res, next) => {
+  try {
+    const { school } = req.params;
+    const me = String(req.user._id || req.user.id);
+    const items = await AcademicPost.find({ school, author: me })
+      .sort({ createdAt: -1, _id: -1 })
+      .lean();
+    res.json(items.map(serialize));
+  } catch (err) { next(err); }
+});
+
+
 /** ---------------- vote (mutually exclusive + toggle) ---------------- **/
 router.post("/:school/academic-posts/:id/vote", requireAuth, schoolGuard, async (req, res, next) => {
   try {

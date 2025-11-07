@@ -420,9 +420,12 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useSchool } from "../../contexts/SchoolContext";
 import { apiFetch } from "../../api/http";
 import VoteButtons from "../../components/VoteButtons";
+import { ArrowLeft, User, Edit2, Trash2, Save, X } from "lucide-react";
 
 dayjs.extend(relativeTime);
 dayjs.locale("en");
+
+const TOKENS = { accent: "#FF7A70", accentHover: "#FF6B61" };
 
 export default function FreeBoardDetail() {
   const { id } = useParams();
@@ -529,143 +532,168 @@ export default function FreeBoardDetail() {
     }
   };
 
+  const handleSave = async () => {
+    const title = editTitle.trim();
+    const content = editContent.trim();
+    if (!title || !content) {
+      alert("Title and content are required.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const updated = await updatePost({ school, id: post._id, title, content });
+      const next = updated?.post || updated;
+      setPost(next);
+      setIsEditing(false);
+    } catch (err) {
+      alert("Update failed: " + (err?.message || "Unknown error"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditTitle(post?.title || "");
+    setEditContent(post?.content || "");
+    setIsEditing(false);
+  };
+
   if (error) {
     return (
-      <div className="flex min-h-screen items-center justify-center text-sm text-red-700" style={{ backgroundColor: schoolTheme?.bg || "#f6f3ff" }}>
-        {error}
+      <div className="min-h-screen bg-[#F8F9FA] flex items-center justify-center">
+        <div className="text-red-600">{error}</div>
       </div>
     );
   }
   if (!post) {
     return (
-      <div className="flex min-h-screen items-center justify-center text-sm text-gray-600" style={{ backgroundColor: schoolTheme?.bg || "#f6f3ff" }}>
-        Loading…
+      <div className="min-h-screen bg-[#F8F9FA] flex items-center justify-center">
+        <div className="text-gray-600">Loading…</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen px-4 py-6 sm:px-6" style={{ backgroundColor: schoolTheme?.bg || "#f6f3ff" }}>
-      <div className="mx-auto max-w-3xl">
-        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+    <div className="min-h-screen bg-[#F8F9FA] py-8">
+      <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
+        {/* Back button */}
+        <button
+          onClick={() => navigate(schoolPath("/dashboard?tab=free"))}
+          className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6 font-medium transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>Back to Free Board</span>
+        </button>
+
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
           {/* Header */}
-          <div className="border-b border-gray-100 p-5 sm:p-6">
-            <div className="flex items-start gap-4">
-              <div className="flex-1">
-                {isEditing ? (
-                  <input
-                    value={editTitle}
-                    onChange={(e) => setEditTitle(e.target.value)}
-                    placeholder="Title"
-                    className="w-full rounded-xl border border-gray-300 px-3 py-2 text-lg font-semibold text-gray-900 focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10"
-                  />
-                ) : (
-                  <h1 className="text-2xl font-bold text-gray-900">{post.title}</h1>
-                )}
-                <p className="mt-1 text-sm text-gray-500">
-                  Posted by <span className="font-medium">anonymous</span> • {dayjs(post.createdAt).fromNow()}
-                </p>
+          <div className="border-b border-gray-100 px-6 py-5">
+            <div className="flex items-start justify-between gap-4 mb-4">
+              <div className="flex items-start gap-3 flex-1">
+                <div className="w-11 h-11 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center shrink-0">
+                  <User className="w-5 h-5 text-gray-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold text-gray-900">Anonymous</span>
+                    <span className="text-gray-400">•</span>
+                    <span className="text-sm text-gray-500">
+                      {dayjs(post.createdAt).fromNow()}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-sm text-gray-500">Free Board</span>
+                  </div>
+                </div>
               </div>
 
-              {/* Right-side vertical vote widget */}
-              {/* <VoteButtons
-                school={school}
-                postId={post._id || id}
-                initialCounts={{ up: upCount, down: downCount }}
-                initialVote={myVote}
-                disabled={!!isAuthor}
-                className="shrink-0"
-              /> */}
+              {isAuthor && !isEditing && (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setIsEditing(true)}
+                    className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                    title="Edit post"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={handleDelete}
+                    className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                    title="Delete post"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
             </div>
+
+            {/* Title */}
+            {isEditing ? (
+              <input
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                placeholder="Title"
+                className="w-full text-2xl font-bold text-gray-900 bg-transparent border-b-2 border-gray-300 focus:border-[#FF7A70] outline-none pb-2 transition-colors"
+              />
+            ) : (
+              <h1 className="text-2xl font-bold text-gray-900 leading-tight">
+                {post.title}
+              </h1>
+            )}
           </div>
 
           {/* Body */}
-          <div className="p-5 sm:p-6">
+          <div className="px-6 py-6">
             {isEditing ? (
               <textarea
                 value={editContent}
                 onChange={(e) => setEditContent(e.target.value)}
                 placeholder="Content"
-                className="h-56 w-full resize-y rounded-xl border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:border-gray-900 focus:ring-2 focus:ring-gray-900/10"
+                className="w-full min-h-[240px] text-gray-900 bg-gray-50 rounded-xl border border-gray-300 focus:border-[#FF7A70] focus:ring-2 focus:ring-[#FF7A70]/20 outline-none px-4 py-3 resize-y transition-all"
               />
             ) : (
-              <div className="prose prose-sm max-w-none text-gray-800">
-                <p className="whitespace-pre-wrap leading-relaxed">{post.content}</p>
+              <div className="prose prose-gray max-w-none">
+                <p className="text-gray-900 whitespace-pre-wrap leading-relaxed">
+                  {post.content}
+                </p>
               </div>
             )}
 
-            {/* Actions (Edit/Delete & back) */}
-            <div className="mt-6 flex flex-wrap items-center gap-3">
-              {isAuthor && !isEditing && (
-                <>
-                  <button
-                    onClick={() => setIsEditing(true)}
-                    className="rounded-xl px-4 py-2 text-sm font-semibold text-white shadow"
-                    style={{ backgroundColor: "#6b46c1" }}
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={handleDelete}
-                    className="rounded-xl bg-red-500 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-red-600"
-                  >
-                    Delete
-                  </button>
-                </>
-              )}
-
-              {isAuthor && isEditing && (
-                <>
-                  <button
-                    onClick={async () => {
-                      const title = editTitle.trim();
-                      const content = editContent.trim();
-                      if (!title || !content) return;
-                      setSaving(true);
-                      try {
-                        const updated = await updatePost({ school, id: post._id, title, content });
-                        const next = updated?.post || updated;
-                        setPost(next);
-                        setIsEditing(false);
-                      } catch (err) {
-                        alert("Update failed: " + (err?.message || "Unknown error"));
-                      } finally {
-                        setSaving(false);
-                      }
-                    }}
-                    disabled={saving}
-                    className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-black disabled:opacity-60"
-                  >
-                    {saving ? "Saving…" : "Save"}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setEditTitle(post?.title || "");
-                      setEditContent(post?.content || "");
-                      setIsEditing(false);
-                    }}
-                    className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-800 shadow-sm hover:bg-gray-50"
-                  >
-                    Cancel
-                  </button>
-                </>
-              )}
-
-              <Link to={schoolPath("/dashboard?tab=free")} className="ml-auto text-sm font-medium text-blue-600 underline underline-offset-2">
-                ← Back to List
-              </Link>
-            </div>
+            {/* Edit mode actions */}
+            {isEditing && (
+              <div className="mt-6 flex items-center gap-3">
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  style={{ backgroundColor: TOKENS.accent }}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 text-white font-medium rounded-lg hover:opacity-90 active:scale-[0.98] disabled:opacity-60 transition-all shadow-sm"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>{saving ? "Saving…" : "Save Changes"}</span>
+                </button>
+                <button
+                  onClick={handleCancelEdit}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-white border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 active:scale-[0.98] transition-all"
+                >
+                  <X className="w-4 h-4" />
+                  <span>Cancel</span>
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Comments */}
           {post?._id && (
-            <div className="mt-0 rounded-2xl border-t border-gray-200 bg-white p-5 shadow-sm sm:p-6">
-              <CommentSection
-                postId={post._id}
-                authorEmail={post.email}
-                highlightId={highlightId}
-                anonymousMode={true}
-              />
+            <div className="border-t border-gray-200 bg-gray-50/50">
+              <div className="px-6 py-6">
+                <h3 className="font-semibold text-gray-900 mb-4">Comments</h3>
+                <CommentSection
+                  postId={post._id}
+                  authorEmail={post.email}
+                  highlightId={highlightId}
+                  anonymousMode={true}
+                />
+              </div>
             </div>
           )}
         </div>

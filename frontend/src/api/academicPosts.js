@@ -19,25 +19,16 @@ function buildQuery(params = {}) {
 /* -------------------------------------------------------
  * Public (no auth)
  * ----------------------------------------------------- */
-
-/**
- * Public list
- * - 서버 라우트: GET /public/:school/academic-posts
- * - type: 'question' | 'seeking' | ''   (FE에서 'all'은 보내지 않음)
- * - kind: 'course_materials' | 'study_mate' | 'coffee_chat' | ''
- */
 export async function getPublicAcademicPosts({
   school,
   page = 1,
   limit = 20,
   q = "",
-  sort = "new",        // 'new' | 'old'
-  type = "",           // '' | 'question' | 'seeking'
-  kind = "",           // '' | 'course_materials' | 'study_mate' | 'coffee_chat'
+  sort = "new",
+  type = "",
+  kind = "",
 }) {
-  // 'all'은 서버에 보내지 않음
   const safeType = type === "all" ? "" : type;
-
   const qs = buildQuery({
     page,
     limit,
@@ -46,15 +37,9 @@ export async function getPublicAcademicPosts({
     type: safeType || undefined,
     kind: safeType === "seeking" ? (kind || undefined) : undefined,
   });
-
-  // ✅ 상대경로 사용: 프록시/동일 오리진에서 안정적
   return getJson(`/public/${encodeURIComponent(school)}/academic-posts${qs}`);
 }
 
-/**
- * Public detail
- * - 서버 라우트: GET /public/:school/academic-posts/:id
- */
 export async function getPublicAcademicPost({ school, id }) {
   return getJson(
     `/public/${encodeURIComponent(school)}/academic-posts/${encodeURIComponent(id)}`
@@ -65,52 +50,33 @@ export async function getPublicAcademicPost({ school, id }) {
  * Protected (auth)
  * ----------------------------------------------------- */
 
-/**
- * Protected detail
- * - 서버 라우트: GET /:school/academic-posts/:id
- */
 export async function getAcademicPost({ school, id }) {
   return getJson(`/${encodeURIComponent(school)}/academic-posts/${encodeURIComponent(id)}`);
 }
 
-/**
- * Create (auth)
- * - postType: 'question' | 'seeking'
- * - seeking + course_materials:
- *    - courseName (없으면 title을 courseName으로 미러링)
- *    - professor? (optional)
- *    - materials? (['lecture_notes','syllabus','past_exams','quiz_prep'])
- */
 export async function createAcademicPost({
   school,
   title,
   content = "",
-  postType, // or type/mode; 서버에서 normalize됨
+  postType,
   type,
   mode,
   kind,
   tags,
   images,
-
-  // course_materials extras
   courseName,
   professor,
   materials,
 }) {
   const body = { title, content, postType, type, mode, kind, tags, images };
-
   if (kind === "course_materials") {
     body.courseName = courseName ?? title;
     if (professor) body.professor = professor;
     if (Array.isArray(materials)) body.materials = materials;
   }
-
   return postJson(`/${encodeURIComponent(school)}/academic-posts`, body);
 }
 
-/**
- * Update (auth)
- */
 export async function updateAcademicPost({
   school,
   id,
@@ -122,33 +88,45 @@ export async function updateAcademicPost({
   kind,
   tags,
   images,
-
-  // course_materials extras
   courseName,
   professor,
   materials,
 }) {
   const body = { title, content, postType, type, mode, kind, tags, images };
-
   if (kind === "course_materials") {
     body.courseName = courseName ?? title;
     if (professor) body.professor = professor;
     if (Array.isArray(materials)) body.materials = materials;
   }
-
   return putJson(`/${encodeURIComponent(school)}/academic-posts/${encodeURIComponent(id)}`, body);
 }
 
-/**
- * Delete (auth)
- */
 export async function deleteAcademicPost({ school, id }) {
   return deleteJson(`/${encodeURIComponent(school)}/academic-posts/${encodeURIComponent(id)}`);
 }
 
-
-// 맨 아래에 이 함수만 추가해 붙여줘 (기존 export 유지)
-export function voteAcademicPost({ school, id, dir }) {
-  // dir: "up" | "down"
-  return postJson(`/${encodeURIComponent(school)}/academic-posts/${encodeURIComponent(id)}/vote`, { dir });
+/**
+ * ⬇️ “내 아카데믹 글” 목록 (프론트 필터 전제)
+ * - 서버는 mine 파라미터를 지원하지 않으므로, 여기서는 단순히 최신 200개를 받아오게 하고
+ *   실제 필터링은 MyPosts.jsx에서 author 기준으로 수행한다.
+ */
+export async function listMyAcademicPosts({
+  school,
+  page = 1,
+  limit = 200,
+  sort = "new",
+}) {
+  const qs = buildQuery({ page, limit, sort });
+  // 서버 응답 형태는 { data: [...], paging: {...} } 형태이므로,
+  // 호출부에서 data를 pluck 하도록 둔다.
+  return getJson(`/${encodeURIComponent(school)}/academic-posts${qs}`);
 }
+
+export function voteAcademicPost({ school, id, dir }) {
+  return postJson(
+    `/${encodeURIComponent(school)}/academic-posts/${encodeURIComponent(id)}/vote`,
+    { dir }
+  );
+}
+
+
