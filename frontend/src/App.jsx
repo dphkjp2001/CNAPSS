@@ -67,6 +67,12 @@ export default function App() {
     <AuthGateProvider>
       <Suspense fallback={<div className="p-6 text-sm text-gray-500">Loading…</div>}>
         <Routes>
+          
+          <Route 
+              path="/m/:school/academic/:id" 
+              element={<AcademicDetailMobile 
+              />} 
+          />
           {/* ✅ 랜딩(학교 선택)만 fullBleed: 사이드바 제거 */}
           <Route element={<PublicLayout fullBleed />}>
             <Route path="/" element={<SchoolSelect />} />
@@ -79,12 +85,6 @@ export default function App() {
             <Route path="/register" element={<RegisterRoute />} />
             <Route path="/auth-required" element={<AuthRequired />} />
           </Route>
-          
-          <Route 
-              path="/m/:school/academic/:id" 
-              element={<AcademicDetailMobile 
-              />} 
-            />
 
           <Route path="/dashboard/*" element={<NormalizeDashboard />} />
 
