@@ -144,44 +144,44 @@ export default function AcademicDetailMobile() {
     }
   };
 
-  // sections
-  const sections = useMemo(() => {
+    // sections
+    let sections = [];
     if (isGeneral) {
-      return [
+    sections = [
         { label: "Related Course", value: showVal(p.courseName), icon: GraduationCap },
         { label: "Question Details", value: showVal(p.content), icon: BookOpen },
-      ];
-    }
+    ];
+    } else {
     const kind = String(p.kind || "").toLowerCase().replace(/[\s-]+/g, "_");
     if (kind === "course_materials") {
-      return [
+        sections = [
         { label: "Course Name", value: showVal(p.title || p.courseName), icon: BookOpen },
         { label: "Professor", value: showVal(p.professor), icon: GraduationCap },
         { label: "Semester", value: showVal(p.semester), icon: Clock },
         {
-          label: "Looking for Materials",
-          value:
+            label: "Looking for Materials",
+            value:
             Array.isArray(p.materials) && p.materials.length
-              ? p.materials.map((m) => m.replace(/_/g, " ")).join(", ")
-              : "Not specified",
-          icon: BookOpen,
+                ? p.materials.map(m => m.replace(/_/g, " ")).join(", ")
+                : "Not specified",
+            icon: BookOpen,
         },
-      ];
-    }
-    if (kind === "coffee_chat") {
-      return [
+        ];
+    } else if (kind === "coffee_chat") {
+        sections = [
         { label: "Title", value: showVal(p.title), icon: Coffee },
         { label: "Topic", value: showVal(p.content), icon: BookOpen },
-      ];
-    }
-    if (kind === "study_mate") {
-      return [
+        ];
+    } else if (kind === "study_mate") {
+        sections = [
         { label: "Class", value: showVal(p.courseName), icon: GraduationCap },
         { label: "Topic", value: showVal(p.content), icon: BookOpen },
-      ];
+        ];
+    } else {
+        sections = [{ label: "Content", value: showVal(p.content), icon: BookOpen }];
     }
-    return [{ label: "Content", value: showVal(p.content), icon: BookOpen }];
-  }, [isGeneral, p]);
+}
+
 
   const authorName = p.author?.name || p.author?.username || "Anonymous";
 
