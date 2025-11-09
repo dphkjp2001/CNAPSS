@@ -26,6 +26,12 @@ module.exports = {
     experimental: {
     oxide: false, // force Tailwind to use pure JS, skip native oxide binary
   },
+  screens: {
+    sm: '640px',
+    md: '768px',
+    lg: '1024px',
+    xl: '1280px',
+  }
 };
 
 

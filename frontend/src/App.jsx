@@ -18,7 +18,8 @@ import MyPosts from "./pages/dashboard/MyPosts";
 // Dashboard + Boards
 const Dashboard = lazy(() => import("./pages/dashboard/Dashboard"));
 const FreeBoardDetail = lazy(() => import("./pages/freeboard/FreeBoardDetail"));
-const AcademicDetail = lazy(() => import("./pages/academic/AcademicDetail")); // ✅ NEW
+const AcademicDetail = lazy(() => import("./pages/academic/AcademicDetail")); 
+const AcademicDetailMobile = lazy(() => import("./pages/academic/AcademicDetailMobile")); 
 
 // Market + Messages
 const MarketList = lazy(() => import("./pages/market/MarketList"));
@@ -78,6 +79,12 @@ export default function App() {
             <Route path="/register" element={<RegisterRoute />} />
             <Route path="/auth-required" element={<AuthRequired />} />
           </Route>
+          
+          <Route 
+              path="/m/:school/academic/:id" 
+              element={<AcademicDetailMobile 
+              />} 
+            />
 
           <Route path="/dashboard/*" element={<NormalizeDashboard />} />
 
@@ -96,6 +103,7 @@ export default function App() {
             {/* Free & Academic boards (detail only) */}
             <Route path="freeboard/:id" element={<FreeBoardDetail />} />
             <Route path="academic/:id" element={<AcademicDetail />} />
+
 
             {/* Marketplace */}
             <Route path="market" element={<MarketList />} />
@@ -126,6 +134,8 @@ export default function App() {
                 </RequireAuth>
               }
             />
+
+
             <Route
               path="liked"
               element={

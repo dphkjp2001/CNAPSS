@@ -1467,7 +1467,13 @@ export default function Dashboard() {
   const goDetail = (post, tab) => {
     const id = post.raw?._id || post._id || post.raw?.id || post.id;
     if (!id) return;
-    const to = tab === "general" ? `/freeboard/${id}` : `/academic/${id}`;
+    // base desktop path
+    const basePath = tab === "general" ? `/freeboard/${id}` : `/academic/${id}`;
+
+    // if screen is narrow (mobile), use /m/ prefix
+    const isMobile = window.innerWidth < 768;
+    const to = isMobile ? `/m${basePath}` : basePath;
+    
     navigate(schoolPath(to));
   };
 
