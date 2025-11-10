@@ -58,6 +58,12 @@ export default function AcademicDetailMobile() {
         if (!alive) return;
         console.log("✅ Public post loaded:", p);
         setState({ loading: false, error: "", post: p });
+        // if logged in and token present, hydrate with private data
+        if (user && token) {
+            const pr = await getAcademicPost({ school, id });
+            if (!alive) return;
+            setState((s) => ({ ...s, post: pr || s.post }));
+        }
       } catch (err) {
         if (!alive) return;
         console.error("❌ Failed public load:", err);
