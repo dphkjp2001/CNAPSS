@@ -48,30 +48,6 @@ export default function AcademicDetailMobile() {
   const [state, setState] = useState({ loading: true, error: "", post: null });
   const [sheetOpen, setSheetOpen] = useState(false);
 
-    useEffect(() => {
-    let alive = true;
-    (async () => {
-    try {
-        const p = await getPublicAcademicPost({ school, id });
-        if (!alive) return;
-        console.log("✅ Public post loaded:", p);
-        setState({ loading: false, error: "", post: p });
-    } catch (err) {
-        if (!alive) return;
-        console.error("❌ Failed public load:", err);
-        setState({
-        loading: false,
-        error: err?.message || "Failed to load post.",
-        post: null,
-        });
-    }
-    })();
-    return () => {
-    alive = false;
-    };
-    }, [school, id]);
-
-
 
   // data load: public
   useEffect(() => {
@@ -80,9 +56,11 @@ export default function AcademicDetailMobile() {
       try {
         const p = await getPublicAcademicPost({ school, id });
         if (!alive) return;
+        console.log("✅ Public post loaded:", p);
         setState({ loading: false, error: "", post: p });
       } catch (err) {
         if (!alive) return;
+        console.error("❌ Failed public load:", err);
         setState({
           loading: false,
           error: err?.message || "Failed to load post.",
