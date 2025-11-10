@@ -7,6 +7,8 @@ import PublicLayout from "./components/PublicLayout";
 import RequireAuth from "./components/RequireAuth";
 import { useAuth } from "./contexts/AuthContext";
 import AuthGateProvider from "./contexts/AuthGateProvider";
+import useDeviceType from './useDeviceType';
+
 
 import SchoolSelect from "./pages/SchoolSelect";
 import About from "./pages/About";
@@ -67,12 +69,6 @@ export default function App() {
     <AuthGateProvider>
       <Suspense fallback={<div className="p-6 text-sm text-gray-500">Loading…</div>}>
         <Routes>
-          
-          <Route 
-              path="/m/:school/academic/:id" 
-              element={<AcademicDetailMobile 
-              />} 
-          />
           {/* ✅ 랜딩(학교 선택)만 fullBleed: 사이드바 제거 */}
           <Route element={<PublicLayout fullBleed />}>
             <Route path="/" element={<SchoolSelect />} />
@@ -102,7 +98,7 @@ export default function App() {
 
             {/* Free & Academic boards (detail only) */}
             <Route path="freeboard/:id" element={<FreeBoardDetail />} />
-            <Route path="academic/:id" element={<AcademicDetail />} />
+            <Route path="academic/:id" element={isMobile ? <AcademicDetailMobile /> : <AcademicDetail />} />
 
 
             {/* Marketplace */}
