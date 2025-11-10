@@ -43,7 +43,7 @@ export default function AcademicDetailMobile() {
   const navigate = useNavigate();
   const { school: ctxSchool } = useSchool();
   const school = schoolFromPath || ctxSchool || "nyu";
-  const { user } = useAuth();
+  const { user, token } = useAuth();
 
   const [state, setState] = useState({ loading: true, error: "", post: null });
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -96,7 +96,7 @@ export default function AcademicDetailMobile() {
     return () => {
       alive = false;
     };
-  }, [user, school, id]);
+  }, [user, token, school, id]);
 
   // body scroll lock for bottom sheet
   useEffect(() => {
