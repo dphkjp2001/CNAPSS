@@ -47,6 +47,7 @@ export default function AcademicDetailMobile() {
 
   const [state, setState] = useState({ loading: true, error: "", post: null });
   const [sheetOpen, setSheetOpen] = useState(false);
+  console.log("✅ Rendering AcademicDetailMobile");
 
 
   // data load: public
