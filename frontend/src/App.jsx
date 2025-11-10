@@ -65,6 +65,8 @@ function SchoolGate({ children }) {
 }
 
 export default function App() {
+  const isMobile = useDeviceType();  
+
   return (
     <AuthGateProvider>
       <Suspense fallback={<div className="p-6 text-sm text-gray-500">Loading…</div>}>
