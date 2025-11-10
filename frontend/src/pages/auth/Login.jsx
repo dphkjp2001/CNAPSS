@@ -40,8 +40,12 @@ function Login() {
         return;
       }
 
-      // save auth
-      login(data); // expects { user, token }
+      if (!data?.token || !data?.user) {
+        console.error("Login failed: malformed response", data);
+        alert("Login failed: missing token or user data from server.");
+        return;
+      }
+      login({ user: data.user, token: data.token });
 
       // ✅ 항상 학교 대시보드 우선. 루트/선택/인증경로 등은 무시
       const school = data?.user?.school;
