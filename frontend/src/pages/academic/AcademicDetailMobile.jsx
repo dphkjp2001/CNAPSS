@@ -201,7 +201,9 @@ export default function AcademicDetailMobile() {
         <div className="sticky top-0 z-30 bg-white border-b border-gray-200">
         <div className="flex items-center px-3 py-2">
             <button
-            onClick={() => navigate(`/${encodeURIComponent(school)}/dashboard?tab=academic`)}
+            onClick={() =>
+                navigate(`/${encodeURIComponent(school)}/dashboard?tab=academic`)
+            }
             className="flex items-center text-gray-700"
             >
             <ArrowLeft className="w-5 h-5" />
@@ -212,9 +214,14 @@ export default function AcademicDetailMobile() {
         </div>
         </div>
 
-        {/* Main content */}
+        {/* Marker for debug */}
+        <div className="text-center text-[11px] text-gray-400 my-1">
+        [MOBILE COMPONENT ACTIVE]
+        </div>
+
+        {/* Content */}
         <div className="px-3 py-4">
-        {/* Author + time */}
+        {/* Author */}
         <div className="flex items-center gap-2 text-sm text-gray-600 mb-3">
             <User className="w-4 h-4 text-gray-400" />
             <span>{authorName}</span>
@@ -225,14 +232,13 @@ export default function AcademicDetailMobile() {
         {/* Title */}
         <h2 className="text-lg font-bold text-gray-900 leading-snug">{p.title}</h2>
 
-        {/* Tags */}
         {!isSeeking && (
             <span className="mt-1 inline-block text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded px-2 py-0.5">
             General Question
             </span>
         )}
 
-        {/* Content sections */}
+        {/* Sections */}
         <ul className="mt-4 space-y-3">
             {sections.map((sec, idx) => {
             const Icon = sec.icon || BookOpen;
