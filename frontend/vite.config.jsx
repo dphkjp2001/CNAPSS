@@ -27,5 +27,9 @@ export default defineConfig({
   server: {
     port: 3000,
   },
+  build: {
+    manifest: true,
+    emptyOutDir: true,  // ensures old assets are deleted before each build
+  },
 });
 
