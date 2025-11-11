@@ -15,13 +15,37 @@ const sendVerificationEmail = require("../utils/sendVerificationEmail");
 const ALL_SCHOOLS = ["nyu", "columbia", "boston"];
 const ACTIVE_SCHOOLS = new Set(["nyu"]);
 
-const ALLOWED_BY_SCHOOL = (() => {
+// ---------- Gmail 허용 추가 ----------
+let ALLOWED_BY_SCHOOL = (() => {
   try {
-    return JSON.parse(process.env.ALLOWED_DOMAINS_BY_SCHOOL || '{"nyu":["nyu.edu"]}');
+    return JSON.parse(
+      process.env.ALLOWED_DOMAINS_BY_SCHOOL || '{"nyu":["nyu.edu"]}'
+    );
   } catch {
     return { nyu: ["nyu.edu"] };
   }
 })();
+
+// TEMP FLAG: allow Gmail
+const allowGmail =
+  String(process.env.ALLOW_GMAIL_TEMP || "").toLowerCase() === "true";
+
+if (allowGmail) {
+  const scope = (process.env.ALLOW_GMAIL_SCOPE || "active").toLowerCase();
+  const targetSchools =
+    scope === "all" ? ALL_SCHOOLS : Array.from(ACTIVE_SCHOOLS);
+
+  for (const school of targetSchools) {
+    const current = new Set(
+      (ALLOWED_BY_SCHOOL[school] || []).map((d) => d.toLowerCase())
+    );
+    current.add("gmail.com");
+    current.add("googlemail.com");
+    ALLOWED_BY_SCHOOL[school] = Array.from(current);
+  }
+
+  console.log("⚙️ Gmail temporarily allowed for:", Array.from(targetSchools));
+}
 
 const FLAT_ALLOWED = new Set(
   Object.entries(ALLOWED_BY_SCHOOL)
@@ -39,7 +63,8 @@ const ensureEmailAllowedForSchool = (email, school) => {
 function generateCode() {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ0123456789";
   let out = "";
-  for (let i = 0; i < 6; i++) out += alphabet[Math.floor(Math.random() * alphabet.length)];
+  for (let i = 0; i < 6; i++)
+    out += alphabet[Math.floor(Math.random() * alphabet.length)];
   return out;
 }
 
@@ -69,13 +94,18 @@ router.post("/send-code", async (req, res) => {
 
     if (!FLAT_ALLOWED.has(getDomain(email))) {
       return res.status(400).json({
-        message: "For now, sign-up is limited to university emails (e.g., @nyu.edu).",
+        message:
+          "For now, sign-up is limited to university or temporarily Gmail emails (e.g., @nyu.edu, @gmail.com).",
       });
     }
 
-    const last = await EmailCode.findOne({ email, verified: false }).sort({ createdAt: -1 });
+    const last = await EmailCode.findOne({ email, verified: false }).sort({
+      createdAt: -1,
+    });
     if (last && Date.now() - last.createdAt.getTime() < 60 * 1000) {
-      return res.status(429).json({ message: "Please wait before requesting another code." });
+      return res
+        .status(429)
+        .json({ message: "Please wait before requesting another code." });
     }
 
     const code = generateCode();
@@ -99,22 +129,29 @@ router.post("/send-code", async (req, res) => {
 router.post("/verify-code", async (req, res) => {
   try {
     let { email, code } = req.body;
-    if (!email || !code) return res.status(400).json({ message: "Email and code are required." });
+    if (!email || !code)
+      return res.status(400).json({ message: "Email and code are required." });
 
     email = String(email).toLowerCase().trim();
     code = String(code).trim().toUpperCase();
 
     if (!FLAT_ALLOWED.has(getDomain(email))) {
       return res.status(400).json({
-        message: "For now, sign-up is limited to university emails (e.g., @nyu.edu).",
+        message:
+          "For now, sign-up is limited to university or temporarily Gmail emails (e.g., @nyu.edu, @gmail.com).",
       });
     }
 
     const rec = await EmailCode.findOne({ email }).sort({ createdAt: -1 });
-    if (!rec) return res.status(400).json({ message: "No code found. Please request a new one." });
+    if (!rec)
+      return res
+        .status(400)
+        .json({ message: "No code found. Please request a new one." });
     if (rec.verified) return res.json({ message: "Already verified." });
-    if (rec.expiresAt < new Date()) return res.status(400).json({ message: "Code expired." });
-    if (rec.attempts >= 5) return res.status(429).json({ message: "Too many attempts." });
+    if (rec.expiresAt < new Date())
+      return res.status(400).json({ message: "Code expired." });
+    if (rec.attempts >= 5)
+      return res.status(429).json({ message: "Too many attempts." });
 
     const ok = await bcrypt.compare(code, rec.codeHash);
     if (!ok) {
@@ -153,19 +190,23 @@ router.post("/register", async (req, res) => {
     }
     if (!ensureEmailAllowedForSchool(email, school)) {
       const needs = (ALLOWED_BY_SCHOOL[school] || []).join(", ");
-      return res.status(403).json({ message: `Please use your official school email (${needs}).` });
+      return res
+        .status(403)
+        .json({ message: `Please use your official or allowed email (${needs}).` });
     }
 
-    // classOf validation (optional but recommended)
     if (typeof classOf !== "number") {
-      return res.status(400).json({ message: "Please select your class year (e.g., 2029)." });
+      return res
+        .status(400)
+        .json({ message: "Please select your class year (e.g., 2029)." });
     }
     if (classOf < 2000 || classOf > 2100) {
       return res.status(400).json({ message: "Invalid class year." });
     }
 
     const existingEmail = await User.findOne({ email });
-    if (existingEmail) return res.status(400).json({ message: "This email is already in use." });
+    if (existingEmail)
+      return res.status(400).json({ message: "This email is already in use." });
 
     const existingNickname = await User.findOne({ nickname });
     if (existingNickname) {
@@ -184,7 +225,7 @@ router.post("/register", async (req, res) => {
       password: hashedPassword,
       isVerified: true,
       school,
-      classOf, // ✅ store cohort
+      classOf,
     });
 
     const token = signJwt({
@@ -211,7 +252,8 @@ router.post("/register", async (req, res) => {
 router.post("/login", async (req, res) => {
   try {
     let { email, password } = req.body;
-    if (!email || !password) return res.status(400).json({ message: "Missing fields." });
+    if (!email || !password)
+      return res.status(400).json({ message: "Missing fields." });
 
     email = String(email).toLowerCase().trim();
     const user = await User.findOne({ email });
@@ -249,7 +291,9 @@ router.get("/exists", async (req, res) => {
   const { email } = req.query;
   if (!email) return res.status(400).json({ error: "Email is required" });
   try {
-    const user = await User.findOne({ email: String(email).toLowerCase().trim() });
+    const user = await User.findOne({
+      email: String(email).toLowerCase().trim(),
+    });
     return res.json({ exists: !!user });
   } catch (err) {
     console.error("Error checking user existence:", err);
@@ -258,10 +302,3 @@ router.get("/exists", async (req, res) => {
 });
 
 module.exports = router;
-
-
-
-
-
-
-
